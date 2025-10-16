@@ -1,7 +1,6 @@
 from datetime import date
 import requests
 from typing import List
-from sqlmodel import Session
 from apps.api.models.models import Rate
 
 # Simple ECB reference rates via exchangerate.host (free mirror) to avoid API keys.

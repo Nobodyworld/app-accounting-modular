@@ -1,6 +1,6 @@
 # Architecture
 
-```
+```bash
 modular-accounting/
   apps/
     api/                # FastAPI service
@@ -23,7 +23,7 @@ modular-accounting/
 
 ## Plugin Contracts
 
-```
+```python
 class BaseFXProvider(Protocol):
     name: str
     def sync_daily_rates(self, base: str, date: date | None = None) -> list[Rate]: ...
@@ -42,6 +42,7 @@ Providers register with `apps.api.services.plugin_loader` and are addressable vi
 ## Forecasting
 
 `ForecastService` composes:
+
 - Time-series model (ARIMA baseline)
 - Optional exogenous features (# TODO): event intensities, FX volatility, commodities, macro
 

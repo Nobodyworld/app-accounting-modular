@@ -25,7 +25,7 @@ uvicorn apps.api.main:app --reload
 streamlit run apps/web/app.py
 ```
 
-Open the API docs at http://localhost:8000/docs and the UI at http://localhost:8501.
+Open the API docs at <http://localhost:8000/docs> and the UI at <http://localhost:8501>.
 
 ## Key Ideas
 

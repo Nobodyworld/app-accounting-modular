@@ -4,7 +4,7 @@ Drop a folder under `plugins/` that exposes a provider module with a `provider()
 
 Example layout:
 
-```
+```bash
 plugins/
   fx_ecb/
     __init__.py
