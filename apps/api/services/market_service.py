@@ -1,6 +1,6 @@
 from datetime import date
 from typing import List
-from sqlmodel import Session
+from sqlmodel import Session, select
 from ..models.models import Price, Instrument
 
 class BaseMarketProvider:
@@ -15,10 +15,12 @@ class MarketService:
 
     def sync_prices(self, symbol: str, start: date, end: date) -> int:
         # ensure instrument
-        inst = self.s.query(Instrument).filter(Instrument.symbol == symbol).first()
+        inst = self.s.exec(select(Instrument).where(Instrument.symbol == symbol)).first()
         if not inst:
             inst = Instrument(symbol=symbol, name=symbol)
-            self.s.add(inst); self.s.commit(); self.s.refresh(inst)
+            self.s.add(inst)
+            self.s.commit()
+            self.s.refresh(inst)
         prices = self.provider.fetch_prices(symbol, start, end)
         for p in prices:
             p.instrument_id = inst.id

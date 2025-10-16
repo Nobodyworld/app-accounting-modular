@@ -2,6 +2,9 @@ from datetime import date
 from typing import List
 from sqlmodel import Session
 from ..models.models import Rate
+import logging
+
+logger = logging.getLogger(__name__)
 
 class BaseFXProvider:
     name: str
@@ -14,8 +17,15 @@ class FXService:
         self.provider = provider
 
     def sync(self, base: str = "USD", date_: date | None = None) -> int:
-        rates = self.provider.sync_daily_rates(base=base, date_=date_)
-        for r in rates:
-            self.s.add(r)
-        self.s.commit()
-        return len(rates)
+        """Sync FX rates from provider."""
+        try:
+            rates = self.provider.sync_daily_rates(base=base, date_=date_)
+            for r in rates:
+                self.s.add(r)
+            self.s.commit()
+            logger.info(f"Synced {len(rates)} FX rates")
+            return len(rates)
+        except Exception as e:
+            self.s.rollback()
+            logger.error(f"FX sync failed: {e}")
+            raise
