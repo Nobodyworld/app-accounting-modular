@@ -16,7 +16,7 @@ from cli.macli import _load_transactions_from_csv
 def create_session():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
-    return Session(engine)
+    return Session(engine, expire_on_commit=False)
 
 
 def write_csv(tmp_path: Path, rows: list[dict[str, str]]) -> Path:

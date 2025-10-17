@@ -26,13 +26,13 @@ def api_context():
     app = create_app()
 
     def override_get_session():
-        with Session(engine) as session:
+        with Session(engine, expire_on_commit=False) as session:
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
     client = TestClient(app)
 
-    with Session(engine) as session:
+    with Session(engine, expire_on_commit=False) as session:
         org1 = Organization(name="Org One")
         org2 = Organization(name="Org Two")
         session.add_all([org1, org2])

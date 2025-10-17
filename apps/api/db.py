@@ -43,7 +43,7 @@ def init_db() -> None:
 def get_session() -> Generator[Session, None, None]:
     """Provide a SQLModel session suitable for dependency injection."""
 
-    with Session(engine) as session:
+    with Session(engine, expire_on_commit=False) as session:
         bind = session.get_bind()
         if bind is not None and not getattr(bind, "_ma_tables_initialized", False):
             SQLModel.metadata.create_all(bind)

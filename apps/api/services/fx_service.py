@@ -29,15 +29,13 @@ class FXService:
         self,
         session: Session,
         provider: BaseFXProvider,
+        organization_id: int | None = None,
         audit_logger: AuditLogger | None = None,
-    ):
-        self.s = session
-        self.provider = provider
-        self.audit = audit_logger or AuditLogger(session)
-    def __init__(self, session: Session, provider: BaseFXProvider, organization_id: int):
-        self.s = session
+    ) -> None:
+        self.session = session
         self.provider = provider
         self.organization_id = organization_id
+        self.audit = audit_logger or AuditLogger(session)
 
     def sync(self, base: str = "USD", date_: date | None = None) -> int:
         """Fetch rates and persist them, returning the number of rates stored."""
@@ -45,11 +43,12 @@ class FXService:
         rates = list(self.provider.sync_daily_rates(base=base, date_=date_))
         for rate in rates:
             apply_creation_metadata(rate)
-            rate.organization_id = self.organization_id
-        self.s.add_all(rates)
-        self.s.commit()
+            if self.organization_id is not None and hasattr(rate, "organization_id"):
+                rate.organization_id = self.organization_id
+        self.session.add_all(rates)
+        self.session.commit()
         for rate in rates:
-            self.s.refresh(rate)
+            self.session.refresh(rate)
         payload = {
             "base": base,
             "date": date_,

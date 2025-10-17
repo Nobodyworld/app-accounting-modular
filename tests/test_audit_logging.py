@@ -6,6 +6,7 @@ from sqlmodel import SQLModel, Session, create_engine, select
 
 from apps.api.audit import AuditActor, use_actor
 from apps.api.models.models import AuditAction, AuditLog, Organization, User, Price, Rate, TaxRule
+from apps.api.security import get_password_hash
 from apps.api.services.fx_service import BaseFXProvider, FXService
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import BaseMarketProvider, MarketService
@@ -15,7 +16,7 @@ from apps.api.services.tax_service import BaseTaxProvider, TaxService
 def _create_session() -> Session:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
-    return Session(engine)
+    return Session(engine, expire_on_commit=False)
 
 
 def _seed_actor(session: Session) -> AuditActor:
@@ -24,7 +25,12 @@ def _seed_actor(session: Session) -> AuditActor:
     session.commit()
     session.refresh(org)
 
-    user = User(email="test@example.com", name="Tester", organization_id=org.id)
+    user = User(
+        email="test@example.com",
+        name="Tester",
+        organization_id=org.id,
+        password_hash=get_password_hash("secret"),
+    )
     session.add(user)
     session.commit()
     session.refresh(user)
