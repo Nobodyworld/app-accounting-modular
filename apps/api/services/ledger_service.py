@@ -34,9 +34,17 @@ class LedgerService:
     def __init__(self, session: Session, audit_logger: AuditLogger | None = None):
         self.s = session
         self.audit = audit_logger or AuditLogger(session)
+    def __init__(self, session: Session, organization_id: int):
+        self.s = session
+        self.organization_id = organization_id
 
     def create_account(
-        self, name: str, type: AccountType | str, code: str | None = None, currency: str = "USD"
+        self,
+        name: str,
+        type: AccountType | str,
+        code: str | None = None,
+        currency: str = "USD",
+        organization_id: int | None = None,
     ) -> Account:
         """Create and persist an account."""
 
@@ -60,6 +68,15 @@ class LedgerService:
 
         acct = Account(name=name_clean, type=acct_type, code=code_clean, currency=currency_clean)
         apply_creation_metadata(acct)
+        acct = Account(
+            name=name_clean,
+            type=acct_type,
+            code=code_clean,
+            currency=currency_clean,
+          # todo - fix
+            organization_id=organization_id,
+            organization_id=self.organization_id,
+        )
         self.s.add(acct)
         self.s.commit()
         self.s.refresh(acct)
@@ -69,13 +86,17 @@ class LedgerService:
     def find_account_by_code(self, code: str) -> Account | None:
         """Return the account with the provided code, if any."""
 
-        stmt = select(Account).where(Account.code == code)
+        stmt = select(Account).where(
+            Account.code == code, Account.organization_id == self.organization_id
+        )
         return self.s.exec(stmt).one_or_none()
 
     def find_account_by_name(self, name: str) -> Account | None:
         """Return the account with the provided name, if any."""
 
-        stmt = select(Account).where(Account.name == name)
+        stmt = select(Account).where(
+            Account.name == name, Account.organization_id == self.organization_id
+        )
         return self.s.exec(stmt).one_or_none()
 
     def require_account(self, identifier: str) -> Account:
@@ -86,10 +107,10 @@ class LedgerService:
             raise ValueError(f"Account '{identifier}' not found")
         return account
 
-    def post_transaction(
+    def validate_transaction(
         self, date: date_type, description: str, postings: Iterable[Mapping[str, object]]
-    ) -> Transaction:
-        """Persist a transaction and its postings."""
+    ) -> list[dict[str, object]]:
+        """Validate transaction inputs and return normalised postings."""
 
         description_clean = (description or "").strip()
         if not description_clean:
@@ -109,7 +130,7 @@ class LedgerService:
                 raise ValueError(f"Posting {idx}: account_id is required")
 
             account = self.s.get(Account, account_id)
-            if account is None:
+            if account is None or account.organization_id != self.organization_id:
                 raise ValueError(f"Posting {idx}: account {account_id} not found")
 
             debit_val = _to_decimal(posting.get("debit"))
@@ -146,6 +167,11 @@ class LedgerService:
 
         txn = Transaction(date=date, description=description_clean)
         apply_creation_metadata(txn)
+        txn = Transaction(
+            date=date,
+            description=description_clean,
+            organization_id=self.organization_id,
+        )
         self.s.add(txn)
         self.s.flush()
 
@@ -155,6 +181,13 @@ class LedgerService:
             apply_creation_metadata(je)
             journal_entries.append(je)
             self.s.add(je)
+            self.s.add(
+                JournalEntry(
+                    transaction_id=txn.id,
+                    organization_id=self.organization_id,
+                    **entry,
+                )
+            )
 
         self.s.commit()
         self.s.refresh(txn)
@@ -188,7 +221,13 @@ class LedgerService:
                 func.coalesce(func.sum(JournalEntry.debit), 0.0),
                 func.coalesce(func.sum(JournalEntry.credit), 0.0),
             )
-            .join(JournalEntry, JournalEntry.account_id == Account.id, isouter=True)
+            .join(
+                JournalEntry,
+                (JournalEntry.account_id == Account.id)
+                & (JournalEntry.organization_id == self.organization_id),
+                isouter=True,
+            )
+            .where(Account.organization_id == self.organization_id)
             .group_by(
                 Account.id,
                 Account.code,

@@ -33,6 +33,10 @@ class TaxService:
         self.s = session
         self.provider = provider
         self.audit = audit_logger or AuditLogger(session)
+    def __init__(self, session: Session, provider: BaseTaxProvider, organization_id: int):
+        self.s = session
+        self.provider = provider
+        self.organization_id = organization_id
 
     def sync_rules(self) -> int:
         """Synchronise tax rules and return the number of records stored."""
@@ -40,6 +44,7 @@ class TaxService:
         rules = list(self.provider.upsert_rules())
         for rule in rules:
             apply_creation_metadata(rule)
+            rule.organization_id = self.organization_id
         self.s.add_all(rules)
         self.s.commit()
         for rule in rules:
