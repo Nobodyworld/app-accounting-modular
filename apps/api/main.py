@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 
 from .db import init_db
@@ -16,7 +18,16 @@ def create_app() -> FastAPI:
     """Instantiate and configure the FastAPI application."""
 
     init_db()
-    app = FastAPI(title="Modular Accounting API", version="0.1.0")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):  # pragma: no cover - exercised via tests
+        start_scheduler()
+        try:
+            yield
+        finally:
+            shutdown_scheduler()
+
+    app = FastAPI(title="Modular Accounting API", version="0.1.0", lifespan=lifespan)
     protected = [Depends(get_current_user)]
     app.include_router(core.router)
     app.include_router(auth.router)
@@ -28,13 +39,6 @@ def create_app() -> FastAPI:
     app.include_router(forecast.router, dependencies=protected)
     app.include_router(reports.router, dependencies=protected)
     app.include_router(workflow.router, dependencies=protected)
-    @app.on_event("startup")
-    def _start_scheduler() -> None:  # pragma: no cover - framework hook
-        start_scheduler()
-
-    @app.on_event("shutdown")
-    def _stop_scheduler() -> None:  # pragma: no cover - framework hook
-        shutdown_scheduler()
 
     return app
 
