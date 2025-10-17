@@ -17,7 +17,18 @@ from apps.api.models.models import AccountType
 from apps.api.services.fx_service import FXService
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import MarketService
-from apps.api.services.plugin_loader import load_provider
+from apps.api.services.plugin_loader import available_providers, load_provider
+
+
+def _provider_keys(capability: str) -> tuple[list[str], str | None]:
+    metas = available_providers(capability)
+    keys = [meta.key for meta in metas]
+    default = keys[0] if keys else None
+    return keys, default
+
+
+_FX_PROVIDER_KEYS, _DEFAULT_FX_PROVIDER = _provider_keys("fx")
+_MARKET_PROVIDER_KEYS, _DEFAULT_MARKET_PROVIDER = _provider_keys("market")
 
 
 @click.group()
@@ -29,19 +40,23 @@ def cli() -> None:
 @click.option("--base", default="USD", show_default=True, help="Base currency to synchronise")
 @click.option(
     "--provider",
-    default="plugins.fx_ecb.provider",
-    show_default=True,
-    help="Import path of the FX provider to use",
+    "provider_key",
+    type=click.Choice(_FX_PROVIDER_KEYS) if _FX_PROVIDER_KEYS else str,
+    default=_DEFAULT_FX_PROVIDER,
+    show_default=_DEFAULT_FX_PROVIDER is not None,
+    help="Configured FX provider key",
 )
-def sync_fx(base: str, provider: str) -> None:
+def sync_fx(base: str, provider_key: str) -> None:
     """Synchronise foreign-exchange rates using the configured provider."""
 
     init_db()
-    prov = load_provider(provider)
+    handle = load_provider(provider_key)
     with Session(engine) as session:
-        svc = FXService(session, prov)
+        svc = FXService(session, handle.instance)
         count = svc.sync(base=base)
-        click.echo(f"Synced {count} FX rates via {prov.name}")
+        click.echo(
+            f"Synced {count} FX rates via {handle.metadata.name} ({handle.metadata.key})"
+        )
 
 
 @cli.command()
@@ -50,21 +65,25 @@ def sync_fx(base: str, provider: str) -> None:
 @click.option("--end", required=True, help="ISO date for the end of the range")
 @click.option(
     "--provider",
-    default="plugins.market_yfinance.provider",
-    show_default=True,
-    help="Import path of the market data provider",
+    "provider_key",
+    type=click.Choice(_MARKET_PROVIDER_KEYS) if _MARKET_PROVIDER_KEYS else str,
+    default=_DEFAULT_MARKET_PROVIDER,
+    show_default=_DEFAULT_MARKET_PROVIDER is not None,
+    help="Configured market data provider key",
 )
-def sync_prices(symbol: str, start: str, end: str, provider: str) -> None:
+def sync_prices(symbol: str, start: str, end: str, provider_key: str) -> None:
     """Synchronise historical prices for ``symbol``."""
 
     init_db()
-    prov = load_provider(provider)
+    handle = load_provider(provider_key)
     start_date = date.fromisoformat(start)
     end_date = date.fromisoformat(end)
     with Session(engine) as session:
-        svc = MarketService(session, prov)
+        svc = MarketService(session, handle.instance)
         count = svc.sync_prices(symbol, start_date, end_date)
-        click.echo(f"Synced {count} prices for {symbol} via {prov.name}")
+        click.echo(
+            f"Synced {count} prices for {symbol} via {handle.metadata.name} ({handle.metadata.key})"
+        )
 
 
 @cli.command()
