@@ -1,9 +1,8 @@
-"""Command line interface for Modular Accounting."""
+"""Command line tooling for Modular Accounting."""
 
 from __future__ import annotations
 
 import csv
-
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -15,13 +14,12 @@ from sqlmodel import Session, select
 
 from apps.api.audit import AuditActor, apply_creation_metadata, use_actor
 from apps.api.db import engine, init_db
-from apps.api.models.models import AccountType, Organization, User
+from apps.api.models.models import AccountType, Organization, User, WorkflowStatus
 from apps.api.services.fx_service import FXService
-from apps.api.models.models import WorkflowStatus
 from apps.api.services.ledger_service import LedgerService
-from apps.api.services.workflow_service import WorkflowService
 from apps.api.services.market_service import MarketService
 from apps.api.services.plugin_loader import available_providers, load_provider
+from apps.api.services.workflow_service import WorkflowService
 
 
 def _provider_keys(capability: str) -> tuple[list[str], str | None]:
@@ -37,7 +35,7 @@ _MARKET_PROVIDER_KEYS, _DEFAULT_MARKET_PROVIDER = _provider_keys("market")
 
 @click.group()
 def cli() -> None:
-    """Modular Accounting CLI"""
+    """Modular Accounting CLI."""
 
 
 @cli.command()
@@ -58,14 +56,11 @@ def sync_fx(base: str, provider_key: str) -> None:
     with Session(engine) as session:
         actor = _ensure_cli_actor(session)
         with use_actor(actor):
-            svc = FXService(session, prov)
-            count = svc.sync(base=base)
-    click.echo(f"Synced {count} FX rates via {prov.name}")
-        svc = FXService(session, handle.instance)
-        count = svc.sync(base=base)
-        click.echo(
-            f"Synced {count} FX rates via {handle.metadata.name} ({handle.metadata.key})"
-        )
+            service = FXService(session, handle.instance)
+            count = service.sync(base=base)
+    click.echo(
+        f"Synced {count} FX rates via {handle.metadata.name} ({handle.metadata.key})"
+    )
 
 
 @cli.command()
@@ -90,14 +85,11 @@ def sync_prices(symbol: str, start: str, end: str, provider_key: str) -> None:
     with Session(engine) as session:
         actor = _ensure_cli_actor(session)
         with use_actor(actor):
-            svc = MarketService(session, prov)
-            count = svc.sync_prices(symbol, start_date, end_date)
-    click.echo(f"Synced {count} prices for {symbol} via {prov.name}")
-        svc = MarketService(session, handle.instance)
-        count = svc.sync_prices(symbol, start_date, end_date)
-        click.echo(
-            f"Synced {count} prices for {symbol} via {handle.metadata.name} ({handle.metadata.key})"
-        )
+            service = MarketService(session, handle.instance)
+            count = service.sync_prices(symbol, start_date, end_date)
+    click.echo(
+        f"Synced {count} prices for {symbol} via {handle.metadata.name} ({handle.metadata.key})"
+    )
 
 
 @cli.command()
@@ -111,18 +103,14 @@ def import_csv(file_: Path) -> None:
         with use_actor(actor):
             ledger = LedgerService(session)
             transactions = _load_transactions_from_csv(ledger, file_)
-            for txn in transactions:
-                ledger.post_transaction(txn["date"], txn["description"], txn["postings"])
-        ledger = LedgerService(session)
-        transactions = _load_transactions_from_csv(ledger, file_)
-        workflow = WorkflowService(session)
-        staged = workflow.ingest_transactions(
-            transactions,
-            source="cli_csv",
-            source_reference=str(file_.resolve()),
-            metadata={"filename": file_.name},
-        )
-        results = workflow.process_transactions([txn.id for txn in staged])
+            workflow = WorkflowService(session)
+            staged = workflow.ingest_transactions(
+                transactions,
+                source="cli_csv",
+                source_reference=str(file_.resolve()),
+                metadata={"filename": file_.name},
+            )
+            results = workflow.process_transactions([txn.id for txn in staged])
 
     posted = sum(1 for result in results if result.status == WorkflowStatus.POSTED)
     failed = [result for result in results if result.status == WorkflowStatus.FAILED]
@@ -156,9 +144,10 @@ def _load_transactions_from_csv(
         header = {name.strip() for name in reader.fieldnames if name}
         missing = required_fields - header
         if missing:
-            raise click.ClickException(f"CSV missing required columns: {', '.join(sorted(missing))}")
+            missing_list = ", ".join(sorted(missing))
+            raise click.ClickException(f"CSV missing required columns: {missing_list}")
 
-        account_key = next((f for f in optional_account_fields if f in header), None)
+        account_key = next((field for field in optional_account_fields if field in header), None)
         if account_key is None:
             raise click.ClickException(
                 "CSV must include either 'account_code' or 'account_name' column"
@@ -263,7 +252,10 @@ def _ensure_cli_actor(session: Session) -> AuditActor:
 
 
 def _resolve_account(
-    ls: LedgerService, cache: dict[str, int], identifier: str, row: dict[str, str | None]
+    ledger: LedgerService,
+    cache: dict[str, int],
+    identifier: str,
+    row: dict[str, str | None],
 ) -> int:
     """Look up an account by code/name, creating it on demand."""
 
@@ -271,20 +263,20 @@ def _resolve_account(
         return cache[identifier]
 
     try:
-        account = ls.require_account(identifier)
+        account = ledger.require_account(identifier)
     except ValueError:
         account_type_raw = (row.get("account_type") or "").strip().upper()
         try:
-            acct_type = AccountType(account_type_raw)
+            account_type = AccountType(account_type_raw)
         except ValueError as exc:
             raise click.ClickException(
                 f"Account '{identifier}' not found and no valid account_type provided"
             ) from exc
         currency = (row.get("currency") or "").strip() or "USD"
         name = (row.get("account_name") or identifier).strip() or identifier
-        account = ls.create_account(
+        account = ledger.create_account(
             name=name,
-            type=acct_type,
+            type=account_type,
             code=row.get("account_code"),
             currency=currency,
         )
@@ -303,10 +295,10 @@ def _to_decimal(value: str | None, row_number: int, field: str) -> Decimal:
     if not text:
         text = "0"
     try:
-        dec = Decimal(text)
+        amount = Decimal(text)
     except InvalidOperation as exc:
         raise click.ClickException(f"Row {row_number}: invalid {field} '{value}'") from exc
-    return dec
+    return amount
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Tax rules service layer."""
+"""Tax rule ingestion services."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class BaseTaxProvider:
 
     name: str
 
-    def upsert_rules(self) -> Iterable[TaxRule]:
+    def upsert_rules(self) -> Iterable[TaxRule]:  # pragma: no cover - interface contract
         raise NotImplementedError
 
 
@@ -28,14 +28,13 @@ class TaxService:
         self,
         session: Session,
         provider: BaseTaxProvider,
+        *,
         audit_logger: AuditLogger | None = None,
-    ):
-        self.s = session
+        organization_id: int | None = None,
+    ) -> None:
+        self.session = session
         self.provider = provider
         self.audit = audit_logger or AuditLogger(session)
-    def __init__(self, session: Session, provider: BaseTaxProvider, organization_id: int):
-        self.s = session
-        self.provider = provider
         self.organization_id = organization_id
 
     def sync_rules(self) -> int:
@@ -44,13 +43,16 @@ class TaxService:
         rules = list(self.provider.upsert_rules())
         for rule in rules:
             apply_creation_metadata(rule)
-            rule.organization_id = self.organization_id
-        self.s.add_all(rules)
-        self.s.commit()
+            if self.organization_id is not None:
+                rule.organization_id = self.organization_id
+
+        self.session.add_all(rules)
+        self.session.commit()
         for rule in rules:
-            self.s.refresh(rule)
+            self.session.refresh(rule)
+
         payload = {
-            "provider": self.provider.name,
+            "provider": getattr(self.provider, "name", "unknown"),
             "rules": [rule.model_dump() for rule in rules],
         }
         self.audit.log(
