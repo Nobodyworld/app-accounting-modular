@@ -1,7 +1,7 @@
 from __future__ import annotations
 """Database models used across Modular Accounting services."""
 
-from typing import Optional
+from typing import Any, Optional
 from enum import Enum
 from datetime import date, datetime
 from sqlalchemy import func
@@ -15,6 +15,9 @@ __all__ = [
     "AccountType",
     "Country",
     "Event",
+    "StagedPosting",
+    "StagedTransaction",
+    "WorkflowStatus",
     "Instrument",
     "JournalEntry",
     "Price",
@@ -193,3 +196,48 @@ class Event(TimestampMixin, SQLModel, table=True):
     source: str
     title: str
     score: Optional[float] = None  # relevance/intensity
+
+
+class WorkflowStatus(str, Enum):
+    """Processing state for staged transactions."""
+
+    INGESTED = "INGESTED"
+    VALIDATED = "VALIDATED"
+    POSTED = "POSTED"
+    FAILED = "FAILED"
+
+
+class StagedTransaction(SQLModel, table=True):
+    """Workflow-controlled transaction awaiting validation/posting."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    date: date
+    description: str
+    status: WorkflowStatus = Field(default=WorkflowStatus.INGESTED)
+    source: str = Field(default="unknown")
+    source_reference: Optional[str] = None
+    source_metadata: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON, nullable=False)
+    )
+    validation_errors: Optional[list[str]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    transaction_id: Optional[int] = Field(default=None, foreign_key="transaction.id")
+    ingested_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class StagedPosting(SQLModel, table=True):
+    """Individual staging record for a transaction posting."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    staged_transaction_id: int = Field(foreign_key="stagedtransaction.id")
+    account_id: Optional[int] = None
+    account_code: Optional[str] = None
+    account_name: Optional[str] = None
+    debit: float = 0.0
+    credit: float = 0.0
+    currency: Optional[str] = None
+    context: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON, nullable=False)
+    )
+

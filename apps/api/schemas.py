@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .models.models import AccountType
+from .models.models import AccountType, WorkflowStatus
 from .services.ledger_service import TrialBalanceRow
+from .services.workflow_service import WorkflowResult
 
 __all__ = [
     "AccountCreate",
@@ -20,6 +21,14 @@ __all__ = [
     "TransactionCreate",
     "TrialBalanceResponse",
     "TrialBalanceRowSchema",
+    "WorkflowIngestRequest",
+    "WorkflowIngestResponse",
+    "WorkflowProcessRequest",
+    "WorkflowResultSchema",
+    "StagedPostingIngest",
+    "StagedPostingRead",
+    "StagedTransactionIngest",
+    "StagedTransactionRead",
 ]
 
 
@@ -130,6 +139,126 @@ class TrialBalanceResponse(BaseModel):
             total_debit=payload["total_debit"],
             total_credit=payload["total_credit"],
         )
+
+
+class StagedPostingIngest(BaseModel):
+    """Posting payload accepted by the staging workflow."""
+
+    account_id: int | None = None
+    account_code: str | None = None
+    account_name: str | None = None
+    debit: Decimal = Decimal("0")
+    credit: Decimal = Decimal("0")
+    currency: str | None = Field(default=None, max_length=12)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_account_reference(self) -> "StagedPostingIngest":
+        if self.account_id is None and not (self.account_code or self.account_name):
+            raise ValueError("account reference is required")
+        return self
+
+
+class StagedTransactionIngest(BaseModel):
+    """Transaction ingestion payload."""
+
+    date: date
+    description: str = Field(min_length=1, max_length=255)
+    postings: list[StagedPostingIngest]
+    source_reference: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("postings")
+    @classmethod
+    def ensure_postings(cls, postings: list[StagedPostingIngest]) -> list[StagedPostingIngest]:
+        if not postings:
+            raise ValueError("at least one posting is required")
+        return postings
+
+
+class WorkflowIngestRequest(BaseModel):
+    """Request body for staging transactions."""
+
+    source: str = Field(default="api", min_length=1)
+    source_reference: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    transactions: list[StagedTransactionIngest]
+    auto_process: bool = True
+
+    @field_validator("transactions")
+    @classmethod
+    def ensure_transactions(
+        cls, transactions: list[StagedTransactionIngest]
+    ) -> list[StagedTransactionIngest]:
+        if not transactions:
+            raise ValueError("no transactions supplied")
+        return transactions
+
+
+class WorkflowResultSchema(BaseModel):
+    """Outcome summary returned by the workflow service."""
+
+    staged_transaction_id: int
+    status: WorkflowStatus
+    transaction_id: int | None = None
+    validation_errors: list[str] | None = None
+
+    @classmethod
+    def from_result(cls, result: WorkflowResult) -> "WorkflowResultSchema":
+        return cls(
+            staged_transaction_id=result.staged_transaction_id,
+            status=result.status,
+            transaction_id=result.transaction_id,
+            validation_errors=result.validation_errors,
+        )
+
+
+class WorkflowIngestResponse(BaseModel):
+    """Response payload for ingestion requests."""
+
+    staged_ids: list[int]
+    results: list[WorkflowResultSchema] = Field(default_factory=list)
+
+
+class WorkflowProcessRequest(BaseModel):
+    """Request body to trigger processing of staged transactions."""
+
+    staged_ids: list[int] | None = None
+    auto_post: bool = True
+
+
+class StagedPostingRead(BaseModel):
+    """Serialized staged posting."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    account_id: int | None
+    account_code: str | None
+    account_name: str | None
+    debit: Decimal
+    credit: Decimal
+    currency: str | None
+    metadata: dict[str, Any]
+
+
+class StagedTransactionRead(BaseModel):
+    """Serialized staged transaction with postings."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: date
+    description: str
+    status: WorkflowStatus
+    source: str
+    source_reference: str | None
+    source_metadata: dict[str, Any]
+    validation_errors: list[str] | None
+    transaction_id: int | None
+    ingested_at: datetime
+    updated_at: datetime
+    postings: list[StagedPostingRead]
 
 
 class ForecastRequest(BaseModel):

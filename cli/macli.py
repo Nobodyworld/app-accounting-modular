@@ -15,7 +15,9 @@ from sqlmodel import Session
 from apps.api.db import engine, init_db
 from apps.api.models.models import AccountType
 from apps.api.services.fx_service import FXService
+from apps.api.models.models import WorkflowStatus
 from apps.api.services.ledger_service import LedgerService
+from apps.api.services.workflow_service import WorkflowService
 from apps.api.services.market_service import MarketService
 from apps.api.services.plugin_loader import available_providers, load_provider
 
@@ -95,10 +97,29 @@ def import_csv(file_: Path) -> None:
     with Session(engine) as session:
         ledger = LedgerService(session)
         transactions = _load_transactions_from_csv(ledger, file_)
-        for txn in transactions:
-            ledger.post_transaction(txn["date"], txn["description"], txn["postings"])
+        workflow = WorkflowService(session)
+        staged = workflow.ingest_transactions(
+            transactions,
+            source="cli_csv",
+            source_reference=str(file_.resolve()),
+            metadata={"filename": file_.name},
+        )
+        results = workflow.process_transactions([txn.id for txn in staged])
 
-    click.echo(f"Imported {len(transactions)} transactions from {file_.name}")
+    posted = sum(1 for result in results if result.status == WorkflowStatus.POSTED)
+    failed = [result for result in results if result.status == WorkflowStatus.FAILED]
+
+    for result in failed:
+        message = "; ".join(result.validation_errors or []) or "Unknown error"
+        click.echo(
+            f"Transaction {result.staged_transaction_id} failed validation: {message}",
+            err=True,
+        )
+
+    click.echo(
+        f"Processed {len(results)} transactions from {file_.name} "
+        f"({posted} posted, {len(failed)} failed)"
+    )
 
 
 def _load_transactions_from_csv(

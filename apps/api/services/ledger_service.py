@@ -93,10 +93,10 @@ class LedgerService:
             raise ValueError(f"Account '{identifier}' not found")
         return account
 
-    def post_transaction(
+    def validate_transaction(
         self, date: date_type, description: str, postings: Iterable[Mapping[str, object]]
-    ) -> Transaction:
-        """Persist a transaction and its postings."""
+    ) -> list[dict[str, object]]:
+        """Validate transaction inputs and return normalised postings."""
 
         description_clean = (description or "").strip()
         if not description_clean:
