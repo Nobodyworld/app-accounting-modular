@@ -1,11 +1,13 @@
 from datetime import date
-from typing import List
+from typing import Sequence
+
 from sqlmodel import Session
+
 from ..models.models import Rate
 
 class BaseFXProvider:
     name: str
-    def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> List[Rate]:
+    def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> Sequence[Rate]:
         raise NotImplementedError
 
 class FXService:
@@ -14,8 +16,14 @@ class FXService:
         self.provider = provider
 
     def sync(self, base: str = "USD", date_: date | None = None) -> int:
-        rates = self.provider.sync_daily_rates(base=base, date_=date_)
-        for r in rates:
-            self.s.add(r)
+        base_clean = base.strip().upper()
+        if not base_clean:
+            raise ValueError("Base currency is required")
+
+        rates = list(self.provider.sync_daily_rates(base=base_clean, date_=date_))
+        for rate in rates:
+            rate.base = base_clean
+            rate.quote = rate.quote.upper()
+            self.s.add(rate)
         self.s.commit()
         return len(rates)

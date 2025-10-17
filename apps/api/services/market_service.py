@@ -1,11 +1,14 @@
 from datetime import date
-from typing import List
-from sqlmodel import Session
-from ..models.models import Price, Instrument
+from typing import Sequence
+
+from sqlmodel import Session, select
+
+from ..models.models import Instrument, Price
 
 class BaseMarketProvider:
     name: str
-    def fetch_prices(self, symbol: str, start: date, end: date) -> List[Price]:
+
+    def fetch_prices(self, symbol: str, start: date, end: date) -> Sequence[Price]:
         raise NotImplementedError
 
 class MarketService:
@@ -14,14 +17,25 @@ class MarketService:
         self.provider = provider
 
     def sync_prices(self, symbol: str, start: date, end: date) -> int:
-        # ensure instrument
-        inst = self.s.query(Instrument).filter(Instrument.symbol == symbol).first()
-        if not inst:
-            inst = Instrument(symbol=symbol, name=symbol)
-            self.s.add(inst); self.s.commit(); self.s.refresh(inst)
-        prices = self.provider.fetch_prices(symbol, start, end)
-        for p in prices:
-            p.instrument_id = inst.id
-            self.s.add(p)
+        symbol_clean = symbol.strip().upper()
+        if not symbol_clean:
+            raise ValueError("Symbol is required")
+        if start > end:
+            raise ValueError("Start date must be before or equal to end date")
+
+        stmt = select(Instrument).where(Instrument.symbol == symbol_clean)
+        instrument = self.s.exec(stmt).one_or_none()
+
+        if instrument is None:
+            instrument = Instrument(symbol=symbol_clean, name=symbol_clean)
+            self.s.add(instrument)
+            self.s.flush()
+
+        prices = list(self.provider.fetch_prices(symbol_clean, start, end))
+        for price in prices:
+            price.instrument_id = instrument.id
+            price.provider = self.provider.name
+            self.s.add(price)
+
         self.s.commit()
         return len(prices)
