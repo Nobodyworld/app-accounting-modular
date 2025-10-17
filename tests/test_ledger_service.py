@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 from sqlmodel import SQLModel, Session, create_engine
+from apps.api.models.models import Organization
 from apps.api.services.ledger_service import LedgerService, TrialBalanceRow
 
 
@@ -16,7 +17,12 @@ def create_session():
 
 def test_trial_balance_totals_balance() -> None:
     with create_session() as session:
-        ledger = LedgerService(session)
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
         cash = ledger.create_account(name="Cash", type="ASSET", code="1000")
         revenue = ledger.create_account(name="Revenue", type="REVENUE", code="4000")
 
@@ -47,7 +53,12 @@ def test_trial_balance_totals_balance() -> None:
 
 def test_trial_balance_includes_zero_activity_accounts() -> None:
     with create_session() as session:
-        ledger = LedgerService(session)
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
         cash = ledger.create_account(name="Cash", type="ASSET", code="1000")
         revenue = ledger.create_account(name="Revenue", type="REVENUE", code="4000")
         ledger.create_account(name="Retained Earnings", type="EQUITY", code="3000")
@@ -70,14 +81,24 @@ def test_trial_balance_includes_zero_activity_accounts() -> None:
 
 def test_create_account_rejects_blank_name() -> None:
     with create_session() as session:
-        ledger = LedgerService(session)
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
         with pytest.raises(ValueError):
             ledger.create_account(name="   ", type="ASSET")
 
 
 def test_create_account_rejects_duplicate_code() -> None:
     with create_session() as session:
-        ledger = LedgerService(session)
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
         ledger.create_account(name="Cash", type="ASSET", code="1000")
         with pytest.raises(ValueError):
             ledger.create_account(name="Bank", type="ASSET", code="1000")
@@ -85,7 +106,12 @@ def test_create_account_rejects_duplicate_code() -> None:
 
 def test_post_transaction_requires_balanced_entries() -> None:
     with create_session() as session:
-        ledger = LedgerService(session)
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
         cash = ledger.create_account(name="Cash", type="ASSET", code="1000")
         expense = ledger.create_account(name="Expenses", type="EXPENSE", code="5000")
 
@@ -102,7 +128,12 @@ def test_post_transaction_requires_balanced_entries() -> None:
 
 def test_post_transaction_requires_existing_account() -> None:
     with create_session() as session:
-        ledger = LedgerService(session)
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
         cash = ledger.create_account(name="Cash", type="ASSET", code="1000")
 
         with pytest.raises(ValueError):
