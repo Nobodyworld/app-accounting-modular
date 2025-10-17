@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from ..services.plugin_loader import available_plugins
+from ..services.plugin_loader import available_providers
 
 router = APIRouter(tags=["core"])
 
@@ -17,7 +17,7 @@ def health() -> dict[str, str]:
 
 
 @router.get("/providers")
-def providers() -> dict[str, list[str]]:
-    """List dynamically loadable provider plugins."""
+def providers() -> dict[str, list[dict[str, object]]]:
+    """List provider plugins exposed via the configuration allowlist."""
 
-    return {"available": available_plugins()}
+    return {"providers": [meta.to_dict() for meta in available_providers()]}

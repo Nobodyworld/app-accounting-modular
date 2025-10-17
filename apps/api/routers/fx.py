@@ -15,16 +15,21 @@ router = APIRouter(prefix="/fx", tags=["fx"])
 @router.post("/sync")
 def sync_fx(
     base: str = "USD",
-    provider: str = "plugins.fx_ecb.provider",
+    provider_key: str = "fx:ecb",
     s: Session = Depends(get_session),
 ) -> dict[str, str | int]:
     """Synchronise the latest FX rates from the configured provider."""
 
     try:
-        prov = load_provider(provider)
+        handle = load_provider(provider_key)
     except ValueError as exc:  # pragma: no cover - FastAPI integration
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    svc = FXService(s, prov)
+    svc = FXService(s, handle.instance)
     count = svc.sync(base=base)
-    return {"synced": count, "provider": prov.name, "base": base}
+    return {
+        "synced": count,
+        "provider": handle.metadata.name,
+        "provider_key": handle.metadata.key,
+        "base": base,
+    }

@@ -19,7 +19,7 @@ def sync_prices(
     symbol: str,
     start: date,
     end: date,
-    provider: str = "plugins.market_yfinance.provider",
+    provider_key: str = "market:yfinance",
     s: Session = Depends(get_session),
 ) -> dict[str, str | int | date]:
     """Fetch and persist instrument prices for a date range."""
@@ -28,10 +28,17 @@ def sync_prices(
         raise HTTPException(status_code=400, detail="Start date must be before end date")
 
     try:
-        prov = load_provider(provider)
+        handle = load_provider(provider_key)
     except ValueError as exc:  # pragma: no cover - FastAPI integration
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    svc = MarketService(s, prov)
+    svc = MarketService(s, handle.instance)
     n = svc.sync_prices(symbol, start, end)
-    return {"synced": n, "provider": prov.name, "symbol": symbol, "start": start, "end": end}
+    return {
+        "synced": n,
+        "provider": handle.metadata.name,
+        "provider_key": handle.metadata.key,
+        "symbol": symbol,
+        "start": start,
+        "end": end,
+    }

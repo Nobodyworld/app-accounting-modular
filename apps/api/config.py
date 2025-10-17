@@ -8,7 +8,38 @@ from typing import Mapping
 
 from pydantic import BaseModel, Field, model_validator
 
-__all__ = ["Settings", "get_settings", "settings"]
+__all__ = ["ProviderInfo", "Settings", "get_settings", "settings"]
+
+
+class ProviderInfo(BaseModel):
+    """Configuration describing an allowed provider plugin."""
+
+    module: str
+    name: str
+    description: str | None = None
+    capabilities: tuple[str, ...] = Field(default_factory=tuple)
+
+
+DEFAULT_ALLOWED_PROVIDERS: dict[str, ProviderInfo] = {
+    "fx:ecb": ProviderInfo(
+        module="plugins.fx_ecb.provider",
+        name="European Central Bank FX",
+        description="Reference rates sourced via exchangerate.host",
+        capabilities=("fx",),
+    ),
+    "market:yfinance": ProviderInfo(
+        module="plugins.market_yfinance.provider",
+        name="Yahoo Finance Market Data",
+        description="Historical price data from Yahoo Finance",
+        capabilities=("market",),
+    ),
+    "tax:oecd_stub": ProviderInfo(
+        module="plugins.tax_oecd_stub.provider",
+        name="OECD Tax Rules (Stub)",
+        description="Demonstration tax rules sourced from an OECD stub",
+        capabilities=("tax",),
+    ),
+}
 
 
 class Settings(BaseModel):
@@ -27,6 +58,12 @@ class Settings(BaseModel):
     newsapi_key: str | None = Field(default_factory=lambda: os.getenv("NEWSAPI_KEY"))
     gdelt_user_agent: str | None = Field(
         default_factory=lambda: os.getenv("GDELT_USER_AGENT")
+    )
+    allowed_providers: dict[str, ProviderInfo] = Field(
+        default_factory=lambda: {
+            key: value.model_copy(deep=True)
+            for key, value in DEFAULT_ALLOWED_PROVIDERS.items()
+        }
     )
 
     @model_validator(mode="after")
