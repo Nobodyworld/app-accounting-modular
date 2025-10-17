@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+from datetime import date
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlmodel import SQLModel, Session, create_engine
+
+from apps.api.db import get_session
+from apps.api.main import create_app
+from apps.api.models.models import Membership, Organization, User
+from apps.api.security import create_access_token, get_password_hash
+from apps.api.services.ledger_service import LedgerService
+
+
+@pytest.fixture()
+def api_context():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+
+    app = create_app()
+
+    def override_get_session():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = override_get_session
+    client = TestClient(app)
+
+    with Session(engine) as session:
+        org1 = Organization(name="Org One")
+        org2 = Organization(name="Org Two")
+        session.add_all([org1, org2])
+        session.commit()
+        session.refresh(org1)
+        session.refresh(org2)
+
+        admin = User(email="admin@example.com", password_hash=get_password_hash("secret"))
+        member = User(email="member@example.com", password_hash=get_password_hash("secret"))
+        session.add_all([admin, member])
+        session.commit()
+        session.refresh(admin)
+        session.refresh(member)
+
+        membership_admin = Membership(
+            user_id=admin.id,
+            organization_id=org1.id,
+            is_admin=True,
+            can_manage_ledger=True,
+            can_manage_fx=True,
+            can_manage_market=True,
+            can_manage_tax=True,
+        )
+        membership_member = Membership(
+            user_id=member.id,
+            organization_id=org1.id,
+            can_manage_ledger=True,
+        )
+        session.add_all([membership_admin, membership_member])
+        session.commit()
+
+        ledger1 = LedgerService(session, organization_id=org1.id)
+        cash1 = ledger1.create_account(name="Org1 Cash", type="ASSET", code="ORG1CASH")
+        revenue1 = ledger1.create_account(
+            name="Org1 Revenue", type="REVENUE", code="ORG1REV"
+        )
+        ledger1.post_transaction(
+            date=date(2024, 1, 1),
+            description="Org1 Sale",
+            postings=[
+                {"account_id": cash1.id, "debit": 100.0, "credit": 0.0},
+                {"account_id": revenue1.id, "debit": 0.0, "credit": 100.0},
+            ],
+        )
+
+        ledger2 = LedgerService(session, organization_id=org2.id)
+        cash2 = ledger2.create_account(name="Org2 Cash", type="ASSET", code="ORG2CASH")
+        revenue2 = ledger2.create_account(
+            name="Org2 Revenue", type="REVENUE", code="ORG2REV"
+        )
+        ledger2.post_transaction(
+            date=date(2024, 1, 2),
+            description="Org2 Sale",
+            postings=[
+                {"account_id": cash2.id, "debit": 200.0, "credit": 0.0},
+                {"account_id": revenue2.id, "debit": 0.0, "credit": 200.0},
+            ],
+        )
+
+        org1_id = org1.id
+        org2_id = org2.id
+        admin_id = admin.id
+        member_id = member.id
+
+    tokens = {
+        "admin": create_access_token({"sub": str(admin_id)}),
+        "member": create_access_token({"sub": str(member_id)}),
+    }
+
+    return client, {"org1_id": org1_id, "org2_id": org2_id, "tokens": tokens}
+
+
+def test_requires_authentication(api_context):
+    client, ctx = api_context
+    response = client.get("/ledger/trial-balance", params={"organization_id": ctx["org1_id"]})
+    assert response.status_code == 401
+
+
+def test_role_based_access_blocks_tax_sync(api_context):
+    client, ctx = api_context
+    headers = {"Authorization": f"Bearer {ctx['tokens']['member']}"}
+    response = client.post(
+        "/tax/sync",
+        params={"organization_id": ctx["org1_id"]},
+        headers=headers,
+    )
+    assert response.status_code == 403
+
+
+def test_multi_tenant_isolation(api_context):
+    client, ctx = api_context
+    admin_headers = {"Authorization": f"Bearer {ctx['tokens']['admin']}"}
+
+    response = client.get(
+        "/ledger/trial-balance",
+        params={"organization_id": ctx["org1_id"]},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    rows = response.json()["rows"]
+    codes = {row["account_code"] for row in rows}
+    assert "ORG1CASH" in codes
+    assert "ORG2CASH" not in codes
+
+    forbidden = client.get(
+        "/ledger/trial-balance",
+        params={"organization_id": ctx["org2_id"]},
+        headers=admin_headers,
+    )
+    assert forbidden.status_code == 403
