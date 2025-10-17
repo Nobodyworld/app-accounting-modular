@@ -1,9 +1,15 @@
 from __future__ import annotations
-from typing import Optional, Literal
+from typing import Optional
+from enum import Enum
 from datetime import date, datetime
 from sqlmodel import SQLModel, Field, Relationship
 
-AccountType = Literal["ASSET","LIABILITY","EQUITY","REVENUE","EXPENSE"]
+class AccountType(str, Enum):
+    ASSET = "ASSET"
+    LIABILITY = "LIABILITY"
+    EQUITY = "EQUITY"
+    REVENUE = "REVENUE"
+    EXPENSE = "EXPENSE"
 
 class Account(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

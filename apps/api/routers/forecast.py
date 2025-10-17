@@ -8,4 +8,9 @@ def forecast_series(payload: dict):
     series = payload.get("series", [])
     horizon = int(payload.get("horizon", 30))
     fs = ForecastService()
-    return {"forecast": fs.forecast_series(series, horizon)}
+    result = fs.forecast_series(series, horizon)
+    return {
+        "forecast": result.points,
+        "horizon": result.horizon,
+        "order": result.model_order,
+    }

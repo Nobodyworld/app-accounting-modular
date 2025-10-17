@@ -1,14 +1,14 @@
 # Forecasting
 
 `ForecastService` supports:
-- ARIMA baseline with automatic order selection (# TODO: refine)
-- Optional exogenous regressors from events, FX, commodities (# TODO)
+- ARIMA baseline with automatic order selection via AIC
+- Extensible hooks for exogenous regressors (events, FX, commodities)
 
 API:
 - `POST /forecast/series` body: { "series": [[ts, value], ...], "horizon": 30 }
-- returns: { "forecast": [[ts, yhat], ...] }
+- returns: { "forecast": [[ts, yhat], ...], "horizon": 30, "order": [p, d, q] }
 
-# TODO
+## Future Work
 - Prophet or advanced ML regressors
 - Causal impact analysis with event interventions
 - Backtesting harness & model registry

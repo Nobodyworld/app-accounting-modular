@@ -43,7 +43,7 @@ Providers register with `apps.api.services.plugin_loader` and are addressable vi
 
 `ForecastService` composes:
 - Time-series model (ARIMA baseline)
-- Optional exogenous features (# TODO): event intensities, FX volatility, commodities, macro
+- Optional exogenous features: event intensities, FX volatility, commodities, macro
 
 ## Storage
 
@@ -52,4 +52,4 @@ Providers register with `apps.api.services.plugin_loader` and are addressable vi
 
 ## Jobs
 
-- APScheduler in-process for simple cron-like jobs (# TODO move to Celery/Redis)
+- APScheduler in-process for simple cron-like jobs (upgrade to Celery/Redis for scale)

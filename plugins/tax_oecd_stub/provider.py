@@ -4,7 +4,7 @@ from apps.api.models.models import TaxRule
 
 class OECDFakeTaxProvider:
     name = "oecd_stub"
-    # # TODO: Replace with real OECD/OIPA pulls and country-specific loaders
+    # Placeholder implementation – replace with real OECD/OIPA pulls and loaders in production
     def upsert_rules(self) -> List[TaxRule]:
         # Demo rules: EU VAT baseline stub and US corporate federal baseline stub
         return [

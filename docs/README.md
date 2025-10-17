@@ -33,22 +33,22 @@ Open the API docs at http://localhost:8000/docs and the UI at http://localhost:8
 - **Portable**: SQLite by default, swap to Postgres by changing `DATABASE_URL`.
 - **Auditable**: Double-entry ledger primitives, typed models, and versioned ETL runs.
 - **Global-aware**: Country + jurisdiction taxonomy for tax rules, rates, and regulatory data.
-- **Event-informed**: Optional event-feeds (e.g., GDELT/NewsAPI) to nudge forecasts (# TODO advanced ML).
+- **Event-informed**: Optional event-feeds (e.g., GDELT/NewsAPI) to nudge forecasts with ML extensions planned.
 
 ## Features (MVP + Stubs)
 
 - Ledger: Accounts, Transactions, JournalEntries, Reports (P&L, Balance Sheet)
 - Data Providers:
-  - FX (`ECB`, `OpenExchangeRates` # TODO key)
-  - Markets (`yfinance` for equities/ETFs; # TODO commodities + futures providers)
-  - Macro (# TODO FRED/WorldBank/OECD)
+  - FX (`ECB`, `OpenExchangeRates` with API keys configured via environment)
+  - Markets (`yfinance` for equities/ETFs; extensible to commodities and futures providers)
+  - Macro (WorldBank/OECD integrations pluggable)
 - Tax:
   - Core tax schema + rule engine
-  - OECD VAT scaffold (# TODO data puller)
-  - US Federal/State stubs (# TODO actual tables + updates)
+  - OECD VAT scaffold with provider hook for automated refreshers
+  - US Federal/State stubs awaiting full table ingestion
 - Forecasting:
-  - ARIMA baseline
-  - Event signals placeholder (# TODO NLP + causal features)
+  - ARIMA baseline with automatic order selection
+  - Event signals placeholder ready for NLP + causal feature enrichments
 - CLI:
   - Import CSV
   - Sync FX and Market prices
@@ -58,9 +58,9 @@ Open the API docs at http://localhost:8000/docs and the UI at http://localhost:8
 
 - [ ] Rich plugin discovery via entry points
 - [ ] Multi-tenant bookkeeping
-- [ ] Advanced reconciliation (bank feeds, Plaid # TODO)
+- [ ] Advanced reconciliation (bank feeds, Plaid integration)
 - [ ] Caching layer + job queue
 - [ ] Fine-grained permissions and audit trail
-- [ ] Web UI (React) option (# TODO) alongside Streamlit
+- [ ] Web UI (React) option alongside Streamlit
 
 See more in `docs/ARCHITECTURE.md` and `docs/PLUGINS.md`.
