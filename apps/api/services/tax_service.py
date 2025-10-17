@@ -46,8 +46,12 @@ class TaxService:
             if self.organization_id is not None:
                 rule.organization_id = self.organization_id
 
-        self.session.add_all(rules)
-        self.session.commit()
+        try:
+            self.session.add_all(rules)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         for rule in rules:
             self.session.refresh(rule)
 

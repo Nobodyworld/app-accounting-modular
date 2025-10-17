@@ -2,10 +2,20 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from apps.api.audit import AuditActor, use_actor
-from apps.api.models.models import AuditAction, AuditLog, Organization, User, Price, Rate, TaxRule
+from apps.api.models.models import (
+    AuditAction,
+    AuditLog,
+    Instrument,
+    Organization,
+    Price,
+    Rate,
+    TaxRule,
+    User,
+)
 from apps.api.security import get_password_hash
 from apps.api.services.fx_service import BaseFXProvider, FXService
 from apps.api.services.ledger_service import LedgerService
@@ -136,3 +146,91 @@ def test_tax_sync_produces_audit_entry() -> None:
         assert log is not None
         assert log.after_state is not None
         assert log.after_state["provider"] == provider.name
+
+
+def test_fx_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    with _create_session() as session:
+        provider = _StubFXProvider()
+        svc = FXService(session, provider)
+
+        original_commit = session.commit
+        original_rollback = session.rollback
+        rollback_called = False
+
+        def failing_commit() -> None:
+            raise RuntimeError("boom")
+
+        def tracking_rollback() -> None:
+            nonlocal rollback_called
+            rollback_called = True
+            original_rollback()
+
+        monkeypatch.setattr(session, "commit", failing_commit)
+        monkeypatch.setattr(session, "rollback", tracking_rollback)
+
+        with pytest.raises(RuntimeError):
+            svc.sync(base="USD")
+
+        assert rollback_called is True
+        assert session.exec(select(Rate)).all() == []
+
+
+def test_market_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    with _create_session() as session:
+        actor = _seed_actor(session)
+        provider = _StubMarketProvider()
+
+        instrument = Instrument(symbol="TEST", name="Test", organization_id=actor.organization_id)
+        session.add(instrument)
+        session.commit()
+        session.refresh(instrument)
+
+        svc = MarketService(session, provider)
+
+        original_commit = session.commit
+        original_rollback = session.rollback
+        rollback_called = False
+
+        def failing_commit() -> None:
+            raise RuntimeError("boom")
+
+        def tracking_rollback() -> None:
+            nonlocal rollback_called
+            rollback_called = True
+            original_rollback()
+
+        monkeypatch.setattr(session, "commit", failing_commit)
+        monkeypatch.setattr(session, "rollback", tracking_rollback)
+
+        with pytest.raises(RuntimeError):
+            svc.sync_prices("TEST", date(2024, 1, 1), date(2024, 1, 1))
+
+        assert rollback_called is True
+        assert session.exec(select(Price)).all() == []
+
+
+def test_tax_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    with _create_session() as session:
+        provider = _StubTaxProvider()
+        svc = TaxService(session, provider)
+
+        original_commit = session.commit
+        original_rollback = session.rollback
+        rollback_called = False
+
+        def failing_commit() -> None:
+            raise RuntimeError("boom")
+
+        def tracking_rollback() -> None:
+            nonlocal rollback_called
+            rollback_called = True
+            original_rollback()
+
+        monkeypatch.setattr(session, "commit", failing_commit)
+        monkeypatch.setattr(session, "rollback", tracking_rollback)
+
+        with pytest.raises(RuntimeError):
+            svc.sync_rules()
+
+        assert rollback_called is True
+        assert session.exec(select(TaxRule)).all() == []

@@ -45,8 +45,14 @@ class FXService:
             apply_creation_metadata(rate)
             if self.organization_id is not None and hasattr(rate, "organization_id"):
                 rate.organization_id = self.organization_id
-        self.session.add_all(rates)
-        self.session.commit()
+
+        try:
+            self.session.add_all(rates)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
         for rate in rates:
             self.session.refresh(rate)
         payload = {

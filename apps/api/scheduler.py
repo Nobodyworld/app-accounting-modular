@@ -1,4 +1,4 @@
-"""Background scheduler for regenerating forecast reports."""
+"""Background scheduling utilities for periodic refresh tasks."""
 
 from __future__ import annotations
 
@@ -12,6 +12,11 @@ from sqlmodel import Session, select
 from .db import engine
 from .models.models import ForecastPlan
 from .services.budget_service import BudgetService
+
+__all__ = [
+    "start_scheduler",
+    "shutdown_scheduler",
+]
 
 _scheduler: BackgroundScheduler | None = None
 logger = logging.getLogger(__name__)

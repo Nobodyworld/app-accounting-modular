@@ -50,7 +50,11 @@ class MarketService:
                 inst.organization_id = self.organization_id
             apply_creation_metadata(inst)
             self.session.add(inst)
-            self.session.commit()
+            try:
+                self.session.commit()
+            except Exception:
+                self.session.rollback()
+                raise
             self.session.refresh(inst)
             self.audit.log(AuditAction.CREATE, "Instrument", inst.id, after=inst)
 
@@ -61,7 +65,11 @@ class MarketService:
             if self.organization_id is not None:
                 price.organization_id = self.organization_id
             self.session.add(price)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         for price in prices:
             self.session.refresh(price)
         payload = {
