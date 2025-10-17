@@ -38,10 +38,20 @@ class LedgerService:
     ) -> Account:
         """Create and persist an account."""
 
-        acct_type = AccountType(type) if isinstance(type, str) else type
+        name_clean = (name or "").strip()
+        if not name_clean:
+            raise ValueError("Account name is required")
+
+        if isinstance(type, str):
+            try:
+                acct_type = AccountType(type.strip().upper())
+            except ValueError as exc:
+                raise ValueError(f"Unknown account type '{type}'") from exc
+        else:
+            acct_type = type
 
         code_clean = code.strip() if isinstance(code, str) and code.strip() else None
-        currency_clean = currency.strip().upper() if isinstance(currency, str) else "USD"
+        currency_clean = (currency or "USD").strip().upper() or "USD"
 
         if code_clean and self.find_account_by_code(code_clean):
             raise ValueError(f"Account code '{code_clean}' already exists")
@@ -73,16 +83,70 @@ class LedgerService:
         return account
 
     def post_transaction(
-        self, date, description: str, postings: Iterable[dict[str, object]]
+        self, date: date_type, description: str, postings: Iterable[Mapping[str, object]]
     ) -> Transaction:
         """Persist a transaction and its postings."""
 
-        txn = Transaction(date=date, description=description)
+        description_clean = (description or "").strip()
+        if not description_clean:
+            raise ValueError("Transaction description is required")
+
+        postings_list = [dict(p) for p in postings]
+        if not postings_list:
+            raise ValueError("At least one posting is required")
+
+        debit_total = Decimal("0")
+        credit_total = Decimal("0")
+        normalised_postings: list[dict[str, object]] = []
+
+        for idx, posting in enumerate(postings_list, start=1):
+            account_id = posting.get("account_id")
+            if not isinstance(account_id, int):
+                raise ValueError(f"Posting {idx}: account_id is required")
+
+            account = self.s.get(Account, account_id)
+            if account is None:
+                raise ValueError(f"Posting {idx}: account {account_id} not found")
+
+            debit_val = _to_decimal(posting.get("debit"))
+            credit_val = _to_decimal(posting.get("credit"))
+
+            if debit_val < 0 or credit_val < 0:
+                raise ValueError(f"Posting {idx}: debit and credit must be non-negative")
+            if (debit_val == 0) == (credit_val == 0):
+                raise ValueError(
+                    f"Posting {idx}: exactly one of debit or credit must be provided"
+                )
+
+            currency_val = posting.get("currency")
+            currency_clean = (
+                (currency_val or account.currency).strip().upper()
+                if isinstance(currency_val, str)
+                else account.currency
+            )
+
+            debit_total += debit_val
+            credit_total += credit_val
+
+            normalised_postings.append(
+                {
+                    "account_id": account_id,
+                    "debit": float(debit_val),
+                    "credit": float(credit_val),
+                    "currency": currency_clean,
+                }
+            )
+
+        if debit_total != credit_total:
+            raise ValueError("Transaction is not balanced")
+
+        txn = Transaction(date=date, description=description_clean)
         self.s.add(txn)
         self.s.flush()
-        for posting in postings:
-            je = JournalEntry(transaction_id=txn.id, **posting)
-            self.s.add(je)
+
+        for entry in normalised_postings:
+            self.s.add(JournalEntry(transaction_id=txn.id, **entry))
+
         self.s.commit()
         self.s.refresh(txn)
         return txn
@@ -141,12 +205,16 @@ class LedgerService:
         }
 
 
-def _to_decimal(value: float | int | Decimal | None) -> Decimal:
+def _to_decimal(value: float | int | Decimal | str | None) -> Decimal:
     try:
         if isinstance(value, Decimal):
             return value
         if value is None:
             return Decimal("0")
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return Decimal("0")
         return Decimal(str(value))
     except (InvalidOperation, TypeError) as exc:
         raise ValueError(f"Invalid monetary value: {value!r}") from exc
