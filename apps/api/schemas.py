@@ -30,6 +30,7 @@ class AccountCreate(BaseModel):
     type: AccountType
     code: str | None = Field(default=None, max_length=64)
     currency: str = Field(default="USD", min_length=1, max_length=12)
+    organization_id: int
 
 
 class Posting(BaseModel):
@@ -67,6 +68,7 @@ class TransactionCreate(BaseModel):
     date: date
     description: str = Field(min_length=1, max_length=255)
     postings: list[Posting]
+    organization_id: int
 
     @field_validator("postings")
     @classmethod
@@ -135,6 +137,7 @@ class ForecastRequest(BaseModel):
 
     series: list[tuple[str | date, float]] = Field(default_factory=list)
     horizon: int = Field(default=30, ge=1)
+    organization_id: int
 
 
 class ForecastResponse(BaseModel):
