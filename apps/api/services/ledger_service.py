@@ -30,8 +30,9 @@ class TrialBalanceRow:
 class LedgerService:
     """High-level orchestration of ledger operations."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, organization_id: int):
         self.s = session
+        self.organization_id = organization_id
 
     def create_account(
         self, name: str, type: AccountType | str, code: str | None = None, currency: str = "USD"
@@ -56,7 +57,13 @@ class LedgerService:
         if code_clean and self.find_account_by_code(code_clean):
             raise ValueError(f"Account code '{code_clean}' already exists")
 
-        acct = Account(name=name_clean, type=acct_type, code=code_clean, currency=currency_clean)
+        acct = Account(
+            name=name_clean,
+            type=acct_type,
+            code=code_clean,
+            currency=currency_clean,
+            organization_id=self.organization_id,
+        )
         self.s.add(acct)
         self.s.commit()
         self.s.refresh(acct)
@@ -65,13 +72,17 @@ class LedgerService:
     def find_account_by_code(self, code: str) -> Account | None:
         """Return the account with the provided code, if any."""
 
-        stmt = select(Account).where(Account.code == code)
+        stmt = select(Account).where(
+            Account.code == code, Account.organization_id == self.organization_id
+        )
         return self.s.exec(stmt).one_or_none()
 
     def find_account_by_name(self, name: str) -> Account | None:
         """Return the account with the provided name, if any."""
 
-        stmt = select(Account).where(Account.name == name)
+        stmt = select(Account).where(
+            Account.name == name, Account.organization_id == self.organization_id
+        )
         return self.s.exec(stmt).one_or_none()
 
     def require_account(self, identifier: str) -> Account:
@@ -105,7 +116,7 @@ class LedgerService:
                 raise ValueError(f"Posting {idx}: account_id is required")
 
             account = self.s.get(Account, account_id)
-            if account is None:
+            if account is None or account.organization_id != self.organization_id:
                 raise ValueError(f"Posting {idx}: account {account_id} not found")
 
             debit_val = _to_decimal(posting.get("debit"))
@@ -140,12 +151,22 @@ class LedgerService:
         if debit_total != credit_total:
             raise ValueError("Transaction is not balanced")
 
-        txn = Transaction(date=date, description=description_clean)
+        txn = Transaction(
+            date=date,
+            description=description_clean,
+            organization_id=self.organization_id,
+        )
         self.s.add(txn)
         self.s.flush()
 
         for entry in normalised_postings:
-            self.s.add(JournalEntry(transaction_id=txn.id, **entry))
+            self.s.add(
+                JournalEntry(
+                    transaction_id=txn.id,
+                    organization_id=self.organization_id,
+                    **entry,
+                )
+            )
 
         self.s.commit()
         self.s.refresh(txn)
@@ -165,7 +186,13 @@ class LedgerService:
                 func.coalesce(func.sum(JournalEntry.debit), 0.0),
                 func.coalesce(func.sum(JournalEntry.credit), 0.0),
             )
-            .join(JournalEntry, JournalEntry.account_id == Account.id, isouter=True)
+            .join(
+                JournalEntry,
+                (JournalEntry.account_id == Account.id)
+                & (JournalEntry.organization_id == self.organization_id),
+                isouter=True,
+            )
+            .where(Account.organization_id == self.organization_id)
             .group_by(
                 Account.id,
                 Account.code,
