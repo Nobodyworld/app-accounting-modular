@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
+from ..audit import AuditLogger
+from ..dependencies import session_with_audit_context
 from ..db import get_session
 from ..models.models import User
 from ..security import get_current_organization, get_current_user
@@ -21,6 +23,7 @@ def sync_tax(
     provider_key: str = "tax:oecd_stub",
     organization_id: int,
     provider: str = "plugins.tax_oecd_stub.provider",
+    s: Session = Depends(session_with_audit_context),
     s: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str | int]:
@@ -30,6 +33,8 @@ def sync_tax(
         handle = load_provider(provider_key)
     except ValueError as exc:  # pragma: no cover - FastAPI integration
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    svc = TaxService(s, prov, audit_logger=AuditLogger(s))
 # todo - fix
     svc = TaxService(s, handle.instance)
     org_ctx = get_current_organization(

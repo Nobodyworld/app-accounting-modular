@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
+from ..audit import AuditLogger
+from ..dependencies import session_with_audit_context
 from ..db import get_session
 from ..models.models import User
 from ..security import get_current_organization, get_current_user
@@ -18,6 +20,8 @@ router = APIRouter(prefix="/fx", tags=["fx"])
 def sync_fx(
     organization_id: int,
     base: str = "USD",
+    provider: str = "plugins.fx_ecb.provider",
+    s: Session = Depends(session_with_audit_context),
     provider_key: str = "fx:ecb",
     s: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -29,6 +33,7 @@ def sync_fx(
     except ValueError as exc:  # pragma: no cover - FastAPI integration
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    svc = FXService(s, prov, audit_logger=AuditLogger(s))
     org_ctx = get_current_organization(
         organization_id=organization_id, session=s, current_user=current_user
     )

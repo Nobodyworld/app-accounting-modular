@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Any, Optional
 from enum import Enum
 from datetime import date, datetime
+
+from sqlalchemy import Column, JSON
 # todo - fix
 from sqlalchemy import Column, JSON, Text
 from sqlalchemy import func
@@ -15,6 +17,9 @@ __all__ = [
     "Membership",
     "Account",
     "AccountType",
+  # todo - fix
+    "AuditAction",
+    "AuditLog",
     "Budget",
     "BudgetLine",
     "Country",
@@ -30,6 +35,8 @@ __all__ = [
     "Organization",
     "Price",
     "Rate",
+    "Organization",
+    "User",
     "TaxRule",
     "Transaction",
 ]
@@ -99,6 +106,38 @@ class Organization(SQLModel, table=True):
     name: str
 
 
+class TimestampedModel(SQLModel, table=False):
+    """Mixin providing creation/update timestamps."""
+
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class ActorTrackedModel(TimestampedModel, table=False):
+    """Mixin adding provenance fields for actor/organization metadata."""
+
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+
+
+class Organization(TimestampedModel, table=True):
+    """Legal or logical organization that owns data within the system."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+
+
+class User(TimestampedModel, table=True):
+    """End-user or system actor recorded for provenance."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: Optional[str] = Field(default=None, unique=True, index=True)
+    name: Optional[str] = None
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+
+
+class Account(ActorTrackedModel, table=True):
 class Account(SQLModel, table=True):
 class Account(TimestampMixin, SQLModel, table=True):
     """Chart of accounts entry."""
@@ -114,6 +153,7 @@ class Account(TimestampMixin, SQLModel, table=True):
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
 
 
+class Transaction(ActorTrackedModel, table=True):
 class Transaction(TimestampMixin, SQLModel, table=True):
     """General ledger transaction."""
 
@@ -126,6 +166,7 @@ class Transaction(TimestampMixin, SQLModel, table=True):
     external_ref: Optional[str] = None
 
 
+class JournalEntry(ActorTrackedModel, table=True):
 class JournalEntry(TimestampMixin, SQLModel, table=True):
     """Individual journal posting tied to a transaction."""
 
@@ -186,6 +227,7 @@ class ForecastOutput(SQLModel, table=True):
     csv_data: Optional[str] = Field(default=None, sa_column=Column(Text))
 
 
+class Instrument(ActorTrackedModel, table=True):
 class Instrument(SQLModel, table=True):
 class Instrument(TimestampMixin, SQLModel, table=True):
     """Financial instrument reference data."""
@@ -199,6 +241,7 @@ class Instrument(TimestampMixin, SQLModel, table=True):
     type: str = "equity"  # equity/etf/commodity/currency
 
 
+class Price(ActorTrackedModel, table=True):
 class Price(TimestampMixin, SQLModel, table=True):
     """Daily close price for an instrument."""
 
@@ -212,6 +255,7 @@ class Price(TimestampMixin, SQLModel, table=True):
     provider: str
 
 
+class Rate(ActorTrackedModel, table=True):
 class Rate(TimestampMixin, SQLModel, table=True):
     """Foreign exchange rate observation."""
 
@@ -226,7 +270,7 @@ class Rate(TimestampMixin, SQLModel, table=True):
     provider: str
 
 
-class Country(SQLModel, table=True):
+class Country(ActorTrackedModel, table=True):
     """Geopolitical country reference."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -234,6 +278,7 @@ class Country(SQLModel, table=True):
     name: str
 
 
+class TaxRule(ActorTrackedModel, table=True):
 class TaxRule(TimestampMixin, SQLModel, table=True):
     """Machine-readable tax rule."""
 
@@ -249,6 +294,7 @@ class TaxRule(TimestampMixin, SQLModel, table=True):
     source: Optional[str] = None
 
 
+class Event(ActorTrackedModel, table=True):
 class Event(TimestampMixin, SQLModel, table=True):
     """External event for market intelligence."""
 
@@ -262,6 +308,40 @@ class Event(TimestampMixin, SQLModel, table=True):
     score: Optional[float] = None  # relevance/intensity
 
 
+class AuditAction(str, Enum):
+    """Enumerated audit event types."""
+
+    CREATE = "create"
+    UPDATE = "update"
+    DELETE = "delete"
+
+
+class AuditLog(SQLModel, table=True):
+    """Immutable append-only audit trail capturing entity lifecycle events."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ts: datetime = Field(default_factory=datetime.utcnow, nullable=False, index=True)
+    action: AuditAction
+    entity_name: str
+    entity_id: Optional[str] = Field(default=None, index=True)
+    before_state: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    after_state: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    payload_diff: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    request_id: Optional[str] = Field(default=None, index=True)
+    actor_user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    actor_org_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
+    )
+    actor_label: Optional[str] = None
+    source: Optional[str] = None
+    context: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
 class WorkflowStatus(str, Enum):
     """Processing state for staged transactions."""
 

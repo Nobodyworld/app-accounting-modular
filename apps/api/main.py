@@ -6,6 +6,8 @@ from fastapi import Depends, FastAPI
 
 from .db import init_db
 # todo - fix
+from .routers import audit, core, forecast, fx, ledger, market, tax
+# todo - fix
 from .routers import core, forecast, fx, ledger, market, tax, reports
 from .scheduler import start_scheduler, shutdown_scheduler
 from .routers import auth, core, forecast, fx, ledger, market, tax
@@ -21,6 +23,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Modular Accounting API", version="0.1.0")
     protected = [Depends(get_current_user)]
     app.include_router(core.router)
+    app.include_router(audit.router)
     # todo - fix
     app.include_router(ledger.router)
     app.include_router(fx.router)

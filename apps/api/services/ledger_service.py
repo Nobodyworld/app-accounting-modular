@@ -8,7 +8,8 @@ from typing import Iterable, Mapping, Sequence
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from ..models.models import Account, AccountType, JournalEntry, Transaction
+from ..audit import AuditLogger, apply_creation_metadata
+from ..models.models import Account, AccountType, AuditAction, JournalEntry, Transaction
 
 
 @dataclass(slots=True, frozen=True)
@@ -30,6 +31,9 @@ class TrialBalanceRow:
 class LedgerService:
     """High-level orchestration of ledger operations."""
 
+    def __init__(self, session: Session, audit_logger: AuditLogger | None = None):
+        self.s = session
+        self.audit = audit_logger or AuditLogger(session)
     def __init__(self, session: Session, organization_id: int):
         self.s = session
         self.organization_id = organization_id
@@ -62,6 +66,8 @@ class LedgerService:
         if code_clean and self.find_account_by_code(code_clean):
             raise ValueError(f"Account code '{code_clean}' already exists")
 
+        acct = Account(name=name_clean, type=acct_type, code=code_clean, currency=currency_clean)
+        apply_creation_metadata(acct)
         acct = Account(
             name=name_clean,
             type=acct_type,
@@ -74,6 +80,7 @@ class LedgerService:
         self.s.add(acct)
         self.s.commit()
         self.s.refresh(acct)
+        self.audit.log(AuditAction.CREATE, "Account", acct.id, after=acct)
         return acct
 
     def find_account_by_code(self, code: str) -> Account | None:
@@ -158,6 +165,8 @@ class LedgerService:
         if debit_total != credit_total:
             raise ValueError("Transaction is not balanced")
 
+        txn = Transaction(date=date, description=description_clean)
+        apply_creation_metadata(txn)
         txn = Transaction(
             date=date,
             description=description_clean,
@@ -166,7 +175,12 @@ class LedgerService:
         self.s.add(txn)
         self.s.flush()
 
+        journal_entries: list[JournalEntry] = []
         for entry in normalised_postings:
+            je = JournalEntry(transaction_id=txn.id, **entry)
+            apply_creation_metadata(je)
+            journal_entries.append(je)
+            self.s.add(je)
             self.s.add(
                 JournalEntry(
                     transaction_id=txn.id,
@@ -177,6 +191,20 @@ class LedgerService:
 
         self.s.commit()
         self.s.refresh(txn)
+        for je in journal_entries:
+            self.s.refresh(je)
+
+        payload = {
+            "transaction": txn.model_dump(),
+            "entries": [entry.model_dump() for entry in journal_entries],
+            "description": description_clean,
+        }
+        self.audit.log(
+            AuditAction.CREATE,
+            "Transaction",
+            txn.id,
+            after=payload,
+        )
         return txn
 
     def trial_balance(self) -> dict[str, Sequence[TrialBalanceRow] | Decimal]:

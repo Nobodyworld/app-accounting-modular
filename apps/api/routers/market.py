@@ -7,6 +7,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
+from ..audit import AuditLogger
+from ..dependencies import session_with_audit_context
 from ..db import get_session
 from ..models.models import User
 from ..security import get_current_organization, get_current_user
@@ -22,6 +24,8 @@ def sync_prices(
     symbol: str,
     start: date,
     end: date,
+    provider: str = "plugins.market_yfinance.provider",
+    s: Session = Depends(session_with_audit_context),
     provider_key: str = "market:yfinance",
     s: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -36,6 +40,7 @@ def sync_prices(
     except ValueError as exc:  # pragma: no cover - FastAPI integration
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    svc = MarketService(s, prov, audit_logger=AuditLogger(s))
     org_ctx = get_current_organization(
         organization_id=organization_id, session=s, current_user=current_user
     )

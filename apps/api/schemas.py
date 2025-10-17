@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .models.models import AccountType, AuditAction
 from .models.models import AccountType, WorkflowStatus
 from .services.ledger_service import TrialBalanceRow
 from .services.workflow_service import WorkflowResult
@@ -20,6 +21,7 @@ __all__ = [
     "CashflowForecastResponse",
     "ForecastRequest",
     "ForecastResponse",
+    "AuditLogSchema",
     "ReportMetadata",
     "Posting",
     "TransactionCreate",
@@ -34,6 +36,28 @@ __all__ = [
     "StagedTransactionIngest",
     "StagedTransactionRead",
 ]
+
+
+class AuditLogSchema(BaseModel):
+    """Serialized audit trail entry."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ts: datetime
+    action: AuditAction
+    entity_name: str
+    entity_id: str | None = None
+    before_state: dict[str, Any] | None = None
+    after_state: dict[str, Any] | None = None
+    payload_diff: dict[str, Any] | None = None
+    request_id: str | None = None
+    actor_user_id: int | None = None
+    actor_org_id: int | None = None
+    actor_label: str | None = None
+    source: str | None = None
+    context: dict[str, Any] | None = None
+
 
 
 class AccountCreate(BaseModel):
