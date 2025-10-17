@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Iterable, Sequence
 
 import warnings
 
 import pandas as pd
+from pandas import DatetimeIndex
 from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
-from statsmodels.tools.sm_exceptions import ConvergenceWarning
+from statsmodels.tools.sm_exceptions import ConvergenceWarning, ValueWarning
 
 
 @dataclass(slots=True, frozen=True)
@@ -25,7 +27,7 @@ class ForecastService:
         self.candidate_orders = [o for o in orders if not (o in seen or seen.add(o))]
 
     def forecast_series(
-        self, series: Sequence[tuple[object, float]], horizon: int = 30
+        self, series: Sequence[tuple[object, float | int | Decimal]], horizon: int = 30
     ) -> ForecastResult:
         """Forecast a time series using the best ARIMA order by AIC."""
 
@@ -36,11 +38,16 @@ class ForecastService:
             return ForecastResult(horizon=0, points=[], model_order=(0, 0, 0))
 
         df = pd.DataFrame(series, columns=["ts", "y"]).copy()
-        df["ts"] = pd.to_datetime(df["ts"])
-        df = df.sort_values("ts").set_index("ts")
+        df["ts"] = pd.to_datetime(df["ts"], utc=False, errors="coerce")
+        df = df.dropna(subset=["ts"]).sort_values("ts").set_index("ts")
         df = df[~df.index.duplicated(keep="last")]
         df["y"] = pd.to_numeric(df["y"], errors="coerce")
         df = df.dropna()
+
+        if len(df.index) > 1:
+            freq = pd.infer_freq(df.index)
+            if freq:
+                df.index = DatetimeIndex(df.index, freq=freq)
 
         if df.empty:
             raise ValueError("Series does not contain any numeric observations")
@@ -52,7 +59,12 @@ class ForecastService:
         for order in self.candidate_orders:
             try:
                 with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", ConvergenceWarning)
+                    warnings.filterwarnings("ignore", category=ConvergenceWarning)
+                    warnings.filterwarnings("ignore", category=UserWarning)
+                    warnings.filterwarnings("ignore", category=RuntimeWarning)
+                    warnings.filterwarnings("ignore", category=FutureWarning)
+                    warnings.filterwarnings("ignore", category=ValueWarning)
+                    warnings.filterwarnings("ignore", category=DeprecationWarning)
                     model = ARIMA(df["y"], order=order)
                     result = model.fit()
             except Exception:  # statsmodels raises numerous specialised errors

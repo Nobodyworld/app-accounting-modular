@@ -14,7 +14,7 @@ def available_plugins(package: str = "plugins") -> list[str]:
 
     try:
         pkg = importlib.import_module(package)
-    except ModuleNotFoundError:
+    except (ModuleNotFoundError, ImportError):
         return []
     return sorted(m.name for m in pkgutil.iter_modules(pkg.__path__) if not m.ispkg)
 

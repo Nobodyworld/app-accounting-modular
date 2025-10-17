@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date as date_type
 from decimal import Decimal, InvalidOperation
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -38,7 +39,14 @@ class LedgerService:
         """Create and persist an account."""
 
         acct_type = AccountType(type) if isinstance(type, str) else type
-        acct = Account(name=name, type=acct_type, code=code, currency=currency)
+
+        code_clean = code.strip() if isinstance(code, str) and code.strip() else None
+        currency_clean = currency.strip().upper() if isinstance(currency, str) else "USD"
+
+        if code_clean and self.find_account_by_code(code_clean):
+            raise ValueError(f"Account code '{code_clean}' already exists")
+
+        acct = Account(name=name_clean, type=acct_type, code=code_clean, currency=currency_clean)
         self.s.add(acct)
         self.s.commit()
         self.s.refresh(acct)
