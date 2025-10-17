@@ -4,15 +4,22 @@ from __future__ import annotations
 from typing import Optional
 from enum import Enum
 from datetime import date, datetime
+
+from sqlalchemy import Column, JSON, Text
 from sqlmodel import Field, SQLModel
 
 __all__ = [
     "Account",
     "AccountType",
+    "Budget",
+    "BudgetLine",
     "Country",
     "Event",
+    "ForecastOutput",
+    "ForecastPlan",
     "Instrument",
     "JournalEntry",
+    "Organization",
     "Price",
     "Rate",
     "TaxRule",
@@ -30,6 +37,13 @@ class AccountType(str, Enum):
     EXPENSE = "EXPENSE"
 
 
+class Organization(SQLModel, table=True):
+    """Legal entity or business unit tracked in the system."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+
+
 class Account(SQLModel, table=True):
     """Chart of accounts entry."""
 
@@ -38,6 +52,7 @@ class Account(SQLModel, table=True):
     code: Optional[str] = None
     type: AccountType
     currency: str = "USD"
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
 
 
 class Transaction(SQLModel, table=True):
@@ -58,6 +73,52 @@ class JournalEntry(SQLModel, table=True):
     debit: float = 0.0
     credit: float = 0.0
     currency: str = "USD"
+
+
+class Budget(SQLModel, table=True):
+    """Operating budget for an organization."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organization.id")
+    name: str
+    start_date: date
+    end_date: date
+    currency: str = "USD"
+
+
+class BudgetLine(SQLModel, table=True):
+    """Budgeted amount for an account and period."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    budget_id: int = Field(foreign_key="budget.id")
+    account_id: int = Field(foreign_key="account.id")
+    period_start: date
+    amount: float
+
+
+class ForecastPlan(SQLModel, table=True):
+    """Configuration describing how forecasts are generated."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organization.id")
+    budget_id: Optional[int] = Field(default=None, foreign_key="budget.id")
+    name: str
+    horizon: int
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ForecastOutput(SQLModel, table=True):
+    """Stored forecast artefact for quick retrieval."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    plan_id: int = Field(foreign_key="forecastplan.id")
+    report_type: str
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    summary: dict | None = Field(default=None, sa_column=Column(JSON))
+    context: dict | None = Field(default=None, sa_column=Column(JSON))
+    csv_data: Optional[str] = Field(default=None, sa_column=Column(Text))
 
 
 class Instrument(SQLModel, table=True):

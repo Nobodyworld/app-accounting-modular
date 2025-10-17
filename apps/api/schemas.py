@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -14,8 +14,12 @@ from .services.ledger_service import TrialBalanceRow
 
 __all__ = [
     "AccountCreate",
+    "BudgetReportLineSchema",
+    "BudgetReportResponse",
+    "CashflowForecastResponse",
     "ForecastRequest",
     "ForecastResponse",
+    "ReportMetadata",
     "Posting",
     "TransactionCreate",
     "TrialBalanceResponse",
@@ -143,3 +147,48 @@ class ForecastResponse(BaseModel):
     forecast: list[tuple[str, float]]
     horizon: int
     order: tuple[int, int, int]
+
+
+class ReportMetadata(BaseModel):
+    """Metadata accompanying generated reports."""
+
+    generated_at: datetime
+    horizon: int | None = None
+    plan_id: int | None = None
+    budget_id: int | None = None
+    organization_id: int | None = None
+
+
+class BudgetReportLineSchema(BaseModel):
+    """Single row within a budget vs actual report."""
+
+    account_id: int
+    account_code: str | None = None
+    account_name: str
+    period_start: date
+    budget_amount: float
+    actual_amount: float
+    variance: float
+    burn_rate: float | None = None
+    forecast: list[tuple[str, float]] = Field(default_factory=list)
+
+
+class BudgetReportResponse(BaseModel):
+    """Serialized response for budget vs actual outputs."""
+
+    lines: list[BudgetReportLineSchema]
+    summary: dict[str, float | None]
+    metadata: ReportMetadata
+    csv_export: str
+
+
+class CashflowForecastResponse(BaseModel):
+    """Serialized response for cashflow forecasts."""
+
+    historical: list[dict[str, float | str]]
+    forecast: list[tuple[str, float]]
+    model_order: tuple[int, int, int]
+    metadata: ReportMetadata
+    current_cash: float
+    average_monthly_flow: float | None = None
+    csv_export: str

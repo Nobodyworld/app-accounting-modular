@@ -34,7 +34,12 @@ class LedgerService:
         self.s = session
 
     def create_account(
-        self, name: str, type: AccountType | str, code: str | None = None, currency: str = "USD"
+        self,
+        name: str,
+        type: AccountType | str,
+        code: str | None = None,
+        currency: str = "USD",
+        organization_id: int | None = None,
     ) -> Account:
         """Create and persist an account."""
 
@@ -56,7 +61,13 @@ class LedgerService:
         if code_clean and self.find_account_by_code(code_clean):
             raise ValueError(f"Account code '{code_clean}' already exists")
 
-        acct = Account(name=name_clean, type=acct_type, code=code_clean, currency=currency_clean)
+        acct = Account(
+            name=name_clean,
+            type=acct_type,
+            code=code_clean,
+            currency=currency_clean,
+            organization_id=organization_id,
+        )
         self.s.add(acct)
         self.s.commit()
         self.s.refresh(acct)

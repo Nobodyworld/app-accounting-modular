@@ -7,6 +7,7 @@ A modular accounting system designed for flexibility and extensibility. Built wi
 - **API Backend**: RESTful API using FastAPI for core accounting operations.
 - **Web Interface**: User-friendly web app built with Streamlit.
 - **CLI Tools**: Command-line interface for administrative tasks.
+- **Budgeting & Forecast Reports**: Organization-aware budgeting, scheduled forecast refreshes, and downloadable budget vs actual / cashflow reports.
 - **Plugin System**: Extensible plugins for FX rates (ECB), market data (Yahoo Finance), and tax calculations (OECD stub).
 - **Docker Support**: Easy deployment with Docker Compose.
 
