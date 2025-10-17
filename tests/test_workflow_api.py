@@ -5,6 +5,7 @@ import pytest
 pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient
+from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from apps.api import db
@@ -14,7 +15,11 @@ from apps.api.main import create_app
 
 
 def create_client() -> tuple[TestClient, Session]:
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     db.engine = engine
     db.connect_args = {"check_same_thread": False}
     SQLModel.metadata.create_all(engine)
