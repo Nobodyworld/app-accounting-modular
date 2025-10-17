@@ -5,7 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from ..db import get_session
+from ..audit import AuditLogger
+from ..dependencies import session_with_audit_context
 from ..models.models import Account, Transaction
 from ..schemas import AccountCreate, TransactionCreate, TrialBalanceResponse
 from ..services.ledger_service import LedgerService
@@ -14,20 +15,22 @@ router = APIRouter(prefix="/ledger", tags=["ledger"])
 
 
 @router.post("/account", response_model=Account)
-def create_account(payload: AccountCreate, s: Session = Depends(get_session)) -> Account:
+def create_account(
+    payload: AccountCreate, s: Session = Depends(session_with_audit_context)
+) -> Account:
     """Create a new ledger account."""
 
-    ls = LedgerService(s)
+    ls = LedgerService(s, AuditLogger(s))
     return ls.create_account(**payload.model_dump())
 
 
 @router.post("/post", response_model=Transaction)
 def post_transaction(
-    payload: TransactionCreate, s: Session = Depends(get_session)
+    payload: TransactionCreate, s: Session = Depends(session_with_audit_context)
 ) -> Transaction:
     """Persist a balanced journal transaction."""
 
-    ls = LedgerService(s)
+    ls = LedgerService(s, AuditLogger(s))
     return ls.post_transaction(
         payload.date,
         payload.description,
@@ -36,8 +39,10 @@ def post_transaction(
 
 
 @router.get("/trial-balance", response_model=TrialBalanceResponse)
-def trial_balance(s: Session = Depends(get_session)) -> TrialBalanceResponse:
+def trial_balance(
+    s: Session = Depends(session_with_audit_context),
+) -> TrialBalanceResponse:
     """Return the current trial balance across all accounts."""
 
-    ls = LedgerService(s)
+    ls = LedgerService(s, AuditLogger(s))
     return TrialBalanceResponse.from_service(ls.trial_balance())

@@ -1,20 +1,26 @@
 from __future__ import annotations
 """Database models used across Modular Accounting services."""
 
-from typing import Optional
+from typing import Any, Optional
 from enum import Enum
 from datetime import date, datetime
+
+from sqlalchemy import Column, JSON
 from sqlmodel import Field, SQLModel
 
 __all__ = [
     "Account",
     "AccountType",
+    "AuditAction",
+    "AuditLog",
     "Country",
     "Event",
     "Instrument",
     "JournalEntry",
     "Price",
     "Rate",
+    "Organization",
+    "User",
     "TaxRule",
     "Transaction",
 ]
@@ -30,7 +36,38 @@ class AccountType(str, Enum):
     EXPENSE = "EXPENSE"
 
 
-class Account(SQLModel, table=True):
+class TimestampedModel(SQLModel, table=False):
+    """Mixin providing creation/update timestamps."""
+
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class ActorTrackedModel(TimestampedModel, table=False):
+    """Mixin adding provenance fields for actor/organization metadata."""
+
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+
+
+class Organization(TimestampedModel, table=True):
+    """Legal or logical organization that owns data within the system."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+
+
+class User(TimestampedModel, table=True):
+    """End-user or system actor recorded for provenance."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: Optional[str] = Field(default=None, unique=True, index=True)
+    name: Optional[str] = None
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+
+
+class Account(ActorTrackedModel, table=True):
     """Chart of accounts entry."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -40,7 +77,7 @@ class Account(SQLModel, table=True):
     currency: str = "USD"
 
 
-class Transaction(SQLModel, table=True):
+class Transaction(ActorTrackedModel, table=True):
     """General ledger transaction."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -49,7 +86,7 @@ class Transaction(SQLModel, table=True):
     external_ref: Optional[str] = None
 
 
-class JournalEntry(SQLModel, table=True):
+class JournalEntry(ActorTrackedModel, table=True):
     """Individual journal posting tied to a transaction."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -60,7 +97,7 @@ class JournalEntry(SQLModel, table=True):
     currency: str = "USD"
 
 
-class Instrument(SQLModel, table=True):
+class Instrument(ActorTrackedModel, table=True):
     """Financial instrument reference data."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -69,7 +106,7 @@ class Instrument(SQLModel, table=True):
     type: str = "equity"  # equity/etf/commodity/currency
 
 
-class Price(SQLModel, table=True):
+class Price(ActorTrackedModel, table=True):
     """Daily close price for an instrument."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -79,7 +116,7 @@ class Price(SQLModel, table=True):
     provider: str
 
 
-class Rate(SQLModel, table=True):
+class Rate(ActorTrackedModel, table=True):
     """Foreign exchange rate observation."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -90,7 +127,7 @@ class Rate(SQLModel, table=True):
     provider: str
 
 
-class Country(SQLModel, table=True):
+class Country(ActorTrackedModel, table=True):
     """Geopolitical country reference."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -98,7 +135,7 @@ class Country(SQLModel, table=True):
     name: str
 
 
-class TaxRule(SQLModel, table=True):
+class TaxRule(ActorTrackedModel, table=True):
     """Machine-readable tax rule."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -110,7 +147,7 @@ class TaxRule(SQLModel, table=True):
     source: Optional[str] = None
 
 
-class Event(SQLModel, table=True):
+class Event(ActorTrackedModel, table=True):
     """External event for market intelligence."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -118,3 +155,41 @@ class Event(SQLModel, table=True):
     source: str
     title: str
     score: Optional[float] = None  # relevance/intensity
+
+
+class AuditAction(str, Enum):
+    """Enumerated audit event types."""
+
+    CREATE = "create"
+    UPDATE = "update"
+    DELETE = "delete"
+
+
+class AuditLog(SQLModel, table=True):
+    """Immutable append-only audit trail capturing entity lifecycle events."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ts: datetime = Field(default_factory=datetime.utcnow, nullable=False, index=True)
+    action: AuditAction
+    entity_name: str
+    entity_id: Optional[str] = Field(default=None, index=True)
+    before_state: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    after_state: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    payload_diff: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    request_id: Optional[str] = Field(default=None, index=True)
+    actor_user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    actor_org_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
+    )
+    actor_label: Optional[str] = None
+    source: Optional[str] = None
+    context: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+

@@ -8,12 +8,14 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from uuid import uuid4
 
 import click
-from sqlmodel import Session
+from sqlmodel import Session, select
 
+from apps.api.audit import AuditActor, apply_creation_metadata, use_actor
 from apps.api.db import engine, init_db
-from apps.api.models.models import AccountType
+from apps.api.models.models import AccountType, Organization, User
 from apps.api.services.fx_service import FXService
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import MarketService
@@ -39,9 +41,11 @@ def sync_fx(base: str, provider: str) -> None:
     init_db()
     prov = load_provider(provider)
     with Session(engine) as session:
-        svc = FXService(session, prov)
-        count = svc.sync(base=base)
-        click.echo(f"Synced {count} FX rates via {prov.name}")
+        actor = _ensure_cli_actor(session)
+        with use_actor(actor):
+            svc = FXService(session, prov)
+            count = svc.sync(base=base)
+    click.echo(f"Synced {count} FX rates via {prov.name}")
 
 
 @cli.command()
@@ -62,9 +66,11 @@ def sync_prices(symbol: str, start: str, end: str, provider: str) -> None:
     start_date = date.fromisoformat(start)
     end_date = date.fromisoformat(end)
     with Session(engine) as session:
-        svc = MarketService(session, prov)
-        count = svc.sync_prices(symbol, start_date, end_date)
-        click.echo(f"Synced {count} prices for {symbol} via {prov.name}")
+        actor = _ensure_cli_actor(session)
+        with use_actor(actor):
+            svc = MarketService(session, prov)
+            count = svc.sync_prices(symbol, start_date, end_date)
+    click.echo(f"Synced {count} prices for {symbol} via {prov.name}")
 
 
 @cli.command()
@@ -74,10 +80,12 @@ def import_csv(file_: Path) -> None:
 
     init_db()
     with Session(engine) as session:
-        ledger = LedgerService(session)
-        transactions = _load_transactions_from_csv(ledger, file_)
-        for txn in transactions:
-            ledger.post_transaction(txn["date"], txn["description"], txn["postings"])
+        actor = _ensure_cli_actor(session)
+        with use_actor(actor):
+            ledger = LedgerService(session)
+            transactions = _load_transactions_from_csv(ledger, file_)
+            for txn in transactions:
+                ledger.post_transaction(txn["date"], txn["description"], txn["postings"])
 
     click.echo(f"Imported {len(transactions)} transactions from {file_.name}")
 
@@ -170,6 +178,38 @@ def _load_transactions_from_csv(
         )
 
     return transactions
+
+
+def _ensure_cli_actor(session: Session) -> AuditActor:
+    """Ensure a synthetic CLI actor exists and return its context."""
+
+    org = session.exec(
+        select(Organization).where(Organization.name == "CLI Runner")
+    ).one_or_none()
+    if org is None:
+        org = Organization(name="CLI Runner")
+        apply_creation_metadata(org)
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+    user = session.exec(
+        select(User).where(User.email == "cli@system.local")
+    ).one_or_none()
+    if user is None:
+        user = User(email="cli@system.local", name="CLI User", organization_id=org.id)
+        apply_creation_metadata(user)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+    return AuditActor(
+        request_id=str(uuid4()),
+        user_id=user.id,
+        organization_id=org.id,
+        source="cli",
+        user_label=user.email or user.name,
+    )
 
 
 def _resolve_account(
