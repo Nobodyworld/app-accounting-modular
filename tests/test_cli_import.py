@@ -7,7 +7,9 @@ import click
 import pytest
 from sqlmodel import SQLModel, Session, create_engine
 
+from apps.api.models.models import WorkflowStatus
 from apps.api.services.ledger_service import LedgerService
+from apps.api.services.workflow_service import WorkflowService
 from cli.macli import _load_transactions_from_csv
 
 
@@ -64,8 +66,10 @@ def test_load_transactions_from_csv_creates_missing_account(tmp_path) -> None:
         assert txn["date"] == date(2024, 1, 1)
         assert len(txn["postings"]) == 2
 
-        # Persist the postings and ensure balances are correct
-        ledger.post_transaction(txn["date"], txn["description"], txn["postings"])
+        workflow = WorkflowService(session)
+        staged = workflow.ingest_transactions(transactions, source="test_csv")
+        results = workflow.process_transactions([item.id for item in staged])
+        assert results[0].status == WorkflowStatus.POSTED
         trial_balance = ledger.trial_balance()
         assert trial_balance["total_debit"] == trial_balance["total_credit"]
 

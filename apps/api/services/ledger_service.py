@@ -82,10 +82,10 @@ class LedgerService:
             raise ValueError(f"Account '{identifier}' not found")
         return account
 
-    def post_transaction(
+    def validate_transaction(
         self, date: date_type, description: str, postings: Iterable[Mapping[str, object]]
-    ) -> Transaction:
-        """Persist a transaction and its postings."""
+    ) -> list[dict[str, object]]:
+        """Validate transaction inputs and return normalised postings."""
 
         description_clean = (description or "").strip()
         if not description_clean:
@@ -140,7 +140,15 @@ class LedgerService:
         if debit_total != credit_total:
             raise ValueError("Transaction is not balanced")
 
-        txn = Transaction(date=date, description=description_clean)
+        return normalised_postings
+
+    def post_transaction(
+        self, date: date_type, description: str, postings: Iterable[Mapping[str, object]]
+    ) -> Transaction:
+        """Persist a transaction and its postings."""
+
+        normalised_postings = self.validate_transaction(date, description, postings)
+        txn = Transaction(date=date, description=description.strip())
         self.s.add(txn)
         self.s.flush()
 

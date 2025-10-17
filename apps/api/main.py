@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from .db import init_db
-from .routers import core, forecast, fx, ledger, market, tax
+from .routers import core, forecast, fx, ledger, market, tax, workflow
 
 __all__ = ["create_app", "app"]
 
@@ -21,6 +21,7 @@ def create_app() -> FastAPI:
     app.include_router(market.router)
     app.include_router(tax.router)
     app.include_router(forecast.router)
+    app.include_router(workflow.router)
     return app
 
 
