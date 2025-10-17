@@ -27,12 +27,16 @@ class TrialBalanceRow:
         return self.debit - self.credit
 
 class LedgerService:
+    """High-level orchestration of ledger operations."""
+
     def __init__(self, session: Session):
         self.s = session
 
     def create_account(
         self, name: str, type: AccountType | str, code: str | None = None, currency: str = "USD"
     ) -> Account:
+        """Create and persist an account."""
+
         acct_type = AccountType(type) if isinstance(type, str) else type
         acct = Account(name=name, type=acct_type, code=code, currency=currency)
         self.s.add(acct)
@@ -41,25 +45,35 @@ class LedgerService:
         return acct
 
     def find_account_by_code(self, code: str) -> Account | None:
+        """Return the account with the provided code, if any."""
+
         stmt = select(Account).where(Account.code == code)
         return self.s.exec(stmt).one_or_none()
 
     def find_account_by_name(self, name: str) -> Account | None:
+        """Return the account with the provided name, if any."""
+
         stmt = select(Account).where(Account.name == name)
         return self.s.exec(stmt).one_or_none()
 
     def require_account(self, identifier: str) -> Account:
+        """Return the account matching ``identifier`` or raise ``ValueError``."""
+
         account = self.find_account_by_code(identifier) or self.find_account_by_name(identifier)
         if account is None:
             raise ValueError(f"Account '{identifier}' not found")
         return account
 
-    def post_transaction(self, date, description, postings: Iterable[dict]) -> Transaction:
+    def post_transaction(
+        self, date, description: str, postings: Iterable[dict[str, object]]
+    ) -> Transaction:
+        """Persist a transaction and its postings."""
+
         txn = Transaction(date=date, description=description)
         self.s.add(txn)
         self.s.flush()
-        for p in postings:
-            je = JournalEntry(transaction_id=txn.id, **p)
+        for posting in postings:
+            je = JournalEntry(transaction_id=txn.id, **posting)
             self.s.add(je)
         self.s.commit()
         self.s.refresh(txn)

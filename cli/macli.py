@@ -1,10 +1,14 @@
+"""Command line interface for Modular Accounting."""
+
 from __future__ import annotations
 
 import csv
+
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+
 import click
 from sqlmodel import Session
 
@@ -22,29 +26,45 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option("--base", default="USD")
-@click.option("--provider", default="plugins.fx_ecb.provider")
+@click.option("--base", default="USD", show_default=True, help="Base currency to synchronise")
+@click.option(
+    "--provider",
+    default="plugins.fx_ecb.provider",
+    show_default=True,
+    help="Import path of the FX provider to use",
+)
 def sync_fx(base: str, provider: str) -> None:
+    """Synchronise foreign-exchange rates using the configured provider."""
+
     init_db()
     prov = load_provider(provider)
-    with Session(engine) as s:
-        svc = FXService(s, prov)
-        n = svc.sync(base=base)
-        click.echo(f"Synced {n} FX rates via {prov.name}")
+    with Session(engine) as session:
+        svc = FXService(session, prov)
+        count = svc.sync(base=base)
+        click.echo(f"Synced {count} FX rates via {prov.name}")
 
 
 @cli.command()
 @click.argument("symbol")
-@click.option("--start", required=True)
-@click.option("--end", required=True)
-@click.option("--provider", default="plugins.market_yfinance.provider")
+@click.option("--start", required=True, help="ISO date for the start of the range")
+@click.option("--end", required=True, help="ISO date for the end of the range")
+@click.option(
+    "--provider",
+    default="plugins.market_yfinance.provider",
+    show_default=True,
+    help="Import path of the market data provider",
+)
 def sync_prices(symbol: str, start: str, end: str, provider: str) -> None:
+    """Synchronise historical prices for ``symbol``."""
+
     init_db()
     prov = load_provider(provider)
-    with Session(engine) as s:
-        svc = MarketService(s, prov)
-        n = svc.sync_prices(symbol, date.fromisoformat(start), date.fromisoformat(end))
-        click.echo(f"Synced {n} prices for {symbol} via {prov.name}")
+    start_date = date.fromisoformat(start)
+    end_date = date.fromisoformat(end)
+    with Session(engine) as session:
+        svc = MarketService(session, prov)
+        count = svc.sync_prices(symbol, start_date, end_date)
+        click.echo(f"Synced {count} prices for {symbol} via {prov.name}")
 
 
 @cli.command()
@@ -53,16 +73,20 @@ def import_csv(file_: Path) -> None:
     """Import journal postings from a CSV file."""
 
     init_db()
-    with Session(engine) as s:
-        ls = LedgerService(s)
-        transactions = _load_transactions_from_csv(ls, file_)
+    with Session(engine) as session:
+        ledger = LedgerService(session)
+        transactions = _load_transactions_from_csv(ledger, file_)
         for txn in transactions:
-            ls.post_transaction(txn["date"], txn["description"], txn["postings"])
+            ledger.post_transaction(txn["date"], txn["description"], txn["postings"])
 
     click.echo(f"Imported {len(transactions)} transactions from {file_.name}")
 
 
-def _load_transactions_from_csv(ls: LedgerService, file_path: Path) -> list[dict[str, object]]:
+def _load_transactions_from_csv(
+    ledger: LedgerService, file_path: Path
+) -> list[dict[str, object]]:
+    """Parse a CSV file into ledger transaction payloads."""
+
     required_fields = {"date", "description", "debit", "credit"}
     optional_account_fields = ("account_code", "account_name")
 
@@ -103,7 +127,7 @@ def _load_transactions_from_csv(ls: LedgerService, file_path: Path) -> list[dict
             if not identifier:
                 raise click.ClickException(f"Row {idx}: {account_key} is required")
 
-            account_id = _resolve_account(ls, account_cache, identifier, row)
+            account_id = _resolve_account(ledger, account_cache, identifier, row)
 
             debit = _to_decimal(row.get("debit"), idx, "debit")
             credit = _to_decimal(row.get("credit"), idx, "credit")
@@ -151,6 +175,8 @@ def _load_transactions_from_csv(ls: LedgerService, file_path: Path) -> list[dict
 def _resolve_account(
     ls: LedgerService, cache: dict[str, int], identifier: str, row: dict[str, str | None]
 ) -> int:
+    """Look up an account by code/name, creating it on demand."""
+
     if identifier in cache:
         return cache[identifier]
 
@@ -181,6 +207,8 @@ def _resolve_account(
 
 
 def _to_decimal(value: str | None, row_number: int, field: str) -> Decimal:
+    """Convert a textual numeric value to :class:`Decimal`."""
+
     text = (value or "0").strip()
     if not text:
         text = "0"
