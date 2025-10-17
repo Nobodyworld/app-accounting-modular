@@ -1,4 +1,4 @@
-"""Audit logging utilities and context management."""
+"""Audit logging utilities for Modular Accounting."""
 
 from __future__ import annotations
 
@@ -13,6 +13,16 @@ from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session
 
 from .models.models import AuditAction, AuditLog
+
+__all__ = [
+    "AuditActor",
+    "AuditLogger",
+    "get_current_actor",
+    "push_actor",
+    "pop_actor",
+    "use_actor",
+    "apply_creation_metadata",
+]
 
 
 @dataclass(slots=True)
@@ -44,7 +54,14 @@ def push_actor(actor: AuditActor) -> Token:
 def pop_actor(token: Token) -> None:
     """Restore the context to the state before :func:`push_actor`."""
 
-    _actor_ctx.reset(token)
+    try:
+        _actor_ctx.reset(token)
+    except ValueError:
+        # When dependencies run in a separate thread (e.g. TestClient thread pool)
+        # the context in which the token was created may differ from the context
+        # used during teardown. Ignore the reset in this scenario – the worker
+        # thread already discarded its context.
+        pass
 
 
 @contextmanager
@@ -66,7 +83,9 @@ def _jsonify(payload: Any) -> Any:
     return jsonable_encoder(payload)
 
 
-def _compute_diff(before: Mapping[str, Any] | None, after: Mapping[str, Any] | None) -> dict[str, Any] | None:
+def _compute_diff(
+    before: Mapping[str, Any] | None, after: Mapping[str, Any] | None
+) -> dict[str, Any] | None:
     """Return a simple diff structure describing key/value changes."""
 
     if before is None and after is None:

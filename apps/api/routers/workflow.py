@@ -1,4 +1,4 @@
-"""Workflow-related API routes."""
+"""Workflow orchestration API endpoints."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from ..services.workflow_service import WorkflowService
 router = APIRouter(prefix="/workflow", tags=["workflow"])
 
 
-def _posting_payload(posting) -> dict[str, object]:
+def _posting_payload(posting: StagedPostingRead) -> dict[str, object]:
     return {
         "account_id": posting.account_id,
         "account_code": posting.account_code,
@@ -27,7 +27,7 @@ def _posting_payload(posting) -> dict[str, object]:
         "debit": float(posting.debit),
         "credit": float(posting.credit),
         "currency": posting.currency,
-        "metadata": posting.context,
+        "metadata": posting.metadata,
     }
 
 
@@ -110,18 +110,19 @@ def get_staged_transaction(
         source_metadata=staged.source_metadata,
         validation_errors=staged.validation_errors,
         transaction_id=staged.transaction_id,
-        ingested_at=staged.ingested_at,
+        ingested_at=staged.created_at,
         updated_at=staged.updated_at,
         postings=posting_models,
     )
 
 
-@router.get("/", response_model=list[StagedTransactionRead])
+@router.get("", response_model=list[StagedTransactionRead])
+@router.get("/", response_model=list[StagedTransactionRead], include_in_schema=False)
 def list_staged_transactions(s: Session = Depends(get_session)) -> list[StagedTransactionRead]:
     """List staged transactions ordered by creation time."""
 
     svc = WorkflowService(s)
-    items = []
+    items: list[StagedTransactionRead] = []
     for staged, postings in svc.list_transactions():
         posting_models = [
             StagedPostingRead(
@@ -147,7 +148,7 @@ def list_staged_transactions(s: Session = Depends(get_session)) -> list[StagedTr
                 source_metadata=staged.source_metadata,
                 validation_errors=staged.validation_errors,
                 transaction_id=staged.transaction_id,
-                ingested_at=staged.ingested_at,
+                ingested_at=staged.created_at,
                 updated_at=staged.updated_at,
                 postings=posting_models,
             )
