@@ -16,16 +16,38 @@ def available_plugins(package: str = "plugins") -> list[str]:
         pkg = importlib.import_module(package)
     except (ModuleNotFoundError, ImportError):
         return []
-    return sorted(m.name for m in pkgutil.iter_modules(pkg.__path__) if not m.ispkg)
+
+    if not hasattr(pkg, "__path__"):
+        return []
+
+    modules: set[str] = set()
+    prefix = f"{pkg.__name__}."
+    for module_info in pkgutil.walk_packages(pkg.__path__, prefix=prefix):
+        if module_info.ispkg:
+            continue
+        modules.add(module_info.name)
+
+    return sorted(modules)
 
 
 def load_provider(module_path: str, factory: str = "provider") -> Any:
     """Load and instantiate a provider from ``module_path``."""
 
-    mod = importlib.import_module(module_path)
+    if not module_path:
+        raise ValueError("Module path is required")
+
+    try:
+        mod = importlib.import_module(module_path)
+    except (ModuleNotFoundError, ImportError) as exc:
+        raise ValueError(f"Unable to import provider module '{module_path}'") from exc
+
     if not hasattr(mod, factory):
         raise ValueError(f"Factory '{factory}' not found in {module_path}")
     factory_fn = getattr(mod, factory)
     if not callable(factory_fn):  # pragma: no cover - defensive
         raise ValueError(f"Factory '{factory}' in {module_path} is not callable")
-    return factory_fn()
+
+    provider = factory_fn()
+    if provider is None:
+        raise ValueError(f"Factory '{factory}' in {module_path} returned None")
+    return provider
