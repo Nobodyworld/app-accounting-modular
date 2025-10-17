@@ -59,13 +59,12 @@ class Settings(BaseModel):
     gdelt_user_agent: str | None = Field(
         default_factory=lambda: os.getenv("GDELT_USER_AGENT")
     )
-      # todo - fix
     allowed_providers: dict[str, ProviderInfo] = Field(
         default_factory=lambda: {
             key: value.model_copy(deep=True)
             for key, value in DEFAULT_ALLOWED_PROVIDERS.items()
         }
-      # todo - fix
+    )
     jwt_secret_key: str = Field(
         default_factory=lambda: os.getenv("JWT_SECRET_KEY", "change-me")
     )

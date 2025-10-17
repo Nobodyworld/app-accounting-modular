@@ -1,44 +1,37 @@
-from __future__ import annotations
 """Database models used across Modular Accounting services."""
 
-from typing import Any, Optional
-from enum import Enum
-from datetime import date, datetime
+from __future__ import annotations
 
-from sqlalchemy import Column, JSON
-# todo - fix
-from sqlalchemy import Column, JSON, Text
-from sqlalchemy import func
+from datetime import date, datetime
+from enum import Enum
+from typing import Any, Optional
+
+from sqlalchemy import Column, JSON, Text, func
 from sqlmodel import Field, SQLModel
 
 __all__ = [
-    "Organization",
-    "User",
-    "Membership",
     "Account",
     "AccountType",
-  # todo - fix
     "AuditAction",
     "AuditLog",
     "Budget",
     "BudgetLine",
     "Country",
     "Event",
-  # todo - fix
     "ForecastOutput",
     "ForecastPlan",
-    "StagedPosting",
-    "StagedTransaction",
-    "WorkflowStatus",
     "Instrument",
     "JournalEntry",
+    "Membership",
     "Organization",
     "Price",
     "Rate",
-    "Organization",
-    "User",
+    "StagedPosting",
+    "StagedTransaction",
     "TaxRule",
     "Transaction",
+    "User",
+    "WorkflowStatus",
 ]
 
 
@@ -54,6 +47,16 @@ class TimestampMixin(SQLModel, table=False):
         default_factory=datetime.utcnow,
         nullable=False,
         sa_column_kwargs={"server_default": func.now(), "onupdate": func.now()},
+    )
+
+
+class ActorTrackedModel(TimestampMixin, table=False):
+    """Mixin adding provenance fields for actor/organization metadata."""
+
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
 
 
@@ -98,89 +101,46 @@ class AccountType(str, Enum):
     REVENUE = "REVENUE"
     EXPENSE = "EXPENSE"
 
-# todo - fix
-class Organization(SQLModel, table=True):
-    """Legal entity or business unit tracked in the system."""
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-
-
-class TimestampedModel(SQLModel, table=False):
-    """Mixin providing creation/update timestamps."""
-
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-
-
-class ActorTrackedModel(TimestampedModel, table=False):
-    """Mixin adding provenance fields for actor/organization metadata."""
-
-    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
-
-
-class Organization(TimestampedModel, table=True):
-    """Legal or logical organization that owns data within the system."""
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-
-
-class User(TimestampedModel, table=True):
-    """End-user or system actor recorded for provenance."""
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    email: Optional[str] = Field(default=None, unique=True, index=True)
-    name: Optional[str] = None
-    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
-
 
 class Account(ActorTrackedModel, table=True):
-class Account(SQLModel, table=True):
-class Account(TimestampMixin, SQLModel, table=True):
     """Chart of accounts entry."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    organization_id: int | None = Field(
-        default=None, foreign_key="organization.id", index=True, nullable=False
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
     name: str
-    code: Optional[str] = None
+    code: Optional[str] = Field(default=None, max_length=64, index=True)
     type: AccountType
-    currency: str = "USD"
-    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    currency: str = Field(default="USD", max_length=12)
 
 
 class Transaction(ActorTrackedModel, table=True):
-class Transaction(TimestampMixin, SQLModel, table=True):
     """General ledger transaction."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    organization_id: int | None = Field(
-        default=None, foreign_key="organization.id", index=True, nullable=False
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
     date: date
     description: str
-    external_ref: Optional[str] = None
+    external_ref: Optional[str] = Field(default=None, max_length=255)
 
 
 class JournalEntry(ActorTrackedModel, table=True):
-class JournalEntry(TimestampMixin, SQLModel, table=True):
     """Individual journal posting tied to a transaction."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    organization_id: int | None = Field(
-        default=None, foreign_key="organization.id", index=True, nullable=False
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
     transaction_id: int = Field(foreign_key="transaction.id")
     account_id: int = Field(foreign_key="account.id")
     debit: float = 0.0
     credit: float = 0.0
-    currency: str = "USD"
+    currency: str = Field(default="USD", max_length=12)
 
-# todo - fix
+
 class Budget(SQLModel, table=True):
     """Operating budget for an organization."""
 
@@ -189,7 +149,7 @@ class Budget(SQLModel, table=True):
     name: str
     start_date: date
     end_date: date
-    currency: str = "USD"
+    currency: str = Field(default="USD", max_length=12)
 
 
 class BudgetLine(SQLModel, table=True):
@@ -222,33 +182,30 @@ class ForecastOutput(SQLModel, table=True):
     plan_id: int = Field(foreign_key="forecastplan.id")
     report_type: str
     generated_at: datetime = Field(default_factory=datetime.utcnow)
-    summary: dict | None = Field(default=None, sa_column=Column(JSON))
-    context: dict | None = Field(default=None, sa_column=Column(JSON))
+    summary: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    context: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     csv_data: Optional[str] = Field(default=None, sa_column=Column(Text))
 
 
 class Instrument(ActorTrackedModel, table=True):
-class Instrument(SQLModel, table=True):
-class Instrument(TimestampMixin, SQLModel, table=True):
     """Financial instrument reference data."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    organization_id: int | None = Field(
-        default=None, foreign_key="organization.id", index=True, nullable=False
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
     symbol: str
     name: Optional[str] = None
-    type: str = "equity"  # equity/etf/commodity/currency
+    type: str = Field(default="equity", max_length=32)
 
 
 class Price(ActorTrackedModel, table=True):
-class Price(TimestampMixin, SQLModel, table=True):
     """Daily close price for an instrument."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
     instrument_id: int = Field(foreign_key="instrument.id")
-    organization_id: int | None = Field(
-        default=None, foreign_key="organization.id", index=True, nullable=False
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
     date: date
     close: float
@@ -256,12 +213,11 @@ class Price(TimestampMixin, SQLModel, table=True):
 
 
 class Rate(ActorTrackedModel, table=True):
-class Rate(TimestampMixin, SQLModel, table=True):
     """Foreign exchange rate observation."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    organization_id: int | None = Field(
-        default=None, foreign_key="organization.id", index=True, nullable=False
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
     base: str
     quote: str
@@ -279,33 +235,31 @@ class Country(ActorTrackedModel, table=True):
 
 
 class TaxRule(ActorTrackedModel, table=True):
-class TaxRule(TimestampMixin, SQLModel, table=True):
     """Machine-readable tax rule."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    organization_id: int | None = Field(
-        default=None, foreign_key="organization.id", index=True, nullable=False
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
-    jurisdiction: str  # e.g., US-FED, EU-IE
-    scope: str  # e.g., vat, corporate_income, payroll
-    expression: str  # JSONLogic or simple expr string
+    jurisdiction: str
+    scope: str
+    expression: str
     valid_from: Optional[date] = None
     valid_to: Optional[date] = None
     source: Optional[str] = None
 
 
 class Event(ActorTrackedModel, table=True):
-class Event(TimestampMixin, SQLModel, table=True):
     """External event for market intelligence."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    organization_id: int | None = Field(
-        default=None, foreign_key="organization.id", index=True, nullable=False
+    organization_id: Optional[int] = Field(
+        default=None, foreign_key="organization.id", index=True
     )
     ts: datetime
     source: str
     title: str
-    score: Optional[float] = None  # relevance/intensity
+    score: Optional[float] = None
 
 
 class AuditAction(str, Enum):
@@ -342,6 +296,9 @@ class AuditLog(SQLModel, table=True):
     source: Optional[str] = None
     context: Optional[dict[str, Any]] = Field(
         default=None, sa_column=Column(JSON, nullable=True)
+    )
+
+
 class WorkflowStatus(str, Enum):
     """Processing state for staged transactions."""
 
@@ -370,6 +327,7 @@ class StagedTransaction(SQLModel, table=True):
     ingested_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+
 class StagedPosting(SQLModel, table=True):
     """Individual staging record for a transaction posting."""
 
@@ -384,4 +342,3 @@ class StagedPosting(SQLModel, table=True):
     context: dict[str, Any] = Field(
         default_factory=dict, sa_column=Column(JSON, nullable=False)
     )
-

@@ -1,3 +1,5 @@
+"""Ledger domain services."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,16 +30,23 @@ class TrialBalanceRow:
     def balance(self) -> Decimal:
         return self.debit - self.credit
 
+
 class LedgerService:
     """High-level orchestration of ledger operations."""
 
-    def __init__(self, session: Session, audit_logger: AuditLogger | None = None):
-        self.s = session
+    def __init__(
+        self,
+        session: Session,
+        audit_logger: AuditLogger | None = None,
+        organization_id: int | None = None,
+    ) -> None:
+        self.session = session
         self.audit = audit_logger or AuditLogger(session)
-    def __init__(self, session: Session, organization_id: int):
-        self.s = session
         self.organization_id = organization_id
 
+    # ------------------------------------------------------------------
+    # Account operations
+    # ------------------------------------------------------------------
     def create_account(
         self,
         name: str,
@@ -55,7 +64,7 @@ class LedgerService:
         if isinstance(type, str):
             try:
                 acct_type = AccountType(type.strip().upper())
-            except ValueError as exc:
+            except ValueError as exc:  # pragma: no cover - defensive normalisation
                 raise ValueError(f"Unknown account type '{type}'") from exc
         else:
             acct_type = type
@@ -63,41 +72,49 @@ class LedgerService:
         code_clean = code.strip() if isinstance(code, str) and code.strip() else None
         currency_clean = (currency or "USD").strip().upper() or "USD"
 
-        if code_clean and self.find_account_by_code(code_clean):
+        resolved_org = self._resolve_org_id(organization_id)
+
+        if code_clean and self.find_account_by_code(code_clean, organization_id=resolved_org):
             raise ValueError(f"Account code '{code_clean}' already exists")
 
-        acct = Account(name=name_clean, type=acct_type, code=code_clean, currency=currency_clean)
-        apply_creation_metadata(acct)
-        acct = Account(
+        account = Account(
             name=name_clean,
             type=acct_type,
             code=code_clean,
             currency=currency_clean,
-          # todo - fix
-            organization_id=organization_id,
-            organization_id=self.organization_id,
+            organization_id=resolved_org,
         )
-        self.s.add(acct)
-        self.s.commit()
-        self.s.refresh(acct)
-        self.audit.log(AuditAction.CREATE, "Account", acct.id, after=acct)
-        return acct
+        apply_creation_metadata(account)
+        if resolved_org is not None and getattr(account, "organization_id", None) is None:
+            account.organization_id = resolved_org
 
-    def find_account_by_code(self, code: str) -> Account | None:
+        self.session.add(account)
+        self.session.commit()
+        self.session.refresh(account)
+        self.audit.log(AuditAction.CREATE, "Account", account.id, after=account)
+        return account
+
+    def find_account_by_code(
+        self, code: str, *, organization_id: int | None = None
+    ) -> Account | None:
         """Return the account with the provided code, if any."""
 
-        stmt = select(Account).where(
-            Account.code == code, Account.organization_id == self.organization_id
-        )
-        return self.s.exec(stmt).one_or_none()
+        resolved_org = self._resolve_org_id(organization_id)
+        stmt = select(Account).where(Account.code == code)
+        if resolved_org is not None:
+            stmt = stmt.where(Account.organization_id == resolved_org)
+        return self.session.exec(stmt).one_or_none()
 
-    def find_account_by_name(self, name: str) -> Account | None:
+    def find_account_by_name(
+        self, name: str, *, organization_id: int | None = None
+    ) -> Account | None:
         """Return the account with the provided name, if any."""
 
-        stmt = select(Account).where(
-            Account.name == name, Account.organization_id == self.organization_id
-        )
-        return self.s.exec(stmt).one_or_none()
+        resolved_org = self._resolve_org_id(organization_id)
+        stmt = select(Account).where(Account.name == name)
+        if resolved_org is not None:
+            stmt = stmt.where(Account.organization_id == resolved_org)
+        return self.session.exec(stmt).one_or_none()
 
     def require_account(self, identifier: str) -> Account:
         """Return the account matching ``identifier`` or raise ``ValueError``."""
@@ -107,11 +124,153 @@ class LedgerService:
             raise ValueError(f"Account '{identifier}' not found")
         return account
 
+    # ------------------------------------------------------------------
+    # Transaction processing
+    # ------------------------------------------------------------------
     def validate_transaction(
-        self, date: date_type, description: str, postings: Iterable[Mapping[str, object]]
+        self,
+        date: date_type,
+        description: str,
+        postings: Iterable[Mapping[str, object]],
+        *,
+        organization_id: int | None = None,
     ) -> list[dict[str, object]]:
         """Validate transaction inputs and return normalised postings."""
 
+        _, normalised = self._normalise_transaction(
+            date, description, postings, organization_id=organization_id
+        )
+        return normalised
+
+    def post_transaction(
+        self,
+        date: date_type,
+        description: str,
+        postings: Iterable[Mapping[str, object]],
+        *,
+        organization_id: int | None = None,
+    ) -> Transaction:
+        """Persist a balanced transaction with associated journal entries."""
+
+        description_clean, normalised = self._normalise_transaction(
+            date, description, postings, organization_id=organization_id
+        )
+        resolved_org = self._resolve_org_id(organization_id)
+
+        transaction = Transaction(
+            date=date,
+            description=description_clean,
+            organization_id=resolved_org,
+        )
+        apply_creation_metadata(transaction)
+        if resolved_org is not None and getattr(transaction, "organization_id", None) is None:
+            transaction.organization_id = resolved_org
+
+        self.session.add(transaction)
+        self.session.flush()
+
+        journal_entries: list[JournalEntry] = []
+        for entry in normalised:
+            journal_entry = JournalEntry(transaction_id=transaction.id, **entry)
+            apply_creation_metadata(journal_entry)
+            if resolved_org is not None and getattr(journal_entry, "organization_id", None) is None:
+                journal_entry.organization_id = resolved_org
+            self.session.add(journal_entry)
+            journal_entries.append(journal_entry)
+
+        self.session.commit()
+        self.session.refresh(transaction)
+        for journal_entry in journal_entries:
+            self.session.refresh(journal_entry)
+
+        payload = {
+            "transaction": transaction.model_dump(),
+            "entries": [entry.model_dump() for entry in journal_entries],
+            "description": description_clean,
+        }
+        self.audit.log(AuditAction.CREATE, "Transaction", transaction.id, after=payload)
+        return transaction
+
+    # ------------------------------------------------------------------
+    # Reporting
+    # ------------------------------------------------------------------
+    def trial_balance(self) -> dict[str, Sequence[TrialBalanceRow] | Decimal]:
+        """Return summed debits and credits per account."""
+
+        currency_expr = func.coalesce(JournalEntry.currency, Account.currency).label(
+            "currency"
+        )
+        join_condition = JournalEntry.account_id == Account.id
+        if self.organization_id is not None:
+            join_condition = join_condition & (JournalEntry.organization_id == self.organization_id)
+
+        stmt = (
+            select(
+                Account.id,
+                Account.code,
+                Account.name,
+                Account.type,
+                currency_expr,
+                func.coalesce(func.sum(JournalEntry.debit), 0.0),
+                func.coalesce(func.sum(JournalEntry.credit), 0.0),
+            )
+            .join(JournalEntry, join_condition, isouter=True)
+        )
+
+        if self.organization_id is not None:
+            stmt = stmt.where(Account.organization_id == self.organization_id)
+
+        stmt = stmt.group_by(
+            Account.id,
+            Account.code,
+            Account.name,
+            Account.type,
+            currency_expr,
+        ).order_by(Account.code, Account.name, currency_expr)
+
+        rows: list[TrialBalanceRow] = []
+        total_debit = Decimal("0")
+        total_credit = Decimal("0")
+
+        for acct_id, code, name, type_, currency, debit, credit in self.session.exec(stmt):
+            acct_type = AccountType(type_) if not isinstance(type_, AccountType) else type_
+            debit_dec = _to_decimal(debit)
+            credit_dec = _to_decimal(credit)
+            rows.append(
+                TrialBalanceRow(
+                    account_id=acct_id,
+                    account_code=code,
+                    account_name=name,
+                    account_type=acct_type,
+                    currency=currency,
+                    debit=debit_dec,
+                    credit=credit_dec,
+                )
+            )
+            total_debit += debit_dec
+            total_credit += credit_dec
+
+        return {
+            "rows": rows,
+            "total_debit": total_debit,
+            "total_credit": total_credit,
+        }
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _resolve_org_id(self, organization_id: int | None) -> int | None:
+        if organization_id is not None:
+            return organization_id
+        return self.organization_id
+
+    def _normalise_transaction(
+        self,
+        date: date_type,
+        description: str,
+        postings: Iterable[Mapping[str, object]],
+        organization_id: int | None = None,
+    ) -> tuple[str, list[dict[str, object]]]:
         description_clean = (description or "").strip()
         if not description_clean:
             raise ValueError("Transaction description is required")
@@ -119,6 +278,8 @@ class LedgerService:
         postings_list = [dict(p) for p in postings]
         if not postings_list:
             raise ValueError("At least one posting is required")
+
+        resolved_org = self._resolve_org_id(organization_id)
 
         debit_total = Decimal("0")
         credit_total = Decimal("0")
@@ -129,9 +290,13 @@ class LedgerService:
             if not isinstance(account_id, int):
                 raise ValueError(f"Posting {idx}: account_id is required")
 
-            account = self.s.get(Account, account_id)
-            if account is None or account.organization_id != self.organization_id:
+            account = self.session.get(Account, account_id)
+            if account is None:
                 raise ValueError(f"Posting {idx}: account {account_id} not found")
+            if resolved_org is not None and account.organization_id != resolved_org:
+                raise ValueError(
+                    f"Posting {idx}: account {account_id} is not part of this organization"
+                )
 
             debit_val = _to_decimal(posting.get("debit"))
             credit_val = _to_decimal(posting.get("credit"))
@@ -165,106 +330,7 @@ class LedgerService:
         if debit_total != credit_total:
             raise ValueError("Transaction is not balanced")
 
-        txn = Transaction(date=date, description=description_clean)
-        apply_creation_metadata(txn)
-        txn = Transaction(
-            date=date,
-            description=description_clean,
-            organization_id=self.organization_id,
-        )
-        self.s.add(txn)
-        self.s.flush()
-
-        journal_entries: list[JournalEntry] = []
-        for entry in normalised_postings:
-            je = JournalEntry(transaction_id=txn.id, **entry)
-            apply_creation_metadata(je)
-            journal_entries.append(je)
-            self.s.add(je)
-            self.s.add(
-                JournalEntry(
-                    transaction_id=txn.id,
-                    organization_id=self.organization_id,
-                    **entry,
-                )
-            )
-
-        self.s.commit()
-        self.s.refresh(txn)
-        for je in journal_entries:
-            self.s.refresh(je)
-
-        payload = {
-            "transaction": txn.model_dump(),
-            "entries": [entry.model_dump() for entry in journal_entries],
-            "description": description_clean,
-        }
-        self.audit.log(
-            AuditAction.CREATE,
-            "Transaction",
-            txn.id,
-            after=payload,
-        )
-        return txn
-
-    def trial_balance(self) -> dict[str, Sequence[TrialBalanceRow] | Decimal]:
-        """Return summed debits and credits per account."""
-
-        currency_expr = func.coalesce(JournalEntry.currency, Account.currency).label("currency")
-        stmt = (
-            select(
-                Account.id,
-                Account.code,
-                Account.name,
-                Account.type,
-                currency_expr,
-                func.coalesce(func.sum(JournalEntry.debit), 0.0),
-                func.coalesce(func.sum(JournalEntry.credit), 0.0),
-            )
-            .join(
-                JournalEntry,
-                (JournalEntry.account_id == Account.id)
-                & (JournalEntry.organization_id == self.organization_id),
-                isouter=True,
-            )
-            .where(Account.organization_id == self.organization_id)
-            .group_by(
-                Account.id,
-                Account.code,
-                Account.name,
-                Account.type,
-                currency_expr,
-            )
-            .order_by(Account.code, Account.name, currency_expr)
-        )
-
-        rows: list[TrialBalanceRow] = []
-        total_debit = Decimal("0")
-        total_credit = Decimal("0")
-
-        for acct_id, code, name, type_, currency, debit, credit in self.s.exec(stmt):
-            acct_type = AccountType(type_) if not isinstance(type_, AccountType) else type_
-            debit_dec = _to_decimal(debit)
-            credit_dec = _to_decimal(credit)
-            rows.append(
-                TrialBalanceRow(
-                    account_id=acct_id,
-                    account_code=code,
-                    account_name=name,
-                    account_type=acct_type,
-                    currency=currency,
-                    debit=debit_dec,
-                    credit=credit_dec,
-                )
-            )
-            total_debit += debit_dec
-            total_credit += credit_dec
-
-        return {
-            "rows": rows,
-            "total_debit": total_debit,
-            "total_credit": total_credit,
-        }
+        return description_clean, normalised_postings
 
 
 def _to_decimal(value: float | int | Decimal | str | None) -> Decimal:
@@ -278,5 +344,5 @@ def _to_decimal(value: float | int | Decimal | str | None) -> Decimal:
             if not value:
                 return Decimal("0")
         return Decimal(str(value))
-    except (InvalidOperation, TypeError) as exc:
+    except (InvalidOperation, TypeError) as exc:  # pragma: no cover - defensive
         raise ValueError(f"Invalid monetary value: {value!r}") from exc
