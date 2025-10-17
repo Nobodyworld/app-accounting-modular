@@ -1,25 +1,41 @@
+"""European Central Bank FX provider implementation."""
+
+from __future__ import annotations
+
 from datetime import date
+from typing import Iterable
+
 import requests
-from typing import List
-from sqlmodel import Session
+
 from apps.api.models.models import Rate
 
-# Simple ECB reference rates via exchangerate.host (free mirror) to avoid API keys.
-# NOTE: For production, pin a compliant source and add retries/caching.
+API_ROOT = "https://api.exchangerate.host"
+
+__all__ = ["ECBFXProvider", "provider"]
+
+
 class ECBFXProvider:
+    """Fetch FX rates using the exchangerate.host ECB mirror."""
+
     name = "ecb_reference_via_exchangerate_host"
 
-    def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> List[Rate]:
-        # if date_ is None, latest
-        endpoint = f"https://api.exchangerate.host/latest?base={base}" if date_ is None             else f"https://api.exchangerate.host/{date_.isoformat()}?base={base}"
-        r = requests.get(endpoint, timeout=20)
-        r.raise_for_status()
-        data = r.json()
-        d = date.fromisoformat(data["date"])
-        out = []
-        for quote, val in data.get("rates", {}).items():
-            out.append(Rate(base=base, quote=quote, date=d, value=float(val), provider=self.name))
-        return out
+    def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> Iterable[Rate]:
+        endpoint = f"{API_ROOT}/latest?base={base}" if date_ is None else f"{API_ROOT}/{date_.isoformat()}?base={base}"
+        response = requests.get(endpoint, timeout=20)
+        response.raise_for_status()
+        payload = response.json()
+        rate_date = date.fromisoformat(payload["date"])
+        for quote, value in payload.get("rates", {}).items():
+            yield Rate(
+                base=base,
+                quote=quote,
+                date=rate_date,
+                value=float(value),
+                provider=self.name,
+            )
 
-def provider():
+
+def provider() -> ECBFXProvider:
+    """Entry point for the plugin loader."""
+
     return ECBFXProvider()
