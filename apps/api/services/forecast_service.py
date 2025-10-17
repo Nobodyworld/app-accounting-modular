@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Iterable, Sequence
 
 import warnings
@@ -25,7 +26,7 @@ class ForecastService:
         self.candidate_orders = [o for o in orders if not (o in seen or seen.add(o))]
 
     def forecast_series(
-        self, series: Sequence[tuple[object, float]], horizon: int = 30
+        self, series: Sequence[tuple[object, float | int | Decimal]], horizon: int = 30
     ) -> ForecastResult:
         """Forecast a time series using the best ARIMA order by AIC."""
 

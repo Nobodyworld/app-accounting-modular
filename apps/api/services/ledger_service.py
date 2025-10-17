@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date as date_type
 from decimal import Decimal, InvalidOperation
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -33,34 +34,115 @@ class LedgerService:
     def create_account(
         self, name: str, type: AccountType | str, code: str | None = None, currency: str = "USD"
     ) -> Account:
+        """Create and persist an account with basic validation."""
+
+        name_clean = name.strip()
+        if not name_clean:
+            raise ValueError("Account name is required")
+
         acct_type = AccountType(type) if isinstance(type, str) else type
-        acct = Account(name=name, type=acct_type, code=code, currency=currency)
+
+        code_clean = code.strip() if isinstance(code, str) and code.strip() else None
+        currency_clean = currency.strip().upper() if isinstance(currency, str) else "USD"
+
+        if code_clean and self.find_account_by_code(code_clean):
+            raise ValueError(f"Account code '{code_clean}' already exists")
+
+        acct = Account(name=name_clean, type=acct_type, code=code_clean, currency=currency_clean)
         self.s.add(acct)
         self.s.commit()
         self.s.refresh(acct)
         return acct
 
     def find_account_by_code(self, code: str) -> Account | None:
-        stmt = select(Account).where(Account.code == code)
+        code_clean = code.strip()
+        stmt = select(Account).where(Account.code == code_clean)
         return self.s.exec(stmt).one_or_none()
 
     def find_account_by_name(self, name: str) -> Account | None:
-        stmt = select(Account).where(Account.name == name)
+        name_clean = name.strip()
+        stmt = select(Account).where(Account.name == name_clean)
         return self.s.exec(stmt).one_or_none()
 
-    def require_account(self, identifier: str) -> Account:
-        account = self.find_account_by_code(identifier) or self.find_account_by_name(identifier)
+    def require_account(self, identifier: str | int) -> Account:
+        account: Account | None
+        if isinstance(identifier, int):
+            account = self.s.get(Account, identifier)
+        else:
+            identifier_str = str(identifier).strip()
+            account = self.find_account_by_code(identifier_str) or self.find_account_by_name(identifier_str)
+            if account is None and identifier_str.isdigit():
+                account = self.s.get(Account, int(identifier_str))
         if account is None:
             raise ValueError(f"Account '{identifier}' not found")
         return account
 
-    def post_transaction(self, date, description, postings: Iterable[dict]) -> Transaction:
-        txn = Transaction(date=date, description=description)
+    def post_transaction(
+        self,
+        date: date_type,
+        description: str,
+        postings: Iterable[Mapping[str, object]],
+        external_ref: str | None = None,
+    ) -> Transaction:
+        """Persist a balanced transaction composed of validated postings."""
+
+        description_clean = description.strip()
+        if not description_clean:
+            raise ValueError("Transaction description is required")
+
+        entries: list[JournalEntry] = []
+        total_debit = Decimal("0")
+        total_credit = Decimal("0")
+
+        for idx, posting in enumerate(postings, start=1):
+            try:
+                account_id = int(posting["account_id"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f"Posting {idx}: account_id is required") from exc
+
+            account = self.s.get(Account, account_id)
+            if account is None:
+                raise ValueError(f"Posting {idx}: account {account_id} not found")
+
+            debit = _to_decimal(posting.get("debit"))
+            credit = _to_decimal(posting.get("credit"))
+
+            if debit < 0 or credit < 0:
+                raise ValueError(f"Posting {idx}: debit and credit must be non-negative")
+            if debit == 0 and credit == 0:
+                raise ValueError(f"Posting {idx}: either debit or credit must be provided")
+            if debit != 0 and credit != 0:
+                raise ValueError(f"Posting {idx}: only one of debit or credit can be provided")
+
+            currency_raw = posting.get("currency")
+            currency = (str(currency_raw).strip().upper() if currency_raw else account.currency)
+
+            entries.append(
+                JournalEntry(
+                    account_id=account_id,
+                    debit=float(debit),
+                    credit=float(credit),
+                    currency=currency,
+                )
+            )
+
+            total_debit += debit
+            total_credit += credit
+
+        if len(entries) < 2:
+            raise ValueError("Transaction must contain at least two postings")
+
+        if abs(total_debit - total_credit) > Decimal("0.005"):
+            raise ValueError("Transaction is not balanced")
+
+        txn = Transaction(date=date, description=description_clean, external_ref=external_ref)
         self.s.add(txn)
         self.s.flush()
-        for p in postings:
-            je = JournalEntry(transaction_id=txn.id, **p)
-            self.s.add(je)
+
+        for entry in entries:
+            entry.transaction_id = txn.id
+            self.s.add(entry)
+
         self.s.commit()
         self.s.refresh(txn)
         return txn

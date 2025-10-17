@@ -1,10 +1,13 @@
-from typing import List
+from typing import Sequence
+
 from sqlmodel import Session
+
 from ..models.models import TaxRule
 
 class BaseTaxProvider:
     name: str
-    def upsert_rules(self) -> List[TaxRule]:
+
+    def upsert_rules(self) -> Sequence[TaxRule]:
         raise NotImplementedError
 
 class TaxService:
@@ -13,8 +16,8 @@ class TaxService:
         self.provider = provider
 
     def sync_rules(self) -> int:
-        rules = self.provider.upsert_rules()
-        for r in rules:
-            self.s.add(r)
+        rules = list(self.provider.upsert_rules())
+        for rule in rules:
+            self.s.add(rule)
         self.s.commit()
         return len(rules)
