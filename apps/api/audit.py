@@ -126,6 +126,9 @@ class AuditLogger:
             context=_jsonify(metadata),
         )
         self.session.add(log_entry)
+        # Persist immediately to ensure audit entries are durable even if
+        # subsequent operations fail.
+        self.session.commit()
 
 
 def apply_creation_metadata(record: Any) -> None:
