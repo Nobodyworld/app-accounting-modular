@@ -12,7 +12,7 @@ from apps.api.services.workflow_service import WorkflowService
 def create_session():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
-    return Session(engine)
+    return Session(engine, expire_on_commit=False)
 
 
 def test_workflow_validation_and_reprocessing() -> None:

@@ -15,7 +15,7 @@ def setup_database() -> Session:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     db.engine = engine
     SQLModel.metadata.create_all(engine)
-    return Session(engine)
+    return Session(engine, expire_on_commit=False)
 
 
 def seed_data(session: Session) -> tuple[int, int]:

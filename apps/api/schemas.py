@@ -9,8 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .models.models import AccountType, AuditAction
-from .models.models import AccountType, WorkflowStatus
+from .models.models import AccountType, AuditAction, WorkflowStatus
 from .services.ledger_service import TrialBalanceRow
 from .services.workflow_service import WorkflowResult
 
@@ -340,6 +339,8 @@ class BudgetReportResponse(BaseModel):
 
 class CashflowForecastResponse(BaseModel):
     """Serialized response for cashflow forecasts."""
+
+    model_config = ConfigDict(protected_namespaces=())
 
     historical: list[dict[str, float | str]]
     forecast: list[tuple[str, float]]

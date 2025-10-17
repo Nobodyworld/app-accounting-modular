@@ -29,46 +29,41 @@ class MarketService:
         self,
         session: Session,
         provider: BaseMarketProvider,
+        organization_id: int | None = None,
         audit_logger: AuditLogger | None = None,
-    ):
-        self.s = session
-        self.provider = provider
-        self.audit = audit_logger or AuditLogger(session)
-    def __init__(self, session: Session, provider: BaseMarketProvider, organization_id: int):
-        self.s = session
+    ) -> None:
+        self.session = session
         self.provider = provider
         self.organization_id = organization_id
+        self.audit = audit_logger or AuditLogger(session)
 
     def sync_prices(self, symbol: str, start: date, end: date) -> int:
         """Persist price data for ``symbol`` between ``start`` and ``end`` inclusive."""
 
-        stmt = select(Instrument).where(
-            Instrument.symbol == symbol,
-            Instrument.organization_id == self.organization_id,
-        )
-        inst = self.s.exec(stmt).one_or_none()
+        stmt = select(Instrument).where(Instrument.symbol == symbol)
+        if self.organization_id is not None:
+            stmt = stmt.where(Instrument.organization_id == self.organization_id)
+        inst = self.session.exec(stmt).one_or_none()
         if inst is None:
             inst = Instrument(symbol=symbol, name=symbol)
+            if self.organization_id is not None:
+                inst.organization_id = self.organization_id
             apply_creation_metadata(inst)
-            inst = Instrument(
-                symbol=symbol,
-                name=symbol,
-                organization_id=self.organization_id,
-            )
-            self.s.add(inst)
-            self.s.commit()
-            self.s.refresh(inst)
+            self.session.add(inst)
+            self.session.commit()
+            self.session.refresh(inst)
             self.audit.log(AuditAction.CREATE, "Instrument", inst.id, after=inst)
 
         prices = list(self.provider.fetch_prices(symbol, start, end))
         for price in prices:
             price.instrument_id = inst.id
             apply_creation_metadata(price)
-            price.organization_id = self.organization_id
-            self.s.add(price)
-        self.s.commit()
+            if self.organization_id is not None:
+                price.organization_id = self.organization_id
+            self.session.add(price)
+        self.session.commit()
         for price in prices:
-            self.s.refresh(price)
+            self.session.refresh(price)
         payload = {
             "symbol": symbol,
             "start": start,

@@ -110,7 +110,7 @@ def get_staged_transaction(
         source_metadata=staged.source_metadata,
         validation_errors=staged.validation_errors,
         transaction_id=staged.transaction_id,
-        ingested_at=staged.created_at,
+        ingested_at=staged.ingested_at,
         updated_at=staged.updated_at,
         postings=posting_models,
     )
@@ -148,7 +148,7 @@ def list_staged_transactions(s: Session = Depends(get_session)) -> list[StagedTr
                 source_metadata=staged.source_metadata,
                 validation_errors=staged.validation_errors,
                 transaction_id=staged.transaction_id,
-                ingested_at=staged.created_at,
+                ingested_at=staged.ingested_at,
                 updated_at=staged.updated_at,
                 postings=posting_models,
             )

@@ -9,9 +9,10 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from apps.api import db
-from apps.api.models.models import StagedPosting, WorkflowStatus
+from apps.api.models.models import StagedPosting, User, WorkflowStatus
 from apps.api.services.ledger_service import LedgerService
 from apps.api.main import create_app
+from apps.api.security import get_current_user
 
 
 def create_client() -> tuple[TestClient, Session]:
@@ -24,7 +25,12 @@ def create_client() -> tuple[TestClient, Session]:
     db.connect_args = {"check_same_thread": False}
     SQLModel.metadata.create_all(engine)
     app = create_app()
-    return TestClient(app), Session(engine)
+
+    def _stub_user() -> User:
+        return User(id=1, email="tester@example.com", password_hash="stub", is_active=True)
+
+    app.dependency_overrides[get_current_user] = _stub_user
+    return TestClient(app), Session(engine, expire_on_commit=False)
 
 
 def test_workflow_api_end_to_end() -> None:
@@ -68,7 +74,7 @@ def test_workflow_api_end_to_end() -> None:
     failed = next(r for r in data["results"] if r["status"] == WorkflowStatus.FAILED.value)
     assert "account 9999 not found" in failed["validation_errors"][0]
 
-    with Session(db.engine) as session:
+    with Session(db.engine, expire_on_commit=False) as session:
         posting = session.exec(
             select(StagedPosting).where(
                 StagedPosting.staged_transaction_id == failed["staged_transaction_id"],

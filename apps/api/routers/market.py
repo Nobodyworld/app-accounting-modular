@@ -7,9 +7,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from ..audit import AuditLogger
 from ..dependencies import session_with_audit_context
-from ..db import get_session
 from ..models.models import User
 from ..security import get_current_organization, get_current_user
 from ..services.market_service import MarketService
@@ -24,10 +22,8 @@ def sync_prices(
     symbol: str,
     start: date,
     end: date,
-    provider: str = "plugins.market_yfinance.provider",
-    s: Session = Depends(session_with_audit_context),
     provider_key: str = "market:yfinance",
-    s: Session = Depends(get_session),
+    session: Session = Depends(session_with_audit_context),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str | int | date]:
     """Fetch and persist instrument prices for a date range."""
@@ -40,15 +36,21 @@ def sync_prices(
     except ValueError as exc:  # pragma: no cover - FastAPI integration
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    svc = MarketService(s, prov, audit_logger=AuditLogger(s))
     org_ctx = get_current_organization(
-        organization_id=organization_id, session=s, current_user=current_user
+        organization_id=organization_id,
+        session=session,
+        current_user=current_user,
     )
-    if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_market):
+    membership = org_ctx.membership
+    if not (membership.is_admin or membership.can_manage_market):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    svc = MarketService(s, prov, organization_id=org_ctx.organization.id)
-    n = svc.sync_prices(symbol, start, end)
+    service = MarketService(
+        session,
+        handle.instance,
+        organization_id=org_ctx.organization.id,
+    )
+    n = service.sync_prices(symbol, start, end)
     return {
         "synced": n,
         "provider": handle.metadata.name,
