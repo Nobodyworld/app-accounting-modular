@@ -45,6 +45,7 @@ def sync_fx(
     )
     count = service.sync(base=base)
     # TODO - Dispatch background sync jobs for longer historical windows.
+    # TODO - Capture provider latency metrics to tune retry policies.
     return {
         "synced": count,
         "provider": handle.metadata.name,

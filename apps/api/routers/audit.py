@@ -40,4 +40,5 @@ def list_audit_logs(
         stmt = stmt.where(AuditLog.ts <= end)
 
     logs = s.exec(stmt).all()
+    # TODO - Add cursor-based pagination to support browsing long audit histories.
     return [AuditLogSchema.model_validate(log) for log in logs]

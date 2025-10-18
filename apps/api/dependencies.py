@@ -19,6 +19,7 @@ def _parse_optional_int(value: Optional[str]) -> Optional[int]:
     try:
         return int(value)
     except ValueError:  # pragma: no cover - defensive
+        # TODO - Emit structured metrics for malformed identifier headers.
         return None
 
 

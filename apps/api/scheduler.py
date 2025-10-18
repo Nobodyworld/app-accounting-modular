@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 @contextmanager
 def _session_scope() -> Iterator[Session]:
     session = Session(engine)
+    # TODO - Implement retry/backoff for transient database connectivity issues.
     try:
         yield session
     finally:

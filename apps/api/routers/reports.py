@@ -16,6 +16,7 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 def _response_from_budget(report: BudgetReport) -> BudgetReportResponse:
     metadata = report.metadata.copy()
+    # TODO - Normalize metadata keys/values to ensure downstream clients see consistent casing.
     generated_at = metadata.get("generated_at")
     if isinstance(generated_at, str):
         metadata["generated_at"] = datetime.fromisoformat(generated_at)
@@ -48,6 +49,7 @@ def _response_from_budget(report: BudgetReport) -> BudgetReportResponse:
 
 def _response_from_cashflow(report: CashflowReport) -> CashflowForecastResponse:
     metadata = report.metadata.copy()
+    # TODO - Attach model diagnostics to metadata for observability of forecast quality.
     generated_at = metadata.get("generated_at")
     if isinstance(generated_at, str):
         metadata["generated_at"] = datetime.fromisoformat(generated_at)
@@ -70,6 +72,7 @@ def budget_vs_actual(
     refresh: bool = Query(default=False),
     session: Session = Depends(get_session),
 ) -> BudgetReportResponse:
+    # TODO - Enforce organization scoping to prevent cross-tenant budget exposure.
     service = BudgetService(session)
     report = service.budget_vs_actual(budget_id, horizon=horizon, refresh=refresh)
     return _response_from_budget(report)
@@ -82,6 +85,7 @@ def cashflow_forecast(
     refresh: bool = Query(default=False),
     session: Session = Depends(get_session),
 ) -> CashflowForecastResponse:
+    # TODO - Cache refresh results to reduce repeated model runs for identical parameters.
     service = BudgetService(session)
     report = service.cashflow_forecast(organization_id, horizon=horizon, refresh=refresh)
     return _response_from_cashflow(report)

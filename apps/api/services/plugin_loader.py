@@ -97,4 +97,5 @@ def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
     if provider is None:
         raise ValueError(f"Factory '{factory}' in {module_path} returned None")
 
+    # TODO - Validate provider interface compliance before exposing the handle.
     return ProviderHandle(instance=provider, metadata=_metadata_from_info(key, info))

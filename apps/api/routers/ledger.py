@@ -15,6 +15,7 @@ router = APIRouter(prefix="/ledger", tags=["ledger"])
 
 
 def _service_for_org(session: Session, organization_id: int) -> LedgerService:
+    # TODO - Reuse a per-request service cache to avoid redundant instantiations.
     return LedgerService(session, organization_id=organization_id)
 
 
