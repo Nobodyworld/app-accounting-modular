@@ -125,3 +125,59 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Project-specific / additional
+# virtual environments and env files (common variations)
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python packaging / build artifacts
+pyproject.lock
+pip-wheel-metadata/
+dist/
+build/
+__pypackages__/
+
+# dotenv / environment files that often contain secrets
+.env.local
+.env.*
+!.env.example
+
+# log files
+*.log
+logs/
+
+# SQLite and DB files used during development/testing
+*.db
+*.sqlite3
+
+# Streamlit cache
+.streamlit/
+
+# Uvicorn / Gunicorn / ASGI/WSGI
+gunicorn.socket
+gunicorn.pid
+
+# Docker
+*.tar
+docker-compose.override.yml
+
+# Editor/IDE files (kept more inclusive)
+*.sublime-workspace
+*.sublime-project
+
+# pyenv/virtualenvwrapper
+.python-version
+.venvrc
+
+# test artifacts
+.pytest_cache/
+coverage/
+
+# my local vim swap files and backup
+.*.swp
+*.swo
