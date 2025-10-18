@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Modular Accounting API", version="0.1.0", lifespan=lifespan)
     protected = [Depends(get_current_user)]
+    # TODO - Centralize router dependency sets to simplify role-based expansions.
     app.include_router(core.router)
     app.include_router(auth.router)
     app.include_router(audit.router, dependencies=protected)

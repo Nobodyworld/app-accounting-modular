@@ -24,4 +24,5 @@ def login(
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     # TODO - Enforce login throttling or MFA challenges for repeated failures.
     token = create_access_token({"sub": str(user.id)})
+    # TODO - Issue refresh tokens to support longer-lived sessions securely.
     return {"access_token": token, "token_type": "bearer"}

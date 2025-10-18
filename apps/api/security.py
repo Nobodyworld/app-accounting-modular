@@ -143,4 +143,5 @@ def get_current_organization(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized for this organization",
         )
+    # TODO - Cache organization membership lookups for high-traffic permission checks.
     return OrganizationContext(organization=organization, membership=membership)

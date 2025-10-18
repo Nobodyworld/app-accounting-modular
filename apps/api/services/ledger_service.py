@@ -252,6 +252,7 @@ class LedgerService:
             total_debit += debit_dec
             total_credit += credit_dec
 
+        # TODO - Persist summarised balances for historical cutoffs to speed up reporting.
         return {
             "rows": rows,
             "total_debit": total_debit,

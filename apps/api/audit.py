@@ -149,6 +149,7 @@ class AuditLogger:
         # Persist immediately to ensure audit entries are durable even if
         # subsequent operations fail.
         self.session.commit()
+        # TODO - Support asynchronous flushing to reduce latency on hot paths.
 
 
 def apply_creation_metadata(record: Any) -> None:

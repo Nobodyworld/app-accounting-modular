@@ -241,6 +241,7 @@ class BudgetService:
             "budget_id": plan.budget_id,
             "organization_id": plan.organization_id,
         }
+        # TODO - Include reporting currency and fx assumptions in metadata payload.
 
         return BudgetReport(
             lines=lines,
@@ -289,6 +290,7 @@ class BudgetService:
             try:
                 forecast_result = self.forecaster.forecast_series(series, plan.horizon)
             except ValueError:
+                # TODO - Capture forecasting errors for monitoring and automatic fallbacks.
                 forecast_result = None
 
         current_cash = float(sum(amount for _, amount in historical)) if historical else 0.0
@@ -305,6 +307,7 @@ class BudgetService:
             "organization_id": plan.organization_id,
             "budget_id": plan.budget_id,
         }
+        # TODO - Expose plan revision identifiers to aid reconciliation between exports.
 
         return CashflowReport(
             historical=[(period.isoformat(), amount) for period, amount in historical],
@@ -341,6 +344,8 @@ class BudgetService:
             period = self._period_key(txn_date)
             key = (account_id, period)
             actuals[key] += Decimal(str(debit)) - Decimal(str(credit))
+        # TODO - Apply currency conversion when aggregating multi-currency ledgers.
+        # TODO - Stream large actual datasets instead of loading all rows into memory.
 
         return actuals
 
