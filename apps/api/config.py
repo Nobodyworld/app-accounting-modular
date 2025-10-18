@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from functools import lru_cache
 from typing import Mapping
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 __all__ = ["ProviderInfo", "Settings", "get_settings", "settings"]
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderInfo(BaseModel):
@@ -43,9 +47,41 @@ DEFAULT_ALLOWED_PROVIDERS: dict[str, ProviderInfo] = {
 
 # TODO - Load provider catalog from persistence so admin edits survive restarts.
 
+_SECRET_PROVENANCE: dict[str, bool] = {}
+
+
+def _resolve_jwt_secret(
+    environ: Mapping[str, str] | None = None, prefix: str = "MODACCT_"
+) -> tuple[str, bool]:
+    """Return a JWT secret and whether it was auto-generated."""
+
+    env = environ or os.environ
+    for key in (f"{prefix}JWT_SECRET_KEY", "JWT_SECRET_KEY"):
+        value = env.get(key)
+        if value is None:
+            continue
+        trimmed = value.strip()
+        if trimmed:
+            return trimmed, False
+
+    secret = secrets.token_urlsafe(48)
+    logger.warning(
+        "Generated ephemeral JWT secret; tokens will rotate on restart. "
+        "Set MODACCT_JWT_SECRET_KEY or JWT_SECRET_KEY to use a persistent value."
+    )
+    return secret, True
+
+
+def _default_jwt_secret() -> str:
+    secret, ephemeral = _resolve_jwt_secret()
+    _SECRET_PROVENANCE[secret] = ephemeral
+    return secret
+
 
 class Settings(BaseModel):
     """Application configuration derived from environment variables."""
+
+    _jwt_secret_is_ephemeral: bool = PrivateAttr(default=False)
 
     database_url: str = Field(
         default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./modacct.db")
@@ -68,7 +104,7 @@ class Settings(BaseModel):
         }
     )
     jwt_secret_key: str = Field(
-        default_factory=lambda: os.getenv("JWT_SECRET_KEY", "change-me")
+        default_factory=_default_jwt_secret
     )
     jwt_algorithm: str = Field(
         default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256")
@@ -91,6 +127,8 @@ class Settings(BaseModel):
         object.__setattr__(
             self, "jwt_algorithm", (self.jwt_algorithm or "HS256").strip().upper()
         )
+        if self.jwt_secret_key in _SECRET_PROVENANCE:
+            self._jwt_secret_is_ephemeral = _SECRET_PROVENANCE.pop(self.jwt_secret_key)
         return self
 
     @staticmethod
@@ -142,6 +180,11 @@ class Settings(BaseModel):
         jwt_secret = lookup("jwt_secret_key", "JWT_SECRET_KEY")
         if jwt_secret is not None:
             data["jwt_secret_key"] = jwt_secret
+            _SECRET_PROVENANCE[jwt_secret] = False
+        else:
+            secret, ephemeral = _resolve_jwt_secret(env, prefix=prefix)
+            data["jwt_secret_key"] = secret
+            _SECRET_PROVENANCE[secret] = ephemeral
 
         jwt_algorithm = lookup("jwt_algorithm", "JWT_ALGORITHM", upper=True)
         if jwt_algorithm is not None:
@@ -152,6 +195,12 @@ class Settings(BaseModel):
             data["access_token_expire_minutes"] = int(expire_minutes)
 
         return cls(**data)
+
+    @property
+    def jwt_secret_is_ephemeral(self) -> bool:
+        """True when the JWT secret was auto-generated for this process."""
+
+        return self._jwt_secret_is_ephemeral
 
 
 @lru_cache()

@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 from uuid import uuid4
 
@@ -131,7 +131,7 @@ class AuditLogger:
             entity_id_value = entity_id if entity_id is None else str(entity_id)
 
         log_entry = AuditLog(
-            ts=datetime.utcnow(),
+            ts=datetime.now(timezone.utc),
             action=action,
             entity_name=entity_name,
             entity_id=entity_id_value,
@@ -156,7 +156,7 @@ def apply_creation_metadata(record: Any) -> None:
     """Populate provenance fields on new ORM objects when possible."""
 
     actor = get_current_actor()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     if hasattr(record, "created_at") and getattr(record, "created_at") is None:
         setattr(record, "created_at", now)

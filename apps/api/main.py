@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 
+from .config import settings
 from .db import init_db
 from .routers import audit, auth, core, forecast, fx, ledger, market, reports, tax, workflow
 from .scheduler import shutdown_scheduler, start_scheduler
@@ -13,11 +15,18 @@ from .security import get_current_user
 
 __all__ = ["create_app", "app"]
 
+logger = logging.getLogger(__name__)
+
 
 def create_app() -> FastAPI:
     """Instantiate and configure the FastAPI application."""
 
     init_db()
+    if settings.jwt_secret_is_ephemeral:
+        logger.warning(
+            "JWT secret is ephemeral and will rotate on process restart. "
+            "Set MODACCT_JWT_SECRET_KEY or JWT_SECRET_KEY for persistent sessions."
+        )
     # TODO - Wire structured logging around startup failures for easier triage.
 
     @asynccontextmanager

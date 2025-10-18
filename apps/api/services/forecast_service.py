@@ -61,12 +61,7 @@ class ForecastService:
         for order in self.candidate_orders:
             try:
                 with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", category=ConvergenceWarning)
-                    warnings.filterwarnings("ignore", category=UserWarning)
-                    warnings.filterwarnings("ignore", category=RuntimeWarning)
-                    warnings.filterwarnings("ignore", category=FutureWarning)
-                    warnings.filterwarnings("ignore", category=ValueWarning)
-                    warnings.filterwarnings("ignore", category=DeprecationWarning)
+                    warnings.simplefilter("ignore")
                     model = ARIMA(df["y"], order=order)
                     result = model.fit()
             except Exception:  # statsmodels raises numerous specialised errors
@@ -80,7 +75,9 @@ class ForecastService:
         if best_result is None or best_order is None:
             raise ValueError("Unable to fit ARIMA model with provided data")
 
-        fc = best_result.forecast(steps=horizon)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = best_result.forecast(steps=horizon)
         points = [(str(idx), float(val)) for idx, val in fc.items()]
         return ForecastResult(horizon=horizon, points=points, model_order=best_order)
 

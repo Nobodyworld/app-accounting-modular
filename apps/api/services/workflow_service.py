@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable, Mapping, Sequence
 
 from sqlmodel import Session, select
@@ -124,7 +124,7 @@ class WorkflowService:
             except ValueError as exc:
                 staged.status = WorkflowStatus.FAILED
                 staged.validation_errors = [str(exc)]
-                staged.updated_at = datetime.utcnow()
+                staged.updated_at = datetime.now(timezone.utc)
                 self.s.add(staged)
                 results.append(
                     WorkflowResult(
@@ -138,7 +138,7 @@ class WorkflowService:
 
             staged.validation_errors = None
             staged.status = WorkflowStatus.VALIDATED
-            staged.updated_at = datetime.utcnow()
+            staged.updated_at = datetime.now(timezone.utc)
             self.s.add(staged)
 
             for posting, normalised_posting in zip(postings, normalised, strict=True):
@@ -165,7 +165,7 @@ class WorkflowService:
                 existing = self.s.get(Transaction, transaction_id)
                 if existing is not None:
                     staged.status = WorkflowStatus.POSTED
-                    staged.updated_at = datetime.utcnow()
+                    staged.updated_at = datetime.now(timezone.utc)
                     self.s.add(staged)
                     results.append(
                         WorkflowResult(
@@ -182,7 +182,7 @@ class WorkflowService:
             )
             staged.transaction_id = transaction.id
             staged.status = WorkflowStatus.POSTED
-            staged.updated_at = datetime.utcnow()
+            staged.updated_at = datetime.now(timezone.utc)
             self.s.add(staged)
 
             results.append(

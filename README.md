@@ -47,7 +47,7 @@ A modular accounting system designed for flexibility and extensibility. Built wi
 ## Project Structure
 
 - `apps/api/`: FastAPI backend
-- `apps/web/`: Flask web interface
+   - Using Docker Compose:
 - `cli/`: Command-line tools
 - `plugins/`: Plugin modules for various services
 - `docs/`: Documentation
@@ -58,7 +58,7 @@ A modular accounting system designed for flexibility and extensibility. Built wi
 For detailed documentation, see the `docs/` directory:
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Forecasting](docs/FORECASTING.md)
+    streamlit run apps/web/app.py
 - [Plugins](docs/PLUGINS.md)
 - [Tax Model](docs/TAX_MODEL.md)
 
@@ -69,3 +69,7 @@ Contributions are welcome! Please read the contributing guidelines in the docume
 ## License
 
 This project is licensed under the terms specified in the LICENSE file.
+
+## Notable changes
+
+- Times are now recorded in timezone-aware UTC datetimes across the codebase (e.g. created_at/updated_at and audit timestamps) to avoid deprecation warnings with newer Python/JWT libraries.

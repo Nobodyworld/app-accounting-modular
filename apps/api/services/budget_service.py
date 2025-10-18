@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import StringIO
 from typing import Iterable
@@ -132,7 +132,7 @@ class BudgetService:
             updated_horizon = horizon or plan.horizon
             if plan.horizon != updated_horizon:
                 plan.horizon = updated_horizon
-                plan.updated_at = datetime.utcnow()
+                plan.updated_at = datetime.now(timezone.utc)
                 self.session.add(plan)
                 self.session.commit()
                 self.session.refresh(plan)
@@ -164,7 +164,7 @@ class BudgetService:
             updated_horizon = horizon or plan.horizon
             if plan.horizon != updated_horizon:
                 plan.horizon = updated_horizon
-                plan.updated_at = datetime.utcnow()
+                plan.updated_at = datetime.now(timezone.utc)
                 self.session.add(plan)
                 self.session.commit()
                 self.session.refresh(plan)
@@ -235,7 +235,7 @@ class BudgetService:
         csv_export = self._render_budget_csv(lines)
 
         metadata = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "horizon": plan.horizon,
             "plan_id": plan.id,
             "budget_id": plan.budget_id,
@@ -301,7 +301,7 @@ class BudgetService:
         csv_export = self._render_cashflow_csv(historical, forecast_result)
 
         metadata = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "horizon": plan.horizon,
             "plan_id": plan.id,
             "organization_id": plan.organization_id,
