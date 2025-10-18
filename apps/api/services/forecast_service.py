@@ -25,6 +25,7 @@ class ForecastService:
         # Preserve order while removing duplicates
         seen: set[tuple[int, int, int]] = set()
         self.candidate_orders = [o for o in orders if not (o in seen or seen.add(o))]
+        # TODO - Allow pluggable model strategies beyond fixed ARIMA order search.
 
     def forecast_series(
         self, series: Sequence[tuple[object, float | int | Decimal]], horizon: int = 30
@@ -39,6 +40,7 @@ class ForecastService:
 
         df = pd.DataFrame(series, columns=["ts", "y"]).copy()
         df["ts"] = pd.to_datetime(df["ts"], utc=False, errors="coerce")
+        # TODO - Capture timezone metadata to prevent mixed-local timestamp drift.
         df = df.dropna(subset=["ts"]).sort_values("ts").set_index("ts")
         df = df[~df.index.duplicated(keep="last")]
         df["y"] = pd.to_numeric(df["y"], errors="coerce")

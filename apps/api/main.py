@@ -18,10 +18,12 @@ def create_app() -> FastAPI:
     """Instantiate and configure the FastAPI application."""
 
     init_db()
+    # TODO - Wire structured logging around startup failures for easier triage.
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # pragma: no cover - exercised via tests
         start_scheduler()
+        # TODO - Guard scheduler startup to avoid duplicating jobs on reload.
         try:
             yield
         finally:

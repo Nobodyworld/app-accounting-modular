@@ -60,6 +60,7 @@ def authenticate_user(session: Session, email: str, password: str) -> User | Non
         return None
     if not verify_password(password, user.password_hash):
         return None
+    # TODO - Record authentication audit events for anomaly detection.
     return user
 
 
@@ -73,6 +74,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
         else timedelta(minutes=settings.access_token_expire_minutes)
     )
     to_encode.update({"exp": expire})
+    # TODO - Issue refresh tokens to allow long-lived sessions with rotation.
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 

@@ -61,6 +61,7 @@ def pop_actor(token: Token) -> None:
         # the context in which the token was created may differ from the context
         # used during teardown. Ignore the reset in this scenario – the worker
         # thread already discarded its context.
+        # TODO - Revisit context reset handling for cross-thread usage.
         pass
 
 

@@ -127,6 +127,7 @@ class BudgetService:
             self.session.add(plan)
             self.session.commit()
             self.session.refresh(plan)
+            # TODO - Lock plan creation to avoid duplicate rows under concurrent calls.
         else:
             updated_horizon = horizon or plan.horizon
             if plan.horizon != updated_horizon:
@@ -158,6 +159,7 @@ class BudgetService:
             self.session.add(plan)
             self.session.commit()
             self.session.refresh(plan)
+            # TODO - Capture creator metadata when provisioning default cashflow plan.
         else:
             updated_horizon = horizon or plan.horizon
             if plan.horizon != updated_horizon:
@@ -194,6 +196,7 @@ class BudgetService:
 
         actuals = self._collect_actuals(account_ids, period_keys)
         forecast_series = self._forecast_by_account(actuals, plan.horizon)
+        # TODO - Surface accounts missing actuals in report metadata for diagnostics.
 
         total_budget = Decimal("0")
         total_actual = Decimal("0")

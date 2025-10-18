@@ -41,6 +41,7 @@ def _refresh_plan(service: BudgetService, plan: ForecastPlan) -> None:
 
 
 def _run_scheduled_refresh() -> None:
+    # TODO - Emit metrics or alerts when refresh frequency falls behind schedule.
     with _session_scope() as session:
         service = BudgetService(session)
         plans = session.exec(
@@ -72,6 +73,7 @@ def start_scheduler() -> None:
             id="report-refresh",
             replace_existing=True,
         )
+        # TODO - Externalize refresh cadence into configuration per organization.
         _scheduler.start()
 
 

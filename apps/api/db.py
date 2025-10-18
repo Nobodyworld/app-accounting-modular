@@ -37,6 +37,7 @@ def init_db() -> None:
 
     from .models import models  # noqa: F401 - registers SQLModel metadata
 
+    # TODO - Migrate towards Alembic-managed schema evolutions instead of create_all.
     SQLModel.metadata.create_all(engine)
 
 
@@ -48,4 +49,5 @@ def get_session() -> Generator[Session, None, None]:
         if bind is not None and not getattr(bind, "_ma_tables_initialized", False):
             SQLModel.metadata.create_all(bind)
             setattr(bind, "_ma_tables_initialized", True)
+            # TODO - Replace eager create_all with idempotent migration bootstrapping.
         yield session

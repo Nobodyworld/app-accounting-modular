@@ -18,6 +18,7 @@ class BaseTaxProvider:
     name: str
 
     def upsert_rules(self) -> Iterable[TaxRule]:  # pragma: no cover - interface contract
+        # TODO - Implement provider-specific tax rule upsert logic.
         raise NotImplementedError
 
 
@@ -54,6 +55,7 @@ class TaxService:
             raise
         for rule in rules:
             self.session.refresh(rule)
+        # TODO - Remove stale rules that were not returned by the provider sync.
 
         payload = {
             "provider": getattr(self.provider, "name", "unknown"),

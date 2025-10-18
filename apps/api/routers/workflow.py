@@ -123,6 +123,7 @@ def list_staged_transactions(s: Session = Depends(get_session)) -> list[StagedTr
 
     svc = WorkflowService(s)
     items: list[StagedTransactionRead] = []
+    # TODO - Add pagination parameters to avoid loading entire staging tables.
     for staged, postings in svc.list_transactions():
         posting_models = [
             StagedPostingRead(

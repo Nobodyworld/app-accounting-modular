@@ -44,6 +44,7 @@ def sync_fx(
         organization_id=org_ctx.organization.id,
     )
     count = service.sync(base=base)
+    # TODO - Dispatch background sync jobs for longer historical windows.
     return {
         "synced": count,
         "provider": handle.metadata.name,
