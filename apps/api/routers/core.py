@@ -13,6 +13,7 @@ router = APIRouter(tags=["core"])
 def health() -> dict[str, str]:
     """Return a basic health indicator."""
 
+    # TODO - Incorporate database and scheduler checks into health response payload.
     return {"status": "ok"}
 
 
@@ -20,4 +21,5 @@ def health() -> dict[str, str]:
 def providers() -> dict[str, list[dict[str, object]]]:
     """List provider plugins exposed via the configuration allowlist."""
 
+    # TODO - Cache provider metadata and include version compatibility info.
     return {"providers": [meta.to_dict() for meta in available_providers()]}

@@ -92,6 +92,7 @@ class LedgerService:
         self.session.commit()
         self.session.refresh(account)
         self.audit.log(AuditAction.CREATE, "Account", account.id, after=account)
+        # TODO - Broadcast account creation events for downstream integrations.
         return account
 
     def find_account_by_code(
@@ -189,6 +190,7 @@ class LedgerService:
             "description": description_clean,
         }
         self.audit.log(AuditAction.CREATE, "Transaction", transaction.id, after=payload)
+        # TODO - Trigger downstream ledger rollups after transaction posting.
         return transaction
 
     # ------------------------------------------------------------------

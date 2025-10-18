@@ -63,6 +63,7 @@ def available_providers(capability: str | None = None) -> list[ProviderMetadata]
             continue
         providers.append(metadata)
     providers.sort(key=lambda item: item.key)
+    # TODO - Cache provider metadata to avoid rebuilding the list per request.
     return providers
 
 

@@ -173,6 +173,7 @@ class ForecastPlan(SQLModel, table=True):
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    # TODO - Enforce uniqueness on (organization_id, name) to prevent duplicates.
 
 
 class ForecastOutput(SQLModel, table=True):
@@ -210,6 +211,7 @@ class Price(ActorTrackedModel, table=True):
     date: date
     close: float
     provider: str
+    # TODO - Add unique constraint on (instrument_id, date, provider) to avoid duplicates.
 
 
 class Rate(ActorTrackedModel, table=True):
@@ -224,6 +226,7 @@ class Rate(ActorTrackedModel, table=True):
     date: date
     value: float
     provider: str
+    # TODO - Create composite index covering base/quote/date/provider for lookups.
 
 
 class Country(ActorTrackedModel, table=True):
@@ -297,6 +300,7 @@ class AuditLog(SQLModel, table=True):
     context: Optional[dict[str, Any]] = Field(
         default=None, sa_column=Column(JSON, nullable=True)
     )
+    # TODO - Consider table partitioning/retention policies for long-term growth.
 
 
 class WorkflowStatus(str, Enum):

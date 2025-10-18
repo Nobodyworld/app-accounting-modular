@@ -80,6 +80,7 @@ class WorkflowService:
             staged_records.append(staged)
 
         self.s.commit()
+        # TODO - Introduce chunked commits for very large ingestion batches.
         return staged_records
 
     # ------------------------------------------------------------------
@@ -146,6 +147,7 @@ class WorkflowService:
                 posting.credit = normalised_posting["credit"]
                 posting.currency = normalised_posting["currency"]
                 self.s.add(posting)
+            # TODO - Persist validation diagnostics for review in audit trails.
 
             if not auto_post:
                 results.append(
@@ -258,4 +260,5 @@ class WorkflowService:
                     "currency": posting.currency,
                 }
             )
+        # TODO - Validate currency consistency across postings before posting.
         return payload

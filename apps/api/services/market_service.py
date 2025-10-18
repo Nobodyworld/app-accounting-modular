@@ -19,6 +19,7 @@ class BaseMarketProvider:
     name: str
 
     def fetch_prices(self, symbol: str, start: date, end: date) -> Iterable[Price]:
+        # TODO - Implement provider-specific price fetching.
         raise NotImplementedError
 
 
@@ -59,6 +60,7 @@ class MarketService:
             self.audit.log(AuditAction.CREATE, "Instrument", inst.id, after=inst)
 
         prices = list(self.provider.fetch_prices(symbol, start, end))
+        # TODO - Upsert existing prices instead of blindly inserting duplicates.
         for price in prices:
             price.instrument_id = inst.id
             apply_creation_metadata(price)

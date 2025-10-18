@@ -19,6 +19,7 @@ class BaseFXProvider:
     name: str
 
     def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> Iterable[Rate]:
+        # TODO - Implement provider-specific daily rate syncing.
         raise NotImplementedError
 
 
@@ -41,6 +42,7 @@ class FXService:
         """Fetch rates and persist them, returning the number of rates stored."""
 
         rates = list(self.provider.sync_daily_rates(base=base, date_=date_))
+        # TODO - De-duplicate incoming rate records prior to persisting.
         for rate in rates:
             apply_creation_metadata(rate)
             if self.organization_id is not None and hasattr(rate, "organization_id"):

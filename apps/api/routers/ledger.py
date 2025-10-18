@@ -36,6 +36,7 @@ def create_account(
 
     service = _service_for_org(session, org_ctx.organization.id)
     data = payload.model_dump(exclude={"organization_id"})
+    # TODO - Validate account code uniqueness before delegating to the service layer.
     return service.create_account(**data)
 
 
@@ -56,6 +57,7 @@ def post_transaction(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     service = _service_for_org(session, org_ctx.organization.id)
+    # TODO - Capture posting source metadata for reconciliation dashboards.
     return service.post_transaction(
         payload.date,
         payload.description,
@@ -84,6 +86,7 @@ def trial_balance(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     service = _service_for_org(session, org_ctx.organization.id)
+    # TODO - Support comparative periods and currency filters in trial balance responses.
     return TrialBalanceResponse.from_service(service.trial_balance())
 
 

@@ -22,5 +22,6 @@ def login(
     user = authenticate_user(session, form_data.username, form_data.password)
     if user is None:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
+    # TODO - Enforce login throttling or MFA challenges for repeated failures.
     token = create_access_token({"sub": str(user.id)})
     return {"access_token": token, "token_type": "bearer"}

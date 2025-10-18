@@ -41,6 +41,8 @@ DEFAULT_ALLOWED_PROVIDERS: dict[str, ProviderInfo] = {
     ),
 }
 
+# TODO - Load provider catalog from persistence so admin edits survive restarts.
+
 
 class Settings(BaseModel):
     """Application configuration derived from environment variables."""

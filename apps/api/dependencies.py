@@ -36,5 +36,6 @@ def session_with_audit_context(
         source="api",
         user_label=x_user_label,
     )
+    # TODO - Validate header provenance to prevent spoofed audit metadata.
     with use_actor(actor):
         yield s
