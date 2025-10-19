@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
+from threading import Lock
+from typing import Deque
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
@@ -11,6 +16,38 @@ from ..security import authenticate_user, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+_failed_attempts: defaultdict[str, Deque[datetime]] = defaultdict(deque)
+_lockouts: dict[str, datetime] = {}
+_lock = Lock()
+_MAX_ATTEMPTS = 5
+_WINDOW = timedelta(minutes=2)
+_LOCKOUT_DURATION = timedelta(minutes=5)
+
+
+def _normalize_identifier(username: str) -> str:
+    return username.strip().lower()
+
+
+def _prune_attempts(identifier: str, now: datetime) -> None:
+    attempts = _failed_attempts[identifier]
+    while attempts and now - attempts[0] > _WINDOW:
+        attempts.popleft()
+    if not attempts:
+        _failed_attempts.pop(identifier, None)
+
+
+def _register_failure(identifier: str, now: datetime) -> None:
+    attempts = _failed_attempts[identifier]
+    attempts.append(now)
+    if len(attempts) >= _MAX_ATTEMPTS:
+        _lockouts[identifier] = now + _LOCKOUT_DURATION
+        attempts.clear()
+
+
+def _clear_failures(identifier: str) -> None:
+    _failed_attempts.pop(identifier, None)
+    _lockouts.pop(identifier, None)
+
 
 @router.post("/token")
 def login(
@@ -19,10 +56,25 @@ def login(
 ) -> dict[str, str]:
     """Exchange username/password credentials for a bearer token."""
 
-    user = authenticate_user(session, form_data.username, form_data.password)
+    identifier = _normalize_identifier(form_data.username)
+    now = datetime.now(timezone.utc)
+
+    with _lock:
+        locked_until = _lockouts.get(identifier)
+        if locked_until is not None and locked_until > now:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many failed attempts. Try again later.",
+            )
+        _prune_attempts(identifier, now)
+
+    user = authenticate_user(session, identifier, form_data.password)
     if user is None:
+        with _lock:
+            _register_failure(identifier, now)
         raise HTTPException(status_code=400, detail="Incorrect username or password")
-    # TODO - Enforce login throttling or MFA challenges for repeated failures.
+    with _lock:
+        _clear_failures(identifier)
     token = create_access_token({"sub": str(user.id)})
     # TODO - Issue refresh tokens to support longer-lived sessions securely.
     return {"access_token": token, "token_type": "bearer"}

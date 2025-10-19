@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from typing import Iterable, Tuple
 
-from fastapi import Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 
 from .config import settings
 from .db import init_db
@@ -32,7 +33,6 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # pragma: no cover - exercised via tests
         start_scheduler()
-        # TODO - Guard scheduler startup to avoid duplicating jobs on reload.
         try:
             yield
         finally:
@@ -40,17 +40,22 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Modular Accounting API", version="0.1.0", lifespan=lifespan)
     protected = [Depends(get_current_user)]
-    # TODO - Centralize router dependency sets to simplify role-based expansions.
-    app.include_router(core.router)
-    app.include_router(auth.router)
-    app.include_router(audit.router, dependencies=protected)
-    app.include_router(ledger.router, dependencies=protected)
-    app.include_router(fx.router, dependencies=protected)
-    app.include_router(market.router, dependencies=protected)
-    app.include_router(tax.router, dependencies=protected)
-    app.include_router(forecast.router, dependencies=protected)
-    app.include_router(reports.router, dependencies=protected)
-    app.include_router(workflow.router, dependencies=protected)
+    router_registry: Iterable[Tuple[APIRouter, bool]] = (
+        (core.router, False),
+        (auth.router, False),
+        (audit.router, True),
+        (ledger.router, True),
+        (fx.router, True),
+        (market.router, True),
+        (tax.router, True),
+        (forecast.router, True),
+        (reports.router, True),
+        (workflow.router, True),
+    )
+
+    for router, requires_auth in router_registry:
+        dependencies = protected if requires_auth else None
+        app.include_router(router, dependencies=dependencies)
 
     return app
 

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import SQLModel, Session, create_engine, select
 
 from apps.api.db import get_session
 from apps.api.main import create_app
-from apps.api.models.models import Membership, Organization, User
+from apps.api.models.models import AuditLog, Membership, Organization, User
 from apps.api.security import create_access_token, get_password_hash
 from apps.api.services.ledger_service import LedgerService
+from apps.api.routers import auth as auth_router
 
 
 @pytest.fixture()
@@ -31,6 +32,9 @@ def api_context():
 
     app.dependency_overrides[get_session] = override_get_session
     client = TestClient(app)
+
+    auth_router._failed_attempts.clear()
+    auth_router._lockouts.clear()
 
     with Session(engine, expire_on_commit=False) as session:
         org1 = Organization(name="Org One")
@@ -102,17 +106,17 @@ def api_context():
         "member": create_access_token({"sub": str(member_id)}),
     }
 
-    return client, {"org1_id": org1_id, "org2_id": org2_id, "tokens": tokens}
+    return client, {"org1_id": org1_id, "org2_id": org2_id, "tokens": tokens}, engine
 
 
 def test_requires_authentication(api_context):
-    client, ctx = api_context
+    client, ctx, _ = api_context
     response = client.get("/ledger/trial-balance", params={"organization_id": ctx["org1_id"]})
     assert response.status_code == 401
 
 
 def test_role_based_access_blocks_tax_sync(api_context):
-    client, ctx = api_context
+    client, ctx, _ = api_context
     headers = {"Authorization": f"Bearer {ctx['tokens']['member']}"}
     response = client.post(
         "/tax/sync",
@@ -123,7 +127,7 @@ def test_role_based_access_blocks_tax_sync(api_context):
 
 
 def test_multi_tenant_isolation(api_context):
-    client, ctx = api_context
+    client, ctx, _ = api_context
     admin_headers = {"Authorization": f"Bearer {ctx['tokens']['admin']}"}
 
     response = client.get(
@@ -143,3 +147,37 @@ def test_multi_tenant_isolation(api_context):
         headers=admin_headers,
     )
     assert forbidden.status_code == 403
+
+
+def test_login_throttling_and_audit_logging(api_context):
+    client, _, engine = api_context
+
+    for _ in range(5):
+        response = client.post(
+            "/auth/token",
+            data={"username": "admin@example.com", "password": "wrong"},
+        )
+        assert response.status_code == 400
+
+    locked = client.post(
+        "/auth/token",
+        data={"username": "admin@example.com", "password": "wrong"},
+    )
+    assert locked.status_code == 429
+
+    # Expire lockout and login successfully
+    auth_router._lockouts["admin@example.com"] = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    success = client.post(
+        "/auth/token",
+        data={"username": "admin@example.com", "password": "secret"},
+    )
+    assert success.status_code == 200
+
+    with Session(engine, expire_on_commit=False) as session:
+        entries = session.exec(
+            select(AuditLog).where(AuditLog.entity_name == "auth.login")
+        ).all()
+
+    assert len(entries) >= 6  # five failures + one success
+    statuses = {entry.after_state["success"] for entry in entries}
+    assert statuses == {True, False}

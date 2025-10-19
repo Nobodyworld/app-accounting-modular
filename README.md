@@ -10,6 +10,7 @@ A modular accounting system designed for flexibility and extensibility. Built wi
 - **Budgeting & Forecast Reports**: Organization-aware budgeting, scheduled forecast refreshes, and downloadable budget vs actual / cashflow reports.
 - **Plugin System**: Extensible plugins for FX rates (ECB), market data (Yahoo Finance), and tax calculations (OECD stub).
 - **Docker Support**: Easy deployment with Docker Compose.
+- **Hardened Authentication**: Rate-limited login endpoint with audit trail logging.
 
 ## Quick Start
 
@@ -41,26 +42,29 @@ A modular accounting system designed for flexibility and extensibility. Built wi
      ```
 
    - Or run manually:
-     - API: `cd apps/api && uvicorn main:app --reload`
-     - Web: `streamlit run apps/web/app.py`
+
+     ```bash
+     uvicorn apps.api.main:app --reload
+     streamlit run apps/web/app.py
+     ```
 
 ## Project Structure
 
-- `apps/api/`: FastAPI backend
-   - Using Docker Compose:
+- `apps/api/`: FastAPI backend (routers, services, scheduler, security)
+- `apps/web/`: Streamlit dashboards
 - `cli/`: Command-line tools
-- `plugins/`: Plugin modules for various services
-- `docs/`: Documentation
-- `tests/`: Unit tests
+- `plugins/`: External provider integrations
+- `docs/`: Architecture, forecasting, plugin guides
+- `tests/`: Pytest-based regression suite
 
 ## Documentation
 
 For detailed documentation, see the `docs/` directory:
 
 - [Architecture](docs/ARCHITECTURE.md)
-    streamlit run apps/web/app.py
 - [Plugins](docs/PLUGINS.md)
 - [Tax Model](docs/TAX_MODEL.md)
+- [AI Interface](docs/AI_INTERFACE.md)
 
 ## Contributing
 
