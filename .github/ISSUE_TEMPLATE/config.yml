@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/modular-accounting/modular-accounting/tree/main/docs
+    about: Review existing docs before opening an issue.
+  - name: 🔐 Security reports
+    url: mailto:security@modular-accounting.dev
+    about: Please report security issues privately.

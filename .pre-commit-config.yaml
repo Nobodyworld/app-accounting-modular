@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        args: ["--check"]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pandas-stubs==2.2.3.241126
+          - types-requests==2.32.0.20240914
+          - types-python-jose==3.3.4.20240106
+          - types-passlib==1.7.7.20240819
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.3.2
+    hooks:
+      - id: prettier
+        additional_dependencies:
+          - prettier@3.3.3
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v9.11.0
+    hooks:
+      - id: commitlint
+        additional_dependencies:
+          - "@commitlint/cli@19.3.0"
+          - "@commitlint/config-conventional@19.2.2"
+        stages: [commit-msg]
