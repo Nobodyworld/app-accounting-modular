@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterator, Mapping
 from uuid import uuid4
 
 from fastapi.encoders import jsonable_encoder
@@ -15,6 +15,7 @@ from sqlmodel import Session
 from .models.models import AuditAction, AuditLog
 
 __all__ = [
+    "AuditAction",
     "AuditActor",
     "AuditLogger",
     "get_current_actor",
@@ -45,13 +46,13 @@ def get_current_actor() -> AuditActor | None:
     return _actor_ctx.get()
 
 
-def push_actor(actor: AuditActor) -> Token:
+def push_actor(actor: AuditActor) -> Token[AuditActor | None]:
     """Bind the provided actor to the current context and return a token."""
 
     return _actor_ctx.set(actor)
 
 
-def pop_actor(token: Token) -> None:
+def pop_actor(token: Token[AuditActor | None]) -> None:
     """Restore the context to the state before :func:`push_actor`."""
 
     try:
@@ -66,7 +67,7 @@ def pop_actor(token: Token) -> None:
 
 
 @contextmanager
-def use_actor(actor: AuditActor) -> Iterable[AuditActor]:
+def use_actor(actor: AuditActor) -> Iterator[AuditActor]:
     """Context manager that sets the active audit actor."""
 
     token = push_actor(actor)

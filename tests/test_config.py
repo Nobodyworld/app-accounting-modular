@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from apps.api.config import Settings
+from pathlib import Path
+
+import pytest
+
+from apps.api.config import MAX_ACCESS_TOKEN_MINUTES, Settings
 
 
 def test_settings_reads_prefixed_environment(monkeypatch) -> None:
@@ -45,3 +49,63 @@ def test_settings_marks_persistent_secret(monkeypatch, caplog) -> None:
     assert cfg.jwt_secret_key == "persistent-secret"
     assert cfg.jwt_secret_is_ephemeral is False
     assert "Generated ephemeral JWT secret" not in caplog.text
+
+
+def test_settings_rejects_invalid_log_level(monkeypatch) -> None:
+    monkeypatch.setenv("MODACCT_LOG_LEVEL", "notalevel")
+
+    with pytest.raises(ValueError) as exc:
+        Settings.load()
+
+    assert "Unsupported log level" in str(exc.value)
+
+
+def test_settings_rejects_invalid_jwt_algorithm(monkeypatch) -> None:
+    monkeypatch.setenv("MODACCT_JWT_ALGORITHM", "md5")
+
+    with pytest.raises(ValueError) as exc:
+        Settings.load()
+
+    assert "Unsupported JWT algorithm" in str(exc.value)
+    assert "MD5" in str(exc.value)
+
+
+def test_settings_rejects_invalid_expiry(monkeypatch) -> None:
+    monkeypatch.setenv("MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES", "0")
+
+    with pytest.raises(ValueError) as exc:
+        Settings.load()
+
+    assert "greater than zero" in str(exc.value)
+
+    monkeypatch.setenv(
+        "MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES",
+        str(MAX_ACCESS_TOKEN_MINUTES + 1),
+    )
+
+    with pytest.raises(ValueError) as exc:
+        Settings.load()
+
+    assert "must not exceed" in str(exc.value)
+
+
+def test_settings_loads_from_env_file(tmp_path: Path, monkeypatch) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "MODACCT_DATABASE_URL=postgresql://env/file\n"
+        "MODACCT_LOG_LEVEL=warning\n"
+        "MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES=120\n"
+        "MODACCT_JWT_SECRET_KEY="
+        "abcdefghijklmnopqrstuvwxyz012345\n"
+    )
+    monkeypatch.delenv("MODACCT_DATABASE_URL", raising=False)
+    monkeypatch.delenv("MODACCT_LOG_LEVEL", raising=False)
+    monkeypatch.delenv("MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES", raising=False)
+    monkeypatch.delenv("MODACCT_JWT_SECRET_KEY", raising=False)
+
+    cfg = Settings.load(env_file=env_file)
+
+    assert cfg.database_url == "postgresql://env/file"
+    assert cfg.log_level == "WARNING"
+    assert cfg.access_token_expire_minutes == 120
+    assert cfg.jwt_secret_is_ephemeral is False

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import uuid4
 
 from fastapi import Depends, HTTPException, status
@@ -89,13 +89,13 @@ class OrganizationContext:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Return ``True`` if ``plain_password`` matches ``hashed_password``."""
 
-    return pwd_context.verify(plain_password, hashed_password)
+    return cast(bool, pwd_context.verify(plain_password, hashed_password))
 
 
 def get_password_hash(password: str) -> str:
     """Return a salted hash for ``password`` using the configured scheme."""
 
-    return pwd_context.hash(password)
+    return cast(str, pwd_context.hash(password))
 
 
 def authenticate_user(session: Session, email: str, password: str) -> User | None:
@@ -136,12 +136,18 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     )
     to_encode.update({"exp": expire})
     # TODO - Issue refresh tokens to allow long-lived sessions with rotation.
-    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    token = jwt.encode(
+        to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+    )
+    return cast(str, token)
 
 
 def _decode_token(token: str) -> dict[str, Any]:
     try:
-        return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(
+            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+        )
+        return cast(dict[str, Any], payload)
     except JWTError as exc:  # pragma: no cover - library raises numerous subclasses
         logger.warning("Failed to decode access token", exc_info=exc)
         raise HTTPException(

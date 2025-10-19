@@ -1,15 +1,13 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable, Sequence
 
-import warnings
-
 import pandas as pd
 from pandas import DatetimeIndex
 from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
-from statsmodels.tools.sm_exceptions import ConvergenceWarning, ValueWarning
 
 
 @dataclass(slots=True, frozen=True)
@@ -21,10 +19,20 @@ class ForecastResult:
 
 class ForecastService:
     def __init__(self, candidate_orders: Iterable[tuple[int, int, int]] | None = None):
-        orders = list(candidate_orders) if candidate_orders is not None else self._default_orders()
-        # Preserve order while removing duplicates
+        orders = (
+            list(candidate_orders)
+            if candidate_orders is not None
+            else self._default_orders()
+        )
+        # Preserve order while removing duplicates.
         seen: set[tuple[int, int, int]] = set()
-        self.candidate_orders = [o for o in orders if not (o in seen or seen.add(o))]
+        deduped: list[tuple[int, int, int]] = []
+        for order in orders:
+            if order in seen:
+                continue
+            seen.add(order)
+            deduped.append(order)
+        self.candidate_orders = deduped
         # TODO - Allow pluggable model strategies beyond fixed ARIMA order search.
 
     def forecast_series(

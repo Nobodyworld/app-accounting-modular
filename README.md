@@ -1,79 +1,100 @@
 # Modular Accounting
 
-A modular accounting system designed for flexibility and extensibility. Built with FastAPI for the API backend, Streamlit for the web interface, and a plugin architecture for various accounting modules like forecasting, foreign exchange, ledger management, market data, and tax calculations.
+[![CI](https://github.com/modular-accounting/modular-accounting/actions/workflows/ci.yml/badge.svg)](https://github.com/modular-accounting/modular-accounting/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/modular-accounting/modular-accounting/actions/workflows/codeql.yml/badge.svg)](https://github.com/modular-accounting/modular-accounting/actions/workflows/codeql.yml)
 
-## Features
+A modular accounting platform composed of a FastAPI backend, Streamlit operations console, and pluggable data providers for FX, market data, tax, budgeting, and forecasting workflows.
 
-- **API Backend**: RESTful API using FastAPI for core accounting operations.
-- **Web Interface**: User-friendly web app built with Streamlit.
-- **CLI Tools**: Command-line interface for administrative tasks.
-- **Budgeting & Forecast Reports**: Organization-aware budgeting, scheduled forecast refreshes, and downloadable budget vs actual / cashflow reports.
-- **Plugin System**: Extensible plugins for FX rates (ECB), market data (Yahoo Finance), and tax calculations (OECD stub).
-- **Docker Support**: Easy deployment with Docker Compose.
-- **Hardened Authentication**: Rate-limited login endpoint with audit trail logging.
+## Table of Contents
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+- [Configuration](#configuration)
+- [Developer Workflow](#developer-workflow)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
+- [Community & Support](#community--support)
 
-## Quick Start
+## Architecture
+- **API Backend (`apps/api`)**: FastAPI service exposing REST endpoints for auth, ledger, reporting, forecasting, FX, market, tax, audit, and workflow orchestration.
+- **Streamlit Web (`apps/web`)**: Analyst-facing dashboards backed by the API.
+- **Scheduler (`apps/api/scheduler.py`)**: APScheduler jobs refreshing forecasts and provider data.
+- **CLI (`cli/macli.py`)**: Administrative commands for bootstrapping accounts, ingesting data, and generating reports.
+- **Plugins (`plugins/`)**: Provider contracts for FX, market, and tax integrations.
+- **Docs (`docs/`)**: Architecture, forecasting, plugin, and domain references.
 
+## Getting Started
 ### Prerequisites
-
-- Python 3.8+
-- Docker and Docker Compose (optional, for containerized deployment)
+- Python 3.11+
+- (Optional) Docker & Docker Compose
 
 ### Installation
+```bash
+git clone https://github.com/modular-accounting/modular-accounting.git
+cd modular-accounting
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+pre-commit install --install-hooks
+pre-commit install --hook-type commit-msg
+```
 
-1. Clone the repository:
+### Running Locally
+- **API**:
+  ```bash
+  uvicorn apps.api.main:app --reload
+  ```
+- **Streamlit UI**:
+  ```bash
+  streamlit run apps/web/app.py
+  ```
+- **Docker Compose**:
+  ```bash
+  docker-compose up --build
+  ```
 
-   ```bash
-   git clone <repository-url>
-   cd modular-accounting
-   ```
+## Configuration
 
-2. Install dependencies:
+- Copy [`.env.example`](.env.example) to `.env` (or another path) and populate the values with deployment-specific credentials.
+- At runtime the application loads configuration using `Settings.load`, which honours the `MODACCT_`-prefixed environment variables, legacy aliases, and optional dotenv files.
+- Refer to [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full list of supported keys, validation rules, and loading precedence.
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Developer Workflow
+- Lint & format:
+  ```bash
+  pre-commit run --all-files
+  ```
+- Run tests:
+  ```bash
+  pytest
+  ```
+- Static type checks (targeted strict baseline):
+  ```bash
+  mypy
+  ```
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for branching strategy, Conventional Commit guidelines, and review expectations.
+- Repository settings and future workstreams are documented in [PLAN.md](PLAN.md) and [REPORT.md](REPORT.md).
 
-3. Run the application:
-   - Using Docker Compose:
+## Testing
+The repository includes pytest-based unit and integration tests covering:
+- API routers, services, and scheduler behaviours.
+- CLI command smoke tests.
+- Streamlit component smoke coverage.
 
-     ```bash
-     docker-compose up
-     ```
-
-   - Or run manually:
-
-     ```bash
-     uvicorn apps.api.main:app --reload
-     streamlit run apps/web/app.py
-     ```
+Run `pytest` locally or rely on GitHub Actions (`ci.yml`) for automated validation. Coverage reporting will be integrated in a future milestone.
 
 ## Project Structure
+```
+apps/
+  api/        FastAPI application, routers, services, scheduler
+  web/        Streamlit dashboards
+cli/          Click-based CLI entry point
+plugins/      Provider contracts and implementations
+docs/         Architecture and domain documentation
+tests/        Pytest suite
+```
 
-- `apps/api/`: FastAPI backend (routers, services, scheduler, security)
-- `apps/web/`: Streamlit dashboards
-- `cli/`: Command-line tools
-- `plugins/`: External provider integrations
-- `docs/`: Architecture, forecasting, plugin guides
-- `tests/`: Pytest-based regression suite
-
-## Documentation
-
-For detailed documentation, see the `docs/` directory:
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Plugins](docs/PLUGINS.md)
-- [Tax Model](docs/TAX_MODEL.md)
-- [AI Interface](docs/AI_INTERFACE.md)
-
-## Contributing
-
-Contributions are welcome! Please read the contributing guidelines in the documentation.
-
-## License
-
-This project is licensed under the terms specified in the LICENSE file.
-
-## Notable changes
-
-- Times are now recorded in timezone-aware UTC datetimes across the codebase (e.g. created_at/updated_at and audit timestamps) to avoid deprecation warnings with newer Python/JWT libraries.
+## Community & Support
+- Review [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.
+- Adhere to the [Code of Conduct](CODE_OF_CONDUCT.md).
+- For security issues, follow the [Security Policy](SECURITY.md).
+- Support channels and SLAs are detailed in [SUPPORT.md](SUPPORT.md).
