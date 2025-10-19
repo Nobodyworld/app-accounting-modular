@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
+from datetime import timedelta
+from threading import Lock
 from typing import Iterator
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -19,6 +21,8 @@ __all__ = [
 ]
 
 _scheduler: BackgroundScheduler | None = None
+_scheduler_lock = Lock()
+_SCHEDULE_INTERVAL = timedelta(hours=6)
 logger = logging.getLogger(__name__)
 
 
@@ -65,23 +69,39 @@ def start_scheduler() -> None:
     """Start the APScheduler if it is not already running."""
 
     global _scheduler
-    if _scheduler is None:
-        _scheduler = BackgroundScheduler(daemon=True)
-        _scheduler.add_job(
+    with _scheduler_lock:
+        if _scheduler is not None:
+            if not _scheduler.running:
+                logger.info("Starting scheduler that was instantiated but not running")
+                _scheduler.start()
+            return
+
+        scheduler = BackgroundScheduler(daemon=True)
+        scheduler.add_job(
             _run_scheduled_refresh,
             "interval",
-            hours=6,
+            seconds=int(_SCHEDULE_INTERVAL.total_seconds()),
             id="report-refresh",
             replace_existing=True,
         )
         # TODO - Externalize refresh cadence into configuration per organization.
-        _scheduler.start()
+        try:
+            scheduler.start()
+        except Exception:  # pragma: no cover - protective guard
+            logger.exception("Failed to start background scheduler")
+            scheduler.shutdown(wait=False)
+            raise
+
+        _scheduler = scheduler
+        logger.info("Background scheduler started", extra={"interval_seconds": _SCHEDULE_INTERVAL.total_seconds()})
 
 
 def shutdown_scheduler() -> None:
     """Stop the APScheduler if it is running."""
 
     global _scheduler
-    if _scheduler is not None:
-        _scheduler.shutdown(wait=False)
-        _scheduler = None
+    with _scheduler_lock:
+        if _scheduler is not None:
+            _scheduler.shutdown(wait=False)
+            _scheduler = None
+            logger.info("Background scheduler stopped")

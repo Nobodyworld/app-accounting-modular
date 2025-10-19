@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
+from uuid import uuid4
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -12,6 +14,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlmodel import Session, select
 
+from .audit import AuditAction, AuditActor, AuditLogger, use_actor
 from .config import settings
 from .db import get_session
 from .models.models import Membership, Organization, User
@@ -29,6 +32,50 @@ __all__ = [
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+logger = logging.getLogger(__name__)
+
+
+def _record_auth_attempt(
+    session: Session,
+    *,
+    email: str,
+    success: bool,
+    reason: str | None = None,
+    user: User | None = None,
+) -> None:
+    """Persist an audit log entry describing an authentication attempt."""
+
+    metadata: dict[str, Any] = {"email": email, "success": success}
+    if reason is not None:
+        metadata["reason"] = reason
+
+    actor = AuditActor(
+        request_id=str(uuid4()),
+        user_id=user.id if success and user is not None else None,
+        user_label=(user.email if user is not None else email),
+    )
+
+    audit_logger = AuditLogger(session)
+    with use_actor(actor):
+        audit_logger.log(
+            action=AuditAction.ACCESS,
+            entity_name="auth.login",
+            entity_id=str(user.id if user is not None else email),
+            before=None,
+            after={"success": success},
+            metadata=metadata,
+        )
+
+    log_method = logger.info if success else logger.warning
+    log_method(
+        "Authentication attempt",
+        extra={
+            "email": email,
+            "success": success,
+            "reason": reason,
+            "user_id": getattr(user, "id", None),
+        },
+    )
 
 
 @dataclass(slots=True)
@@ -57,10 +104,24 @@ def authenticate_user(session: Session, email: str, password: str) -> User | Non
     stmt = select(User).where(User.email == email)
     user = session.exec(stmt).one_or_none()
     if user is None or not user.is_active:
+        _record_auth_attempt(
+            session,
+            email=email,
+            success=False,
+            reason="inactive-or-missing",
+            user=user,
+        )
         return None
     if not verify_password(password, user.password_hash):
+        _record_auth_attempt(
+            session,
+            email=email,
+            success=False,
+            reason="invalid-password",
+            user=user,
+        )
         return None
-    # TODO - Record authentication audit events for anomaly detection.
+    _record_auth_attempt(session, email=email, success=True, user=user)
     return user
 
 
@@ -82,6 +143,7 @@ def _decode_token(token: str) -> dict[str, Any]:
     try:
         return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     except JWTError as exc:  # pragma: no cover - library raises numerous subclasses
+        logger.warning("Failed to decode access token", exc_info=exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",

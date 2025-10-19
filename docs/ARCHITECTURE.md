@@ -53,3 +53,10 @@ Providers register with `apps.api.services.plugin_loader` and are addressable vi
 ## Jobs
 
 - APScheduler in-process for simple cron-like jobs (upgrade to Celery/Redis for scale)
+- Scheduler lifecycle is centralised in `apps.api.scheduler` with a process-wide lock to prevent duplicate job registration under reloads.
+
+## Security & Audit
+
+- JWT-based auth with PBKDF2 password hashing.
+- `/auth/token` endpoint enforces rate-limits and records each attempt via `AuditLogger` (`AuditAction.ACCESS`).
+- Audit events are appended to `AuditLog` with the acting user/request metadata for traceability.

@@ -271,6 +271,7 @@ class AuditAction(str, Enum):
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
+    ACCESS = "access"
 
 
 class AuditLog(SQLModel, table=True):
