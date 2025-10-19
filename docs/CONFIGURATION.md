@@ -15,7 +15,20 @@ This document outlines the runtime configuration surface for the Modular Account
 | --- | --- | --- | --- |
 | `MODACCT_DATABASE_URL` | SQLAlchemy-compatible database URL | `sqlite:///./modacct.db` | Must include a scheme (e.g. `postgresql://`). |
 | `MODACCT_LOG_LEVEL` | Python logging level | `INFO` | Valid values: `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`, etc. |
+| `MODACCT_LOG_FORMAT` | Logging output format | `JSON` | Valid values: `JSON`, `TEXT`. |
 | `MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES` | OAuth2 access token lifetime in minutes | `60` | Must be between `1` and `43200` (30 days). |
+
+### Logging pipeline
+
+The application uses a single structured logging pipeline powered by
+``configure_logging`` from :mod:`apps.observability.logging`.  Changing
+``MODACCT_LOG_FORMAT`` toggles between newline-delimited JSON (production
+default) and a compact text representation optimised for local debugging.  The
+configuration automatically applies to Uvicorn's access and error loggers, so
+API requests, CLI commands, background jobs, and framework-level events share
+the same correlation metadata and output format.  Additional context can be
+bound via ``logging_context``/``async_logging_context`` helpers when running
+custom scripts.
 
 ## Security
 

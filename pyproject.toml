@@ -39,6 +39,9 @@ filterwarnings = [
   "ignore::DeprecationWarning:passlib",
   "ignore::altair.utils.deprecation.AltairDeprecationWarning",
 ]
+markers = [
+  "asyncio: tests that require an asyncio event loop",
+]
 
 [tool.mypy]
 python_version = "3.11"

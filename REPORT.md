@@ -31,7 +31,7 @@
 
 ## Hotspots & Dead Code
 - **High churn / complexity**: `apps/api/services/*` (ledger, forecast, workflow) combine business rules, IO, and background coordination.
-- **Observation gaps**: Minimal structured logging; scheduler swallows exceptions; lack of request tracing.
+- **Observation gaps**: Structured logging now standardised across entrypoints; next gaps are metrics/tracing coverage and alerting hooks for long-running jobs.
 - **Potential dead code**:
   - `apps/api/audit.py` `AuditAction.EVENT` enumeration unused across repo.
   - Unreferenced docs (`docs/AI_INTERFACE.md`) describing non-existent integration—candidate for archival or implementation.
@@ -45,7 +45,7 @@
 5. **Typing gaps** – Targeted strict mypy now covers settings and forecasting modules; remaining services still rely on implicit `Any` from SQLModel → *Medium effort*: expand coverage and add SQLModel-aware plugins.
 6. **Dependency freshness** – No Renovate or update policy; risk of vulnerable packages → *Quick win*: add Renovate config and SBOM pipeline.
 7. **Test coverage** – Integration coverage moderate but lacks API schema validation and CLI/e2e depth → *Medium effort*: add contract & e2e tests.
-8. **Observability** – Minimal metrics/logging/tracing; scheduler silent failures → *Larger effort*: adopt OpenTelemetry/logging strategy.
+8. **Observability** – Structured logging with correlation IDs now available across API, scheduler, and CLI. Next step: add metrics/tracing instrumentation (e.g., OpenTelemetry) and alerting hooks.
 9. **Release hygiene** – No release automation, changelog manual → *Medium effort*: adopt semantic-release workflow.
 10. **Monolith boundaries** – Services mix domain logic with persistence; hindered testability → *Long-term*: refactor toward layered architecture.
 
@@ -56,7 +56,7 @@
 4. **Introduce mypy/pyright and fix critical typing issues** (High impact, Medium effort).
 5. **Harden config with `.env.example` and validation** (High impact, Medium effort).
 6. **Add SBOM & dependency audit workflow** (Medium impact, Medium effort).
-7. **Implement structured logging & scheduler instrumentation** (High impact, Medium effort).
+7. **Expand observability beyond logging (metrics/tracing, alerts)** (High impact, Medium effort).
 8. **Enhance API contract tests & docs (OpenAPI validation)** (Medium impact, Medium effort).
 9. **Modularise services into domain interfaces** (High impact, High effort).
 10. **Containerize with multi-stage build & CD pipeline** (High impact, Medium/High effort).

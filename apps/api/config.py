@@ -7,12 +7,15 @@ import os
 import secrets
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, Literal, Mapping, cast
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
-__all__ = ["ProviderInfo", "Settings", "get_settings", "settings"]
+__all__ = ["LogFormat", "ProviderInfo", "Settings", "get_settings", "settings"]
+
+LogFormat = Literal["JSON", "TEXT"]
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,9 @@ VALID_LOG_LEVELS = frozenset(
 )
 
 DEFAULT_LOG_LEVEL = "INFO"
+
+VALID_LOG_FORMATS = frozenset({"JSON", "TEXT"})
+DEFAULT_LOG_FORMAT: LogFormat = "JSON"
 
 ALLOWED_JWT_ALGORITHMS = frozenset(
     {
@@ -115,6 +121,7 @@ class Settings(BaseModel):
         default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./modacct.db")
     )
     log_level: str = Field(default_factory=lambda: os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL))
+    log_format: LogFormat = Field(default=DEFAULT_LOG_FORMAT)
     openex_app_id: str | None = Field(
         default_factory=lambda: os.getenv("OPENEXCHANGERATES_APP_ID")
     )
@@ -171,6 +178,20 @@ class Settings(BaseModel):
             )
             raise ValueError(msg)
         return level
+
+    @field_validator("log_format")
+    @classmethod
+    def _validate_log_format(cls, value: str) -> LogFormat:
+        format_normalized = value.upper() or DEFAULT_LOG_FORMAT
+        if format_normalized not in VALID_LOG_FORMATS:
+            msg = (
+                "Unsupported log format '{value}'. "
+                "Valid options: {formats}".format(
+                    value=value, formats=sorted(VALID_LOG_FORMATS)
+                )
+            )
+            raise ValueError(msg)
+        return cast(LogFormat, format_normalized)
 
     @field_validator(
         "openex_app_id",
@@ -263,6 +284,10 @@ class Settings(BaseModel):
         log_level = lookup("log_level", "LOG_LEVEL", upper=True)
         if log_level is not None:
             settings_data["log_level"] = log_level
+
+        log_format = lookup("log_format", "LOG_FORMAT", upper=True)
+        if log_format is not None:
+            settings_data["log_format"] = log_format
 
         optional_keys = {
             "openex_app_id": ("OPENEXCHANGERATES_APP_ID",),

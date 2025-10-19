@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from apps.api.config import MAX_ACCESS_TOKEN_MINUTES, Settings
+from apps.api.config import DEFAULT_LOG_FORMAT, MAX_ACCESS_TOKEN_MINUTES, Settings
 
 
 def test_settings_reads_prefixed_environment(monkeypatch) -> None:
@@ -17,6 +17,7 @@ def test_settings_reads_prefixed_environment(monkeypatch) -> None:
     assert cfg.database_url == "postgresql://user:pass@localhost/db"
     assert cfg.log_level == "debug".upper()
     assert cfg.newsapi_key == "token"
+    assert cfg.log_format == DEFAULT_LOG_FORMAT
 
 
 def test_settings_supports_legacy_env_names(monkeypatch) -> None:
@@ -94,6 +95,7 @@ def test_settings_loads_from_env_file(tmp_path: Path, monkeypatch) -> None:
     env_file.write_text(
         "MODACCT_DATABASE_URL=postgresql://env/file\n"
         "MODACCT_LOG_LEVEL=warning\n"
+        "MODACCT_LOG_FORMAT=text\n"
         "MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES=120\n"
         "MODACCT_JWT_SECRET_KEY="
         "abcdefghijklmnopqrstuvwxyz012345\n"
@@ -107,5 +109,15 @@ def test_settings_loads_from_env_file(tmp_path: Path, monkeypatch) -> None:
 
     assert cfg.database_url == "postgresql://env/file"
     assert cfg.log_level == "WARNING"
+    assert cfg.log_format == "TEXT"
     assert cfg.access_token_expire_minutes == 120
     assert cfg.jwt_secret_is_ephemeral is False
+
+
+def test_settings_rejects_invalid_log_format(monkeypatch) -> None:
+    monkeypatch.setenv("MODACCT_LOG_FORMAT", "yaml")
+
+    with pytest.raises(ValueError) as exc:
+        Settings.load()
+
+    assert "JSON" in str(exc.value)

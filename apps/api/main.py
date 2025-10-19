@@ -8,6 +8,8 @@ from typing import Iterable, Tuple
 
 from fastapi import APIRouter, Depends, FastAPI
 
+from apps.observability.logging import RequestContextMiddleware, configure_logging
+
 from .config import settings
 from .db import init_db
 from .routers import audit, auth, core, forecast, fx, ledger, market, reports, tax, workflow
@@ -22,6 +24,12 @@ logger = logging.getLogger(__name__)
 def create_app() -> FastAPI:
     """Instantiate and configure the FastAPI application."""
 
+    configure_logging(
+        settings.log_level,
+        settings.log_format,
+        service_name="modular-accounting-api",
+        force=True,
+    )
     init_db()
     if settings.jwt_secret_is_ephemeral:
         logger.warning(
@@ -39,6 +47,7 @@ def create_app() -> FastAPI:
             shutdown_scheduler()
 
     app = FastAPI(title="Modular Accounting API", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(RequestContextMiddleware)
     protected = [Depends(get_current_user)]
     router_registry: Iterable[Tuple[APIRouter, bool]] = (
         (core.router, False),

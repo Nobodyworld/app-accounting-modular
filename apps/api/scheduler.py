@@ -7,9 +7,12 @@ from contextlib import contextmanager
 from datetime import timedelta
 from threading import Lock
 from typing import Iterator
+from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlmodel import Session, select
+
+from apps.observability.logging import logging_context
 
 from .db import engine
 from .models.models import ForecastPlan
@@ -46,23 +49,33 @@ def _refresh_plan(service: BudgetService, plan: ForecastPlan) -> None:
 
 
 def _run_scheduled_refresh() -> None:
-    # TODO - Emit metrics or alerts when refresh frequency falls behind schedule.
-    with _session_scope() as session:
-        service = BudgetService(session)
-        plans = session.exec(
-            select(ForecastPlan).where(ForecastPlan.is_active.is_(True))
-        ).all()
-        for plan in plans:
-            try:
-                _refresh_plan(service, plan)
-            except Exception:
-                logger.exception(
-                    "Failed to refresh forecast plan", extra={
-                        "plan_id": plan.id,
-                        "organization_id": plan.organization_id,
-                        "budget_id": plan.budget_id,
-                    }
-                )
+    correlation = f"scheduler-{uuid4()}"
+    with logging_context(
+        correlation_id=correlation,
+        request_id=correlation,
+        job="forecast-refresh",
+    ):
+        logger.info("Running scheduled forecast refresh job")
+        # TODO - Emit metrics or alerts when refresh frequency falls behind schedule.
+        with _session_scope() as session:
+            service = BudgetService(session)
+            plans = session.exec(
+                select(ForecastPlan).where(ForecastPlan.is_active.is_(True))
+            ).all()
+            if not plans:
+                logger.info("No active forecast plans available for refresh")
+                return
+            for plan in plans:
+                with logging_context(
+                    plan_id=plan.id,
+                    organization_id=plan.organization_id,
+                    budget_id=plan.budget_id,
+                ):
+                    try:
+                        _refresh_plan(service, plan)
+                        logger.info("Refreshed forecast plan")
+                    except Exception:
+                        logger.exception("Failed to refresh forecast plan")
 
 
 def start_scheduler() -> None:

@@ -18,6 +18,7 @@ A modular accounting platform composed of a FastAPI backend, Streamlit operation
 - **API Backend (`apps/api`)**: FastAPI service exposing REST endpoints for auth, ledger, reporting, forecasting, FX, market, tax, audit, and workflow orchestration.
 - **Streamlit Web (`apps/web`)**: Analyst-facing dashboards backed by the API.
 - **Scheduler (`apps/api/scheduler.py`)**: APScheduler jobs refreshing forecasts and provider data.
+- **Observability (`apps/observability/logging.py`)**: Structured logging with correlation IDs shared across the API, scheduler, CLI, and Uvicorn access/error loggers plus async context helpers.
 - **CLI (`cli/macli.py`)**: Administrative commands for bootstrapping accounts, ingesting data, and generating reports.
 - **Plugins (`plugins/`)**: Provider contracts for FX, market, and tax integrations.
 - **Docs (`docs/`)**: Architecture, forecasting, plugin, and domain references.
