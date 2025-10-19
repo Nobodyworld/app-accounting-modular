@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import csv
+import logging
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Iterator, cast
 from uuid import uuid4
 
 import click
 from sqlmodel import Session, select
 
 from apps.api.audit import AuditActor, apply_creation_metadata, use_actor
+from apps.api.config import LogFormat, get_settings
 from apps.api.db import engine, init_db
 from apps.api.models.models import AccountType, Organization, User, WorkflowStatus
 from apps.api.services.fx_service import FXService
@@ -20,6 +24,10 @@ from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import MarketService
 from apps.api.services.plugin_loader import available_providers, load_provider
 from apps.api.services.workflow_service import WorkflowService
+from apps.observability.logging import configure_logging, logging_context
+
+
+logger = logging.getLogger(__name__)
 
 
 def _provider_keys(capability: str) -> tuple[list[str], str | None]:
@@ -33,9 +41,50 @@ _FX_PROVIDER_KEYS, _DEFAULT_FX_PROVIDER = _provider_keys("fx")
 _MARKET_PROVIDER_KEYS, _DEFAULT_MARKET_PROVIDER = _provider_keys("market")
 
 
+@contextmanager
+def _command_scope(command: str, **context: object) -> Iterator[None]:
+    correlation = f"{command}-{uuid4()}"
+    merged_context = {"command": command, **context}
+    with logging_context(
+        correlation_id=correlation,
+        request_id=correlation,
+        **merged_context,
+    ):
+        logger.info("Starting CLI command")
+        try:
+            yield
+        except Exception:
+            logger.exception("CLI command failed")
+            raise
+        else:
+            logger.info("Completed CLI command")
+
+
 @click.group()
-def cli() -> None:
+@click.option(
+    "--log-format",
+    type=click.Choice(["json", "text"], case_sensitive=False),
+    default=None,
+    help="Override log output format for this invocation.",
+)
+@click.pass_context
+def cli(ctx: click.Context, log_format: str | None) -> None:
     """Modular Accounting CLI."""
+
+    settings = get_settings()
+    selected_format = (log_format or settings.log_format).upper()
+    configure_logging(
+        settings.log_level,
+        cast(LogFormat, selected_format),
+        service_name="modular-accounting-cli",
+        force=True,
+    )
+    ctx.ensure_object(dict)
+    ctx.obj["log_format"] = selected_format
+    logger.info(
+        "CLI initialised",
+        extra={"log_format": selected_format, "log_level": settings.log_level},
+    )
 
 
 @cli.command()
@@ -51,16 +100,27 @@ def cli() -> None:
 def sync_fx(base: str, provider_key: str) -> None:
     """Synchronise foreign-exchange rates using the configured provider."""
 
-    init_db()
-    handle = load_provider(provider_key)
-    with Session(engine) as session:
-        actor = _ensure_cli_actor(session)
-        with use_actor(actor):
-            service = FXService(session, handle.instance)
-            count = service.sync(base=base)
-    click.echo(
-        f"Synced {count} FX rates via {handle.metadata.name} ({handle.metadata.key})"
-    )
+    with _command_scope(
+        "sync-fx", base_currency=base, provider_key=provider_key
+    ):
+        init_db()
+        handle = load_provider(provider_key)
+        with Session(engine) as session:
+            actor = _ensure_cli_actor(session)
+            with use_actor(actor):
+                service = FXService(session, handle.instance)
+                count = service.sync(base=base)
+        logger.info(
+            "FX rates synchronised",
+            extra={
+                "provider": handle.metadata.key,
+                "base_currency": base,
+                "rates_synced": count,
+            },
+        )
+        click.echo(
+            f"Synced {count} FX rates via {handle.metadata.name} ({handle.metadata.key})"
+        )
 
 
 @cli.command()
@@ -78,18 +138,35 @@ def sync_fx(base: str, provider_key: str) -> None:
 def sync_prices(symbol: str, start: str, end: str, provider_key: str) -> None:
     """Synchronise historical prices for ``symbol``."""
 
-    init_db()
-    handle = load_provider(provider_key)
-    start_date = date.fromisoformat(start)
-    end_date = date.fromisoformat(end)
-    with Session(engine) as session:
-        actor = _ensure_cli_actor(session)
-        with use_actor(actor):
-            service = MarketService(session, handle.instance)
-            count = service.sync_prices(symbol, start_date, end_date)
-    click.echo(
-        f"Synced {count} prices for {symbol} via {handle.metadata.name} ({handle.metadata.key})"
-    )
+    with _command_scope(
+        "sync-prices",
+        symbol=symbol,
+        start=start,
+        end=end,
+        provider_key=provider_key,
+    ):
+        init_db()
+        handle = load_provider(provider_key)
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end)
+        with Session(engine) as session:
+            actor = _ensure_cli_actor(session)
+            with use_actor(actor):
+                service = MarketService(session, handle.instance)
+                count = service.sync_prices(symbol, start_date, end_date)
+        logger.info(
+            "Market prices synchronised",
+            extra={
+                "provider": handle.metadata.key,
+                "symbol": symbol,
+                "start": start,
+                "end": end,
+                "prices_synced": count,
+            },
+        )
+        click.echo(
+            f"Synced {count} prices for {symbol} via {handle.metadata.name} ({handle.metadata.key})"
+        )
 
 
 @cli.command()
@@ -97,35 +174,54 @@ def sync_prices(symbol: str, start: str, end: str, provider_key: str) -> None:
 def import_csv(file_: Path) -> None:
     """Import journal postings from a CSV file."""
 
-    init_db()
-    with Session(engine) as session:
-        actor = _ensure_cli_actor(session)
-        with use_actor(actor):
-            ledger = LedgerService(session)
-            transactions = _load_transactions_from_csv(ledger, file_)
-            workflow = WorkflowService(session)
-            staged = workflow.ingest_transactions(
-                transactions,
-                source="cli_csv",
-                source_reference=str(file_.resolve()),
-                metadata={"filename": file_.name},
+    with _command_scope("import-csv", file=str(file_)):
+        init_db()
+        with Session(engine) as session:
+            actor = _ensure_cli_actor(session)
+            with use_actor(actor):
+                ledger = LedgerService(session)
+                transactions = _load_transactions_from_csv(ledger, file_)
+                workflow = WorkflowService(session)
+                staged = workflow.ingest_transactions(
+                    transactions,
+                    source="cli_csv",
+                    source_reference=str(file_.resolve()),
+                    metadata={"filename": file_.name},
+                )
+                results = workflow.process_transactions([txn.id for txn in staged])
+
+        posted = sum(1 for result in results if result.status == WorkflowStatus.POSTED)
+        failed = [result for result in results if result.status == WorkflowStatus.FAILED]
+
+        if failed:
+            logger.warning(
+                "Validation failures encountered during CSV import",
+                extra={
+                    "failed_count": len(failed),
+                    "file": file_.name,
+                },
             )
-            results = workflow.process_transactions([txn.id for txn in staged])
-
-    posted = sum(1 for result in results if result.status == WorkflowStatus.POSTED)
-    failed = [result for result in results if result.status == WorkflowStatus.FAILED]
-
-    for result in failed:
-        message = "; ".join(result.validation_errors or []) or "Unknown error"
-        click.echo(
-            f"Transaction {result.staged_transaction_id} failed validation: {message}",
-            err=True,
+        logger.info(
+            "CSV import processed",
+            extra={
+                "file": file_.name,
+                "transactions": len(results),
+                "posted": posted,
+                "failed": len(failed),
+            },
         )
 
-    click.echo(
-        f"Processed {len(results)} transactions from {file_.name} "
-        f"({posted} posted, {len(failed)} failed)"
-    )
+        for result in failed:
+            message = "; ".join(result.validation_errors or []) or "Unknown error"
+            click.echo(
+                f"Transaction {result.staged_transaction_id} failed validation: {message}",
+                err=True,
+            )
+
+        click.echo(
+            f"Processed {len(results)} transactions from {file_.name} "
+            f"({posted} posted, {len(failed)} failed)"
+        )
 
 
 def _load_transactions_from_csv(

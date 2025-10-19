@@ -130,6 +130,7 @@
   - **Blast Radius**: Medium—affects logging output.
   - **Rollback Plan**: Revert logging module and dependencies.
   - **Tags**: {reliability, DX}.
+  - **Status**: ✅ Structured logging pipeline with correlation IDs spans API middleware, scheduler jobs, and CLI commands; Uvicorn loggers unified under the same handlers and async helpers/tests added in `tests/test_observability_logging.py`.
 
 - **Task**: Instrument metrics via OpenTelemetry (FastAPI instrumentation, APScheduler metrics) with optional OTLP endpoint.
   - **Goal**: Enable metrics/tracing integration.
