@@ -6,10 +6,15 @@ import types
 import pytest
 
 from apps.api.config import ProviderInfo, settings
-from apps.api.services.plugin_loader import available_providers, load_provider
+from apps.api.services.plugin_loader import (
+    available_providers,
+    load_provider,
+    refresh_provider_cache,
+)
 
 
 def test_available_providers_returns_metadata() -> None:
+    refresh_provider_cache()
     providers = available_providers()
     keys = {meta.key for meta in providers}
     assert "fx:ecb" in keys
@@ -17,6 +22,7 @@ def test_available_providers_returns_metadata() -> None:
 
 
 def test_load_provider_instantiates_provider() -> None:
+    refresh_provider_cache()
     handle = load_provider("fx:ecb")
     assert hasattr(handle.instance, "name")
     assert handle.metadata.key == "fx:ecb"
@@ -31,6 +37,7 @@ def test_load_provider_rejects_unknown_key() -> None:
 
 
 def test_load_provider_rejects_missing_modules(monkeypatch) -> None:
+    refresh_provider_cache()
     monkeypatch.setattr(
         settings,
         "allowed_providers",
@@ -48,6 +55,7 @@ def test_load_provider_rejects_missing_modules(monkeypatch) -> None:
 
 
 def test_load_provider_requires_factory(monkeypatch) -> None:
+    refresh_provider_cache()
     monkeypatch.setattr(settings, "allowed_providers", settings.allowed_providers.copy())
 
     with pytest.raises(ValueError):
@@ -55,6 +63,7 @@ def test_load_provider_requires_factory(monkeypatch) -> None:
 
 
 def test_load_provider_rejects_non_callable(monkeypatch) -> None:
+    refresh_provider_cache()
     module = types.ModuleType("plugins.dummy_module")
     module.provider = "not-callable"
     monkeypatch.setitem(sys.modules, "plugins.dummy_module", module)
@@ -75,6 +84,7 @@ def test_load_provider_rejects_non_callable(monkeypatch) -> None:
 
 
 def test_load_provider_rejects_none(monkeypatch) -> None:
+    refresh_provider_cache()
     module = types.ModuleType("plugins.dummy_none")
 
     def factory():
@@ -96,3 +106,85 @@ def test_load_provider_rejects_none(monkeypatch) -> None:
 
     with pytest.raises(ValueError):
         load_provider("dummy")
+
+
+def test_available_providers_cache_invalidation(monkeypatch) -> None:
+    refresh_provider_cache()
+    baseline = available_providers()
+    assert baseline
+
+    monkeypatch.setattr(
+        settings,
+        "allowed_providers",
+        {
+            "custom": ProviderInfo(
+                module="plugins.tax_oecd_stub.provider",
+                name="Custom",
+                capabilities=("tax",),
+            )
+        },
+    )
+
+    refresh_provider_cache()
+    providers = available_providers()
+    assert [meta.key for meta in providers] == ["custom"]
+
+
+def test_load_provider_validates_required_methods(monkeypatch) -> None:
+    refresh_provider_cache()
+    module = types.ModuleType("plugins.invalid_fx")
+
+    class InvalidProvider:
+        name = "invalid"
+
+    def factory() -> InvalidProvider:
+        return InvalidProvider()
+
+    module.provider = factory
+    monkeypatch.setitem(sys.modules, "plugins.invalid_fx", module)
+    monkeypatch.setattr(
+        settings,
+        "allowed_providers",
+        {
+            "invalid": ProviderInfo(
+                module="plugins.invalid_fx",
+                name="Invalid",
+                capabilities=("fx",),
+            )
+        },
+    )
+
+    refresh_provider_cache()
+    with pytest.raises(ValueError) as excinfo:
+        load_provider("invalid")
+    assert "sync_daily_rates" in str(excinfo.value)
+
+
+def test_load_provider_requires_name_attribute(monkeypatch) -> None:
+    refresh_provider_cache()
+    module = types.ModuleType("plugins.nameless")
+
+    class NamelessProvider:
+        sync_daily_rates = lambda self, *args, **kwargs: None  # type: ignore[assignment]
+
+    def factory() -> NamelessProvider:
+        return NamelessProvider()
+
+    module.provider = factory
+    monkeypatch.setitem(sys.modules, "plugins.nameless", module)
+    monkeypatch.setattr(
+        settings,
+        "allowed_providers",
+        {
+            "nameless": ProviderInfo(
+                module="plugins.nameless",
+                name="Nameless",
+                capabilities=("fx",),
+            )
+        },
+    )
+
+    refresh_provider_cache()
+    with pytest.raises(ValueError) as excinfo:
+        load_provider("nameless")
+    assert "name" in str(excinfo.value)

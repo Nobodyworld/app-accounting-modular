@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timezone
 
+import pytest
+
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -27,6 +30,9 @@ def seed_data(session: Session) -> tuple[int, int]:
     ledger = LedgerService(session)
     cash = ledger.create_account("Cash", "ASSET", code="1000", organization_id=org.id)
     expense = ledger.create_account("Ops", "EXPENSE", code="5000", organization_id=org.id)
+    shadow_expense = ledger.create_account(
+        "Backoffice", "EXPENSE", code="5100", organization_id=org.id
+    )
 
     ledger.post_transaction(
         date=date(2024, 1, 1),
@@ -69,6 +75,12 @@ def seed_data(session: Session) -> tuple[int, int]:
                 period_start=date(2024, 2, 1),
                 amount=300.0,
             ),
+            BudgetLine(
+                budget_id=budget.id,
+                account_id=shadow_expense.id,
+                period_start=date(2024, 1, 1),
+                amount=150.0,
+            ),
         ]
     )
     session.commit()
@@ -79,9 +91,22 @@ def test_budget_vs_actual_endpoint() -> None:
     session = setup_database()
     org_id, budget_id = seed_data(session)
 
-    response = budget_vs_actual(budget_id=budget_id, horizon=15, refresh=True, session=session)
+    response = budget_vs_actual(
+        budget_id=budget_id,
+        organization_id=org_id,
+        horizon=15,
+        refresh=True,
+        session=session,
+    )
     assert response.summary["total_actual"] > 0
     assert response.metadata.budget_id == budget_id
+    assert response.metadata.organization_id == org_id
+    assert response.metadata.reporting_currency == "USD"
+    assert response.metadata.plan_revision is not None
+    assert response.metadata.generated_at.tzinfo == timezone.utc
+    assert response.metadata.accounts_without_actuals is not None
+    missing = response.metadata.accounts_without_actuals
+    assert missing and missing[0].account_name == "Backoffice"
 
     stored_row = session.exec(select(ForecastOutput).where(ForecastOutput.report_type == "budget_vs_actual")).first()
     assert stored_row is not None
@@ -103,6 +128,65 @@ def test_cashflow_endpoint() -> None:
     )
     assert response.metadata.organization_id == org_id
     assert response.current_cash < 0  # cash reduced by spend
+    assert response.metadata.forecast_diagnostics is not None
+    assert response.metadata.forecast_status == "success"
+    assert response.metadata.forecast_timezone == "UTC"
 
+    session.close()
+
+
+def test_budget_vs_actual_rejects_cross_org_access() -> None:
+    session = setup_database()
+    org_id, budget_id = seed_data(session)
+
+    with pytest.raises(HTTPException) as excinfo:
+        budget_vs_actual(
+            budget_id=budget_id,
+            organization_id=org_id + 1,
+            session=session,
+        )
+
+    assert excinfo.value.status_code == 404
+
+    session.close()
+
+
+def test_budget_vs_actual_returns_400_for_empty_budget() -> None:
+    session = setup_database()
+    org = Organization(name="Empty Budget Org")
+    session.add(org)
+    session.commit()
+    session.refresh(org)
+
+    budget = Budget(
+        organization_id=org.id,
+        name="Empty",
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 12, 31),
+    )
+    session.add(budget)
+    session.commit()
+    session.refresh(budget)
+
+    with pytest.raises(HTTPException) as excinfo:
+        budget_vs_actual(
+            budget_id=budget.id,
+            organization_id=org.id,
+            session=session,
+        )
+
+    assert excinfo.value.status_code == 400
+    session.close()
+
+
+def test_cashflow_forecast_returns_404_for_missing_org() -> None:
+    session = setup_database()
+    with pytest.raises(HTTPException) as excinfo:
+        cashflow_forecast(
+            organization_id=999,
+            session=session,
+        )
+
+    assert excinfo.value.status_code == 404
     session.close()
 

@@ -6,7 +6,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional
 
-from sqlalchemy import Column, JSON, Text, func
+from sqlalchemy import Column, Index, JSON, Text, UniqueConstraint, func
 from sqlmodel import Field, SQLModel
 
 __all__ = [
@@ -173,7 +173,23 @@ class ForecastPlan(SQLModel, table=True):
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    # TODO - Enforce uniqueness on (organization_id, name) to prevent duplicates.
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "name",
+            "budget_id",
+            name="uq_forecast_plan_org_name_budget",
+        ),
+    )
+
+
+Index(
+    "ix_forecast_plan_org_name_budget_coalesce",
+    ForecastPlan.organization_id,
+    func.coalesce(ForecastPlan.budget_id, -1),
+    ForecastPlan.name,
+    unique=True,
+)
 
 
 class ForecastOutput(SQLModel, table=True):
@@ -211,7 +227,14 @@ class Price(ActorTrackedModel, table=True):
     date: date
     close: float
     provider: str
-    # TODO - Add unique constraint on (instrument_id, date, provider) to avoid duplicates.
+    __table_args__ = (
+        UniqueConstraint(
+            "instrument_id",
+            "date",
+            "provider",
+            name="uq_price_instrument_date_provider",
+        ),
+    )
 
 
 class Rate(ActorTrackedModel, table=True):
@@ -226,7 +249,15 @@ class Rate(ActorTrackedModel, table=True):
     date: date
     value: float
     provider: str
-    # TODO - Create composite index covering base/quote/date/provider for lookups.
+    __table_args__ = (
+        Index(
+            "ix_rate_base_quote_date_provider",
+            "base",
+            "quote",
+            "date",
+            "provider",
+        ),
+    )
 
 
 class Country(ActorTrackedModel, table=True):

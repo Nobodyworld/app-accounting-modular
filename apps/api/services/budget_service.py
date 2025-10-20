@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -11,6 +12,7 @@ from typing import Iterable
 
 import csv
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..models.models import (
@@ -25,6 +27,9 @@ from ..models.models import (
     Transaction,
 )
 from .forecast_service import ForecastResult, ForecastService
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -118,24 +123,17 @@ class BudgetService:
         )
         plan = self.session.exec(plan_stmt).one_or_none()
         if plan is None:
-            plan = ForecastPlan(
-                organization_id=budget.organization_id,
-                budget_id=budget.id,
-                name=self.BUDGET_PLAN_NAME,
-                horizon=horizon or 90,
+            plan = self._provision_plan(
+                plan_stmt,
+                ForecastPlan(
+                    organization_id=budget.organization_id,
+                    budget_id=budget.id,
+                    name=self.BUDGET_PLAN_NAME,
+                    horizon=horizon or 90,
+                ),
             )
-            self.session.add(plan)
-            self.session.commit()
-            self.session.refresh(plan)
-            # TODO - Lock plan creation to avoid duplicate rows under concurrent calls.
         else:
-            updated_horizon = horizon or plan.horizon
-            if plan.horizon != updated_horizon:
-                plan.horizon = updated_horizon
-                plan.updated_at = datetime.now(timezone.utc)
-                self.session.add(plan)
-                self.session.commit()
-                self.session.refresh(plan)
+            plan = self._update_plan_horizon(plan, horizon)
         return plan
 
     def _ensure_cashflow_plan(self, organization_id: int, horizon: int | None) -> ForecastPlan:
@@ -150,24 +148,17 @@ class BudgetService:
         )
         plan = self.session.exec(plan_stmt).one_or_none()
         if plan is None:
-            plan = ForecastPlan(
-                organization_id=organization_id,
-                budget_id=None,
-                name=self.CASHFLOW_PLAN_NAME,
-                horizon=horizon or 90,
+            plan = self._provision_plan(
+                plan_stmt,
+                ForecastPlan(
+                    organization_id=organization_id,
+                    budget_id=None,
+                    name=self.CASHFLOW_PLAN_NAME,
+                    horizon=horizon or 90,
+                ),
             )
-            self.session.add(plan)
-            self.session.commit()
-            self.session.refresh(plan)
-            # TODO - Capture creator metadata when provisioning default cashflow plan.
         else:
-            updated_horizon = horizon or plan.horizon
-            if plan.horizon != updated_horizon:
-                plan.horizon = updated_horizon
-                plan.updated_at = datetime.now(timezone.utc)
-                self.session.add(plan)
-                self.session.commit()
-                self.session.refresh(plan)
+            plan = self._update_plan_horizon(plan, horizon)
         return plan
 
     def _build_budget_report(self, plan: ForecastPlan) -> BudgetReport:
@@ -190,6 +181,7 @@ class BudgetService:
         for line, account in budget_lines:
             account_ids.add(account.id)
             period_keys.add(self._period_key(line.period_start))
+        accounts_by_id = {account.id: account for _, account in budget_lines}
 
         if not budget_lines:
             raise ValueError("Budget contains no lines to analyse")
@@ -234,14 +226,28 @@ class BudgetService:
 
         csv_export = self._render_budget_csv(lines)
 
-        metadata = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+        accounts_with_actuals = {account_id for account_id, _ in actuals.keys()}
+        missing_accounts = [
+            {
+                "account_id": account.id,
+                "account_name": account.name,
+                "account_code": account.code,
+            }
+            for account_id, account in accounts_by_id.items()
+            if account_id not in accounts_with_actuals
+        ]
+
+        metadata: dict[str, object] = {
+            "generated_at": datetime.now(timezone.utc),
             "horizon": plan.horizon,
             "plan_id": plan.id,
+            "plan_revision": self._as_utc(plan.updated_at),
             "budget_id": plan.budget_id,
             "organization_id": plan.organization_id,
+            "reporting_currency": budget.currency,
         }
-        # TODO - Include reporting currency and fx assumptions in metadata payload.
+        if missing_accounts:
+            metadata["accounts_without_actuals"] = missing_accounts
 
         return BudgetReport(
             lines=lines,
@@ -255,7 +261,7 @@ class BudgetService:
 
     def _build_cashflow_report(self, plan: ForecastPlan) -> CashflowReport:
         asset_accounts = self.session.exec(
-            select(Account.id)
+            select(Account.id, Account.currency)
             .where(Account.organization_id == plan.organization_id)
             .where(Account.type == AccountType.ASSET)
         ).all()
@@ -264,7 +270,10 @@ class BudgetService:
             raise ValueError("Organization has no asset accounts to build cashflow report")
 
         account_ids = {
-            row[0] if isinstance(row, tuple) else row for row in asset_accounts
+            row[0] if isinstance(row, tuple) else row.id for row in asset_accounts
+        }
+        currencies = {
+            row[1] if isinstance(row, tuple) else row.currency for row in asset_accounts
         }
 
         stmt = (
@@ -285,13 +294,22 @@ class BudgetService:
         historical = sorted((period, float(amount)) for period, amount in monthly.items())
 
         forecast_result: ForecastResult | None = None
+        forecast_error: str | None = None
         if historical:
             series = [(period.isoformat(), amount) for period, amount in historical]
             try:
                 forecast_result = self.forecaster.forecast_series(series, plan.horizon)
-            except ValueError:
-                # TODO - Capture forecasting errors for monitoring and automatic fallbacks.
+            except ValueError as exc:
                 forecast_result = None
+                forecast_error = str(exc)
+                logger.warning(
+                    "Cashflow forecasting failed",  # pragma: no cover - structured logging hook
+                    extra={
+                        "plan_id": plan.id,
+                        "organization_id": plan.organization_id,
+                        "error": forecast_error,
+                    },
+                )
 
         current_cash = float(sum(amount for _, amount in historical)) if historical else 0.0
         avg_flow = None
@@ -301,13 +319,25 @@ class BudgetService:
         csv_export = self._render_cashflow_csv(historical, forecast_result)
 
         metadata = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(timezone.utc),
             "horizon": plan.horizon,
             "plan_id": plan.id,
+            "plan_revision": self._as_utc(plan.updated_at),
             "organization_id": plan.organization_id,
             "budget_id": plan.budget_id,
+            "reporting_currency": currencies.pop() if len(currencies) == 1 else None,
         }
-        # TODO - Expose plan revision identifiers to aid reconciliation between exports.
+        forecast_status = "unavailable"
+        if forecast_result:
+            forecast_status = "success"
+            if forecast_result.diagnostics:
+                metadata["forecast_diagnostics"] = forecast_result.diagnostics
+            if forecast_result.timezone:
+                metadata["forecast_timezone"] = forecast_result.timezone
+        elif forecast_error:
+            forecast_status = "error"
+            metadata["forecast_diagnostics"] = {"status": "error", "detail": forecast_error}
+        metadata["forecast_status"] = forecast_status
 
         return CashflowReport(
             historical=[(period.isoformat(), amount) for period, amount in historical],
@@ -317,6 +347,33 @@ class BudgetService:
             metadata=metadata,
             csv_export=csv_export,
         )
+
+    def _provision_plan(
+        self, stmt, candidate: ForecastPlan
+    ) -> ForecastPlan:
+        """Persist a new forecast plan guarding against concurrent creation."""
+
+        self.session.add(candidate)
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            existing = self.session.exec(stmt).one()
+            return existing
+        self.session.refresh(candidate)
+        return candidate
+
+    def _update_plan_horizon(
+        self, plan: ForecastPlan, horizon: int | None
+    ) -> ForecastPlan:
+        updated_horizon = horizon or plan.horizon
+        if plan.horizon != updated_horizon:
+            plan.horizon = updated_horizon
+            plan.updated_at = datetime.now(timezone.utc)
+            self.session.add(plan)
+            self.session.commit()
+            self.session.refresh(plan)
+        return plan
 
     def _collect_actuals(
         self, account_ids: Iterable[int], periods: Iterable[date]
@@ -426,9 +483,13 @@ class BudgetService:
                 horizon=output.summary.get("horizon", 0),
                 points=[(point[0], float(point[1])) for point in forecast_points],
                 model_order=tuple(output.summary.get("model_order", (0, 0, 0))),
+                diagnostics=output.summary.get("diagnostics"),
+                timezone=output.summary.get("timezone"),
             )
 
         metadata = output.context or {}
+        if output.summary.get("status") and "forecast_status" not in metadata:
+            metadata = {**metadata, "forecast_status": output.summary.get("status")}
 
         return CashflowReport(
             historical=[(item[0], float(item[1])) for item in output.summary.get("historical", [])],
@@ -463,7 +524,7 @@ class BudgetService:
                 "total_variance": payload.total_variance,
                 "burn_rate": payload.burn_rate,
             }
-            context = payload.metadata
+            context = self._serialise_metadata(payload.metadata)
             csv_data = payload.csv_export
         else:
             summary = {
@@ -471,10 +532,13 @@ class BudgetService:
                 "forecast": payload.forecast.points if payload.forecast else [],
                 "horizon": payload.forecast.horizon if payload.forecast else 0,
                 "model_order": payload.forecast.model_order if payload.forecast else (0, 0, 0),
+                "diagnostics": payload.forecast.diagnostics if payload.forecast else None,
+                "timezone": payload.forecast.timezone if payload.forecast else None,
+                "status": payload.metadata.get("forecast_status"),
                 "current_cash": payload.current_cash,
                 "average_monthly_flow": payload.average_monthly_flow,
             }
-            context = payload.metadata
+            context = self._serialise_metadata(payload.metadata)
             csv_data = payload.csv_export
 
         output = ForecastOutput(
@@ -543,4 +607,23 @@ class BudgetService:
             for period, amount in forecast.points:
                 writer.writerow([period, f"{amount:.2f}", "forecast"])
         return buffer.getvalue()
+
+    @staticmethod
+    def _as_utc(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    @staticmethod
+    def _serialise_metadata(metadata: dict[str, object]) -> dict[str, object]:
+        def convert(value: object) -> object:
+            if isinstance(value, datetime):
+                return value.isoformat()
+            if isinstance(value, list):
+                return [convert(item) for item in value]
+            if isinstance(value, dict):
+                return {k: convert(v) for k, v in value.items()}
+            return value
+
+        return {key: convert(value) for key, value in metadata.items()}
 

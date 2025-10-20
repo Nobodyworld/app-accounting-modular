@@ -15,6 +15,7 @@ from .services.workflow_service import WorkflowResult
 
 __all__ = [
     "AccountCreate",
+    "AccountReference",
     "BudgetReportLineSchema",
     "BudgetReportResponse",
     "CashflowForecastResponse",
@@ -304,14 +305,30 @@ class ForecastResponse(BaseModel):
     order: tuple[int, int, int]
 
 
+class AccountReference(BaseModel):
+    """Lightweight reference to an account used in report metadata."""
+
+    account_id: int
+    account_name: str
+    account_code: str | None = None
+
+
 class ReportMetadata(BaseModel):
     """Metadata accompanying generated reports."""
+
+    model_config = ConfigDict(extra="allow")
 
     generated_at: datetime
     horizon: int | None = None
     plan_id: int | None = None
+    plan_revision: datetime | None = None
     budget_id: int | None = None
     organization_id: int | None = None
+    reporting_currency: str | None = None
+    forecast_diagnostics: dict[str, float | int | str] | None = None
+    forecast_status: str | None = None
+    forecast_timezone: str | None = None
+    accounts_without_actuals: list[AccountReference] | None = None
 
 
 class BudgetReportLineSchema(BaseModel):

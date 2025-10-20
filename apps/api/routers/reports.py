@@ -2,24 +2,49 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from ..db import get_session
+from ..models.models import Budget
 from ..services.budget_service import BudgetReport, BudgetService, CashflowReport
 from ..schemas import BudgetReportResponse, CashflowForecastResponse
+from ..utils.metadata import normalise_metadata
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
-def _response_from_budget(report: BudgetReport) -> BudgetReportResponse:
-    metadata = report.metadata.copy()
-    # TODO - Normalize metadata keys/values to ensure downstream clients see consistent casing.
-    generated_at = metadata.get("generated_at")
+def _normalised_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+    if metadata is None:
+        return {}
+
+    normalised = normalise_metadata(metadata)
+    generated_at = normalised.get("generated_at")
     if isinstance(generated_at, str):
-        metadata["generated_at"] = datetime.fromisoformat(generated_at)
+        try:
+            normalised["generated_at"] = datetime.fromisoformat(generated_at)
+        except ValueError:
+            # Preserve the original value when it cannot be parsed.
+            pass
+    return normalised
+
+
+def _coerce_optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        coerced = int(value)
+    except (TypeError, ValueError):
+        return None
+    return coerced
+
+
+def _response_from_budget(report: BudgetReport) -> BudgetReportResponse:
+    metadata = _normalised_metadata(report.metadata)
 
     return BudgetReportResponse(
         lines=[
@@ -48,11 +73,9 @@ def _response_from_budget(report: BudgetReport) -> BudgetReportResponse:
 
 
 def _response_from_cashflow(report: CashflowReport) -> CashflowForecastResponse:
-    metadata = report.metadata.copy()
-    # TODO - Attach model diagnostics to metadata for observability of forecast quality.
-    generated_at = metadata.get("generated_at")
-    if isinstance(generated_at, str):
-        metadata["generated_at"] = datetime.fromisoformat(generated_at)
+    metadata = _normalised_metadata(report.metadata)
+    if report.forecast and report.forecast.diagnostics:
+        metadata.setdefault("forecast_diagnostics", report.forecast.diagnostics)
 
     return CashflowForecastResponse(
         historical=[{"period": period, "amount": amount} for period, amount in report.historical],
@@ -65,16 +88,38 @@ def _response_from_cashflow(report: CashflowReport) -> CashflowForecastResponse:
     )
 
 
+def _ensure_budget_scope(
+    session: Session, budget_id: int, organization_id: int
+) -> None:
+    budget = session.get(Budget, budget_id)
+    if budget is None or budget.organization_id != organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Budget not found for organisation",
+        )
+
+
 @router.get("/budget-vs-actual", response_model=BudgetReportResponse)
 def budget_vs_actual(
     budget_id: int = Query(..., ge=1),
+    organization_id: int = Query(..., ge=1),
     horizon: int | None = Query(default=None, ge=1),
     refresh: bool = Query(default=False),
     session: Session = Depends(get_session),
 ) -> BudgetReportResponse:
-    # TODO - Enforce organization scoping to prevent cross-tenant budget exposure.
+    _ensure_budget_scope(session, budget_id, organization_id)
     service = BudgetService(session)
-    report = service.budget_vs_actual(budget_id, horizon=horizon, refresh=refresh)
+    effective_horizon = _coerce_optional_int(horizon)
+    try:
+        report = service.budget_vs_actual(
+            budget_id, horizon=effective_horizon, refresh=refresh
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        ) from exc
     return _response_from_budget(report)
 
 
@@ -87,5 +132,15 @@ def cashflow_forecast(
 ) -> CashflowForecastResponse:
     # TODO - Cache refresh results to reduce repeated model runs for identical parameters.
     service = BudgetService(session)
-    report = service.cashflow_forecast(organization_id, horizon=horizon, refresh=refresh)
+    effective_horizon = _coerce_optional_int(horizon)
+    try:
+        report = service.cashflow_forecast(
+            organization_id, horizon=effective_horizon, refresh=refresh
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_404_NOT_FOUND
+        if "not found" not in detail.lower():
+            status_code = status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
     return _response_from_cashflow(report)
