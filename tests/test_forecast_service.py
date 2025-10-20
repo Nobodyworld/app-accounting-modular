@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import warnings
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -24,6 +25,9 @@ def test_forecast_series_returns_points() -> None:
     assert result.horizon == 5
     assert len(result.points) == 5
     assert result.model_order in svc.candidate_orders
+    assert result.diagnostics is not None
+    assert result.diagnostics["observations"] == 30
+    assert result.timezone == "UTC"
     assert captured == []
 
 
@@ -33,6 +37,8 @@ def test_forecast_series_empty_input() -> None:
     assert result.horizon == 0
     assert result.points == []
     assert result.model_order == (0, 0, 0)
+    assert result.diagnostics == {"observations": 0}
+    assert result.timezone == "UTC"
 
 
 def test_forecast_series_invalid_horizon() -> None:
@@ -69,3 +75,20 @@ def test_forecast_series_cleans_duplicates_and_order() -> None:
     assert len(result.points) == 3
     assert result.model_order in svc.candidate_orders
     assert captured == []
+
+
+def test_forecast_series_records_timezone() -> None:
+    svc = ForecastService()
+    tz = ZoneInfo("America/New_York")
+    series = [
+        (datetime(2024, 1, 1, tzinfo=tz), 100.0),
+        (datetime(2024, 1, 2, tzinfo=tz), 101.0),
+        (datetime(2024, 1, 3, tzinfo=tz), 102.0),
+        (datetime(2024, 1, 4, tzinfo=tz), 103.0),
+    ]
+
+    result = svc.forecast_series(series, horizon=2)
+
+    assert result.timezone == "America/New_York"
+    assert result.diagnostics is not None
+    assert result.diagnostics.get("source_timezone") == "America/New_York"

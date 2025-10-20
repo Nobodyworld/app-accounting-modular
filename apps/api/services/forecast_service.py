@@ -7,14 +7,19 @@ from typing import Iterable, Sequence
 
 import pandas as pd
 from pandas import DatetimeIndex
+from pandas.api.types import DatetimeTZDtype
 from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
 
 
 @dataclass(slots=True, frozen=True)
 class ForecastResult:
+    """Container for forecast outputs and diagnostics."""
+
     horizon: int
     points: list[tuple[str, float]]
     model_order: tuple[int, int, int]
+    diagnostics: dict[str, float | int] | None = None
+    timezone: str | None = None
 
 
 class ForecastService:
@@ -44,18 +49,48 @@ class ForecastService:
             raise ValueError("Forecast horizon must be greater than zero")
 
         if not series:
-            return ForecastResult(horizon=0, points=[], model_order=(0, 0, 0))
+            return ForecastResult(
+                horizon=0,
+                points=[],
+                model_order=(0, 0, 0),
+                diagnostics={"observations": 0},
+                timezone="UTC",
+            )
 
         df = pd.DataFrame(series, columns=["ts", "y"]).copy()
-        df["ts"] = pd.to_datetime(df["ts"], utc=False, errors="coerce")
-        # TODO - Capture timezone metadata to prevent mixed-local timestamp drift.
-        df = df.dropna(subset=["ts"]).sort_values("ts").set_index("ts")
+        # Preserve timezone context before coercing values to UTC to avoid
+        # unintentional drift when series mix aware and naive timestamps.
+        raw_ts = pd.to_datetime(df["ts"], utc=False, errors="coerce")
+        detected_timezone: str | None = None
+        if isinstance(raw_ts.dtype, DatetimeTZDtype):
+            tzinfo = raw_ts.dt.tz
+            if tzinfo is not None:
+                detected_timezone = getattr(tzinfo, "zone", None) or str(tzinfo)
+        else:
+            tz_candidates: set[str] = set()
+            for value in raw_ts.dropna().tolist():
+                tzinfo = getattr(value, "tzinfo", None)
+                if tzinfo is not None:
+                    tz_name = getattr(tzinfo, "zone", None) or tzinfo.tzname(None)
+                    if tz_name:
+                        tz_candidates.add(tz_name)
+            if tz_candidates:
+                detected_timezone = sorted(tz_candidates)[0]
+
+        df["ts"] = pd.to_datetime(df["ts"], utc=True, errors="coerce")
+        df = df.dropna(subset=["ts"]).sort_values("ts")
+        if getattr(df["ts"].dt, "tz", None) is not None:
+            df["ts"] = df["ts"].dt.tz_convert("UTC").dt.tz_localize(None)
+        df = df.set_index("ts")
         df = df[~df.index.duplicated(keep="last")]
         df["y"] = pd.to_numeric(df["y"], errors="coerce")
         df = df.dropna()
 
         if len(df.index) > 1:
-            freq = pd.infer_freq(df.index)
+            try:
+                freq = pd.infer_freq(df.index)
+            except ValueError:
+                freq = None
             if freq:
                 df.index = DatetimeIndex(df.index, freq=freq)
 
@@ -87,7 +122,22 @@ class ForecastService:
             warnings.simplefilter("ignore")
             fc = best_result.forecast(steps=horizon)
         points = [(str(idx), float(val)) for idx, val in fc.items()]
-        return ForecastResult(horizon=horizon, points=points, model_order=best_order)
+        diagnostics = {
+            "observations": int(getattr(best_result, "nobs", len(df.index))),
+            "aic": float(best_result.aic),
+            "bic": float(best_result.bic),
+            "hqic": float(getattr(best_result, "hqic", 0.0)),
+        }
+        if detected_timezone:
+            diagnostics["source_timezone"] = detected_timezone
+
+        return ForecastResult(
+            horizon=horizon,
+            points=points,
+            model_order=best_order,
+            diagnostics=diagnostics,
+            timezone=detected_timezone or "UTC",
+        )
 
     @staticmethod
     def _default_orders() -> list[tuple[int, int, int]]:

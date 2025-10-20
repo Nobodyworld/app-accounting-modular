@@ -4,9 +4,16 @@ from datetime import date
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, create_engine
 
-from apps.api.models.models import Budget, BudgetLine, ForecastOutput, Organization
+from apps.api.models.models import (
+    Budget,
+    BudgetLine,
+    ForecastOutput,
+    ForecastPlan,
+    Organization,
+)
 from apps.api.services.budget_service import BudgetService
 from apps.api.services.ledger_service import LedgerService
 
@@ -113,3 +120,49 @@ def test_budget_vs_actual_requires_budget() -> None:
         service = BudgetService(session)
         with pytest.raises(ValueError):
             service.budget_vs_actual(999)
+
+
+def test_cashflow_forecast_records_error_diagnostics() -> None:
+    class FailingForecastService:
+        def forecast_series(self, *args, **kwargs):
+            raise ValueError("model failed")
+
+    with create_session() as session:
+        org_id, _ = seed_basic_ledger(session)
+        service = BudgetService(session, forecast_service=FailingForecastService())
+
+        report = service.cashflow_forecast(org_id, horizon=5, refresh=True)
+        assert report.metadata["forecast_status"] == "error"
+        diagnostics = report.metadata.get("forecast_diagnostics")
+        assert diagnostics and diagnostics.get("detail") == "model failed"
+
+
+def test_budget_plan_creation_handles_race(monkeypatch) -> None:
+    with create_session() as session:
+        org_id, budget_id = seed_basic_ledger(session)
+        service = BudgetService(session)
+
+        original_commit = session.commit
+        race_triggered = {"count": 0}
+
+        def racing_commit() -> None:
+            if race_triggered["count"] == 0:
+                race_triggered["count"] += 1
+                with Session(session.get_bind(), expire_on_commit=False) as competitor:
+                    plan = ForecastPlan(
+                        organization_id=org_id,
+                        budget_id=budget_id,
+                        name=BudgetService.BUDGET_PLAN_NAME,
+                        horizon=90,
+                    )
+                    competitor.add(plan)
+                    competitor.commit()
+                raise IntegrityError("duplicate", params=None, orig=Exception())
+            original_commit()
+
+        monkeypatch.setattr(session, "commit", racing_commit)
+        plan = service._ensure_budget_plan(budget_id, horizon=None)
+
+        assert plan.id is not None
+        count = session.exec(select(func.count()).select_from(ForecastPlan)).one()[0]
+        assert count == 1

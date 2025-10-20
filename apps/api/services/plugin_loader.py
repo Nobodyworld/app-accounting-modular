@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib
+
 from dataclasses import dataclass
-from typing import Any
+from functools import lru_cache
+from typing import Any, Iterable
 
 from ..config import ProviderInfo, settings
 
@@ -13,6 +15,7 @@ __all__ = [
     "ProviderMetadata",
     "available_providers",
     "load_provider",
+    "refresh_provider_cache",
 ]
 
 
@@ -44,6 +47,25 @@ class ProviderHandle:
     metadata: ProviderMetadata
 
 
+CapabilitySignature = tuple[str, str, str | None, tuple[str, ...]]
+
+
+def _provider_signature() -> tuple[CapabilitySignature, ...]:
+    """Return a hashable snapshot of allowed providers."""
+
+    snapshot: list[CapabilitySignature] = []
+    for key, info in settings.allowed_providers.items():
+        snapshot.append(
+            (
+                key,
+                info.module,
+                info.description,
+                tuple(info.capabilities),
+            )
+        )
+    return tuple(sorted(snapshot))
+
+
 def _metadata_from_info(key: str, info: ProviderInfo) -> ProviderMetadata:
     return ProviderMetadata(
         key=key,
@@ -53,18 +75,66 @@ def _metadata_from_info(key: str, info: ProviderInfo) -> ProviderMetadata:
     )
 
 
+@lru_cache(maxsize=32)
+def _cached_provider_metadata(
+    signature: tuple[CapabilitySignature, ...], capability: str | None
+) -> tuple[ProviderMetadata, ...]:
+    """Build provider metadata lists keyed by capability filters."""
+
+    metadata: list[ProviderMetadata] = []
+    for key, _, _, capabilities in signature:
+        info = settings.allowed_providers.get(key)
+        if info is None:
+            # Configuration changed after cache key generation; ignore entry.
+            continue
+        provider_metadata = _metadata_from_info(key, info)
+        if capability and capability not in provider_metadata.capabilities:
+            continue
+        metadata.append(provider_metadata)
+
+    metadata.sort(key=lambda item: item.key)
+    return tuple(metadata)
+
+
 def available_providers(capability: str | None = None) -> list[ProviderMetadata]:
     """Return metadata for providers permitted by configuration."""
 
-    providers: list[ProviderMetadata] = []
-    for key, info in settings.allowed_providers.items():
-        metadata = _metadata_from_info(key, info)
-        if capability and capability not in metadata.capabilities:
-            continue
-        providers.append(metadata)
-    providers.sort(key=lambda item: item.key)
-    # TODO - Cache provider metadata to avoid rebuilding the list per request.
-    return providers
+    signature = _provider_signature()
+    return list(_cached_provider_metadata(signature, capability))
+
+
+CAPABILITY_METHODS: dict[str, tuple[str, ...]] = {
+    "fx": ("sync_daily_rates",),
+    "market": ("fetch_prices",),
+    "tax": ("upsert_rules",),
+}
+
+
+def _expected_methods(capabilities: Iterable[str]) -> tuple[str, ...]:
+    methods: set[str] = set()
+    for capability in capabilities:
+        methods.update(CAPABILITY_METHODS.get(capability, ()))
+    return tuple(sorted(methods))
+
+
+def _validate_provider_interface(provider: Any, metadata: ProviderMetadata) -> None:
+    """Ensure provider instances expose expected attributes for their capabilities."""
+
+    name = getattr(provider, "name", None)
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError(f"Provider '{metadata.key}' must define a non-empty 'name' attribute")
+
+    missing: list[str] = []
+    for method_name in _expected_methods(metadata.capabilities):
+        attr = getattr(provider, method_name, None)
+        if not callable(attr):
+            missing.append(method_name)
+
+    if missing:
+        methods = ", ".join(sorted(missing))
+        raise ValueError(
+            f"Provider '{metadata.key}' is missing required callable methods: {methods}"
+        )
 
 
 def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
@@ -97,5 +167,12 @@ def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
     if provider is None:
         raise ValueError(f"Factory '{factory}' in {module_path} returned None")
 
-    # TODO - Validate provider interface compliance before exposing the handle.
-    return ProviderHandle(instance=provider, metadata=_metadata_from_info(key, info))
+    metadata = _metadata_from_info(key, info)
+    _validate_provider_interface(provider, metadata)
+    return ProviderHandle(instance=provider, metadata=metadata)
+
+
+def refresh_provider_cache() -> None:
+    """Invalidate cached provider metadata snapshots."""
+
+    _cached_provider_metadata.cache_clear()
