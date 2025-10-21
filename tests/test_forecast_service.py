@@ -1,17 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 import warnings
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 import pytest
+from typing import Sequence, cast
 
 from apps.api.services.forecast_service import ForecastResult, ForecastService
 
 
-def generate_series(count: int = 30):
+def generate_series(count: int = 30) -> list[tuple[datetime, float]]:
     base = datetime(2024, 1, 1)
-    return [(base + timedelta(days=i), 100 + i * 2) for i in range(count)]
+    return [(base + timedelta(days=i), float(100 + i * 2)) for i in range(count)]
 
 
 def test_forecast_series_returns_points() -> None:
@@ -27,6 +30,9 @@ def test_forecast_series_returns_points() -> None:
     assert result.model_order in svc.candidate_orders
     assert result.diagnostics is not None
     assert result.diagnostics["observations"] == 30
+    assert result.diagnostics["model"] == "arima"
+    assert "mae" in result.diagnostics
+    assert "rmse" in result.diagnostics
     assert result.timezone == "UTC"
     assert captured == []
 
@@ -37,7 +43,7 @@ def test_forecast_series_empty_input() -> None:
     assert result.horizon == 0
     assert result.points == []
     assert result.model_order == (0, 0, 0)
-    assert result.diagnostics == {"observations": 0}
+    assert result.diagnostics == {"observations": 0, "strategy": "empty_input"}
     assert result.timezone == "UTC"
 
 
@@ -49,7 +55,10 @@ def test_forecast_series_invalid_horizon() -> None:
 
 def test_forecast_series_rejects_non_numeric() -> None:
     svc = ForecastService()
-    series = [("2024-01-01", "not-a-number")]
+    series = cast(
+        Sequence[tuple[object, float | int | Decimal]],
+        [("2024-01-01", "not-a-number")],
+    )
     with pytest.raises(ValueError):
         svc.forecast_series(series, horizon=2)
 
@@ -92,3 +101,91 @@ def test_forecast_series_records_timezone() -> None:
     assert result.timezone == "America/New_York"
     assert result.diagnostics is not None
     assert result.diagnostics.get("source_timezone") == "America/New_York"
+    assert all(point[0].endswith("-05:00") for point in result.points)
+
+
+def test_forecast_series_repeat_last_fallback() -> None:
+    svc = ForecastService(minimum_observations=5)
+    short_series = generate_series(count=3)
+
+    result = svc.forecast_series(short_series, horizon=2)
+
+    assert result.model_order == (0, 0, 0)
+    assert result.diagnostics is not None
+    assert result.diagnostics["strategy"] == "fallback_repeat_last"
+    assert len(result.points) == 2
+    assert all(point[1] == pytest.approx(short_series[-1][1]) for point in result.points)
+    expected_label = (
+        pd.Timestamp(short_series[-1][0]).replace(tzinfo=timezone.utc).isoformat()
+    )
+    label_value = result.diagnostics["last_observation_label"]
+    assert isinstance(label_value, str)
+    assert label_value == expected_label
+    expected_epoch = pd.Timestamp(short_series[-1][0], tz="UTC").timestamp()
+    epoch_value = result.diagnostics["last_observation_epoch"]
+    assert isinstance(epoch_value, float)
+    assert epoch_value == pytest.approx(expected_epoch)
+
+
+def test_forecast_series_mean_fallback() -> None:
+    svc = ForecastService(minimum_observations=6, fallback_strategy="mean")
+    short_series = generate_series(count=4)
+
+    result = svc.forecast_series(short_series, horizon=3)
+
+    assert result.diagnostics is not None
+    assert result.diagnostics["strategy"] == "fallback_mean"
+    expected_value = sum(v for _, v in short_series) / len(short_series)
+    assert all(point[1] == pytest.approx(expected_value) for point in result.points)
+
+
+def test_forecast_series_fallback_raise() -> None:
+    svc = ForecastService(minimum_observations=4, fallback_strategy="raise")
+    short_series = generate_series(count=2)
+
+    with pytest.raises(ValueError):
+        svc.forecast_series(short_series, horizon=2)
+
+
+def test_forecast_series_timezone_preserved_in_fallback() -> None:
+    tz = ZoneInfo("Europe/Berlin")
+    svc = ForecastService(minimum_observations=10)
+    series = [
+        (datetime(2024, 1, 1, tzinfo=tz), 1.0),
+        (datetime(2024, 1, 2, tzinfo=tz), 2.0),
+        (datetime(2024, 1, 3, tzinfo=tz), 3.0),
+    ]
+
+    result = svc.forecast_series(series, horizon=2)
+
+    assert result.diagnostics is not None
+    assert result.diagnostics["strategy"] == "fallback_repeat_last"
+    assert result.timezone == "Europe/Berlin"
+    assert all(point[0].endswith("+01:00") for point in result.points)
+    label_value = result.diagnostics["last_observation_label"]
+    assert isinstance(label_value, str)
+    assert label_value.endswith("+01:00")
+
+
+def test_generate_future_index_single_observation_defaults_daily() -> None:
+    svc = ForecastService(minimum_observations=10)
+    series = [
+        (datetime(2024, 1, 1), 1.0),
+    ]
+
+    df, _ = svc._prepare_series(series)
+    fallback_index = svc._generate_future_index(df.index, 3)
+
+    assert list(fallback_index) == [
+        pd.Timestamp("2024-01-02 00:00:00"),
+        pd.Timestamp("2024-01-03 00:00:00"),
+        pd.Timestamp("2024-01-04 00:00:00"),
+    ]
+
+
+def test_forecast_service_configuration_guards() -> None:
+    with pytest.raises(ValueError):
+        ForecastService(minimum_observations=0)
+
+    with pytest.raises(ValueError):
+        ForecastService(fallback_strategy="unsupported")  # type: ignore[arg-type]
