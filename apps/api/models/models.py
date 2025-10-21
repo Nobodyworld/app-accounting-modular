@@ -183,11 +183,12 @@ class ForecastPlan(SQLModel, table=True):
     )
 
 
+_forecast_plan_table = SQLModel.metadata.tables["forecastplan"]
 Index(
     "ix_forecast_plan_org_name_budget_coalesce",
-    ForecastPlan.organization_id,
-    func.coalesce(ForecastPlan.budget_id, -1),
-    ForecastPlan.name,
+    _forecast_plan_table.c.organization_id,
+    func.coalesce(_forecast_plan_table.c.budget_id, -1),
+    _forecast_plan_table.c.name,
     unique=True,
 )
 
