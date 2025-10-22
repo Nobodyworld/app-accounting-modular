@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,24 +12,16 @@ from ..db import get_session
 from ..models.models import Budget
 from ..services.budget_service import BudgetReport, BudgetService, CashflowReport
 from ..schemas import BudgetReportResponse, CashflowForecastResponse
-from ..utils.metadata import normalise_metadata
+from ..utils.metadata import (
+    merge_forecast_diagnostics,
+    prepare_metadata_for_response,
+)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
 def _normalised_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
-    if metadata is None:
-        return {}
-
-    normalised = normalise_metadata(metadata)
-    generated_at = normalised.get("generated_at")
-    if isinstance(generated_at, str):
-        try:
-            normalised["generated_at"] = datetime.fromisoformat(generated_at)
-        except ValueError:
-            # Preserve the original value when it cannot be parsed.
-            pass
-    return normalised
+    return prepare_metadata_for_response(metadata)
 
 
 def _coerce_optional_int(value: Any) -> int | None:
@@ -75,7 +66,7 @@ def _response_from_budget(report: BudgetReport) -> BudgetReportResponse:
 def _response_from_cashflow(report: CashflowReport) -> CashflowForecastResponse:
     metadata = _normalised_metadata(report.metadata)
     if report.forecast and report.forecast.diagnostics:
-        metadata.setdefault("forecast_diagnostics", report.forecast.diagnostics)
+        merge_forecast_diagnostics(metadata, report.forecast.diagnostics)
 
     return CashflowForecastResponse(
         historical=[{"period": period, "amount": amount} for period, amount in report.historical],
