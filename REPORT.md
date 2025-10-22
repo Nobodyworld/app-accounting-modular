@@ -1,62 +1,31 @@
-# Repo Intelligence Report
+# REPORT
 
-## System Overview
-- **Domain scope**: Modular general ledger with budgeting, forecasting, FX, market data, tax, and workflow automation.
-- **Runtime services**:
-  - `apps/api`: FastAPI service exposing REST endpoints for auth, audit, ledger, FX, market, tax, forecasting, reporting, and workflow orchestration.
-  - `apps/web`: Streamlit dashboard consuming the API for reporting and operational workflows.
-  - `apps/api/scheduler.py`: APScheduler instance refreshing forecasts and synchronising providers on a cron.
-- **Supporting surfaces**:
-  - `cli/macli.py`: Click-based CLI for bootstrapping accounts, running ingest jobs, and invoking reports.
-  - `plugins/`: Provider contracts and first-party implementations (ECB FX, Yahoo market data, OECD tax stub).
-  - `docs/`: Architecture and domain documentation for contributors.
-- **Data flow**:
-  1. Requests hit FastAPI routers (`apps/api/routers/*`) → services (`apps/api/services/*`) → SQLModel persistence (`apps/api/db.py`).
-  2. Scheduler jobs reuse services for periodic refreshes and audit logging.
-  3. Streamlit app authenticates via API, fetches reports, and renders dashboards.
-  4. CLI shares configuration and service layer to seed data or trigger workflows.
-- **External interfaces**: RESTful JSON API, Streamlit UI, CLI commands. No public gRPC/GraphQL. Docker Compose for local deployment.
+## Structure & Dependency Map
+- **Services**: `apps/api/routers` expose FastAPI routes layered over service modules such as `budget_service`, `forecast_service`, and `ledger_service`. Persistence sits in `apps/api/models` (SQLModel) with session helpers in `apps/api/db.py`.
+- **Clients**: `apps/web` provides Streamlit dashboards and `cli/` offers operational commands sharing the same service layer.
+- **Plugins**: Provider integrations live under `plugins/` and are dynamically loaded through `apps/api/services/plugin_loader.py` based on configuration from `apps/api/config.py`.
+- **Tooling**: Python 3.11 project managed via `requirements.txt` / `requirements-dev.txt`, linting/formatting handled by Ruff/Black through pre-commit, and pytest for the extensive `tests/` suite. Docker compose files supply local orchestration.
 
-## Tech Stack Map
-- **Languages**: Python 3.11 (FastAPI, SQLModel, Streamlit), SQL for persistence (SQLite by default).
-- **Frameworks/Libraries**: FastAPI, SQLModel, Pydantic v2, APScheduler, Passlib, HTTPX, Requests, Pandas/NumPy, Streamlit.
-- **Tooling**: Ad-hoc Black/Ruff config (no automation), pytest test suite, docker-compose for local stack.
-- **Dependencies**:
-  - Core runtime pinned in `requirements.txt`; lacks lock file and separation of prod/dev extras.
-  - Streamlit pulls large transitive surface (watch performance/security).
-- **Module coupling**:
-  - Services tightly coupled to SQLModel session helpers; minimal interface abstraction.
-  - Scheduler imports services directly (process-global state, limited test seam).
-  - Plugins discovered via registry module, no dynamic entry points.
+## Key Findings
+1. Cashflow report metadata normalisation coerced diagnostic ISO strings into `datetime` objects, breaching the `CashflowForecastResponse` contract and causing runtime 422 errors when diagnostics were present.【F:apps/api/routers/reports.py†L20-L90】【F:apps/api/schemas.py†L324-L371】
+2. Response shaping now routes through `apps.api.utils.metadata.prepare_metadata_for_response`, consolidating metadata normalisation, timezone coercion, and diagnostics serialisation in a single helper leveraged by routers, services, and tests.【F:apps/api/utils/metadata.py†L1-L183】【F:apps/api/routers/reports.py†L1-L96】【F:apps/api/services/budget_service.py†L1-L360】
+3. Diagnostics serialisation hardens against JSON edge cases (non-finite floats, `None` values) and regression tests enforce the helper contract across utilities and API flows, catching schema drift earlier; `merge_forecast_diagnostics` now unifies cached metadata with live forecast telemetry without redundant coercion.【F:apps/api/utils/metadata.py†L93-L183】【F:tests/test_metadata_utils.py†L1-L138】【F:tests/test_reports_api.py†L1-L210】
 
-## Hotspots & Dead Code
-- **High churn / complexity**: `apps/api/services/*` (ledger, forecast, workflow) combine business rules, IO, and background coordination.
-- **Observation gaps**: Structured logging now standardised across entrypoints; next gaps are metrics/tracing coverage and alerting hooks for long-running jobs.
-- **Potential dead code**:
-  - `apps/api/audit.py` `AuditAction.EVENT` enumeration unused across repo.
-  - Unreferenced docs (`docs/AI_INTERFACE.md`) describing non-existent integration—candidate for archival or implementation.
-- **Test blind spots**: Streamlit smoke test only ensures import; no contract tests for API schema or CLI behaviors beyond basics.
+## Risk Notes
+- Report metadata remains tightly coupled to the `ReportMetadata` schema; any downstream change to diagnostics structure requires coordinated updates to normalisation logic and tests to prevent schema drift.【F:apps/api/routers/reports.py†L34-L82】
+- Cached provider metadata (`plugin_loader`) still assumes global settings; dynamic reconfiguration at runtime would require cache invalidation hooks to avoid stale modules (deferred for future work).【F:apps/api/services/plugin_loader.py†L1-L165】
 
-## Risks & Quick Wins
-1. **Absence of CI/CD** – No automated tests or lint in CI; high risk of regressions → *Quick win*: introduce GitHub Actions with lint/test matrix.
-2. **Configuration entropy** – No `.env.example`, weak default secrets, limited validation → *Quick win*: centralise settings, validate, and document.
-3. **Lack of security posture** – Missing SECURITY.md, Code of Conduct, reporting process → *Quick win*: add governance docs.
-4. **Scheduler resilience** – Exceptions swallowed; jobs share global session → *Medium effort*: add logging, retries, dependency injection.
-5. **Typing gaps** – Targeted strict mypy now covers settings and forecasting modules; remaining services still rely on implicit `Any` from SQLModel → *Medium effort*: expand coverage and add SQLModel-aware plugins.
-6. **Dependency freshness** – No Renovate or update policy; risk of vulnerable packages → *Quick win*: add Renovate config and SBOM pipeline.
-7. **Test coverage** – Integration coverage moderate but lacks API schema validation and CLI/e2e depth → *Medium effort*: add contract & e2e tests.
-8. **Observability** – Structured logging with correlation IDs now available across API, scheduler, and CLI. Next step: add metrics/tracing instrumentation (e.g., OpenTelemetry) and alerting hooks.
-9. **Release hygiene** – No release automation, changelog manual → *Medium effort*: adopt semantic-release workflow.
-10. **Monolith boundaries** – Services mix domain logic with persistence; hindered testability → *Long-term*: refactor toward layered architecture.
+## Test Posture
+- Broad pytest suite (`tests/`) spans services, routers, CLI, and scheduling behaviour. Coverage is strong for happy paths; new regression tests were added for diagnostics serialisation to catch schema mismatches earlier.【F:tests/test_reports_api.py†L96-L204】
+- Type checking via mypy targets critical config/services but does not yet cover every router; future expansion would harden typing around metadata transforms.
 
-## Top Opportunities by ROI
-1. **Establish CI with lint/test matrix** (High impact, Low effort).
-2. **Adopt pre-commit with formatter/linter hooks** (High impact, Low effort).
-3. **Add governance docs & templates** (Medium impact, Low effort).
-4. **Introduce mypy/pyright and fix critical typing issues** (High impact, Medium effort).
-5. **Harden config with `.env.example` and validation** (High impact, Medium effort).
-6. **Add SBOM & dependency audit workflow** (Medium impact, Medium effort).
-7. **Expand observability beyond logging (metrics/tracing, alerts)** (High impact, Medium effort).
-8. **Enhance API contract tests & docs (OpenAPI validation)** (Medium impact, Medium effort).
-9. **Modularise services into domain interfaces** (High impact, High effort).
-10. **Containerize with multi-stage build & CD pipeline** (High impact, Medium/High effort).
+## CI/CD Posture
+- GitHub Actions workflow (`.github/workflows/ci.yml`) installs dev dependencies, runs pre-commit (Black, Ruff, etc.), and executes the pytest suite for Python 3.11 on pushes/PRs. CodeQL scanning supplements static analysis.【F:.github/workflows/ci.yml†L1-L35】【F:.github/workflows/codeql.yml†L1-L73】
+
+## Modes Selected
+- **Security & Stability Audit** – Eliminated metadata coercion that crashed the cashflow endpoint, restoring predictable API responses for authenticated clients.【F:apps/api/routers/reports.py†L1-L96】
+- **Zero-Bloat Refactor** – Consolidated duplicated diagnostics normalisation into a single helper shared by metadata utilities, services, and routers.【F:apps/api/utils/metadata.py†L1-L160】【F:apps/api/services/budget_service.py†L1-L360】
+- **Test & Verify** – Augmented API and utility tests to assert diagnostics serialisation and reran the full pytest suite to confirm end-to-end stability.【F:tests/test_reports_api.py†L124-L210】【F:tests/test_metadata_utils.py†L1-L138】【caa2ef†L1-L2】
+
+## Verification
+- ✅ `pytest -q` (local) – All 87 tests now pass, confirming the cashflow forecast endpoint emits schema-compliant metadata and utility helpers remain stable.【caa2ef†L1-L2】

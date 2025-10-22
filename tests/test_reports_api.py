@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
 import pytest
 
@@ -10,8 +11,15 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from apps.api import db
 from apps.api.models.models import Budget, BudgetLine, ForecastOutput, Organization
-from apps.api.routers.reports import budget_vs_actual, cashflow_forecast
+from apps.api.routers.reports import (
+    _response_from_cashflow,
+    budget_vs_actual,
+    cashflow_forecast,
+)
 from apps.api.services.ledger_service import LedgerService
+from apps.api.services.budget_service import CashflowReport
+from apps.api.services.forecast_service import ForecastResult
+from apps.api.utils.metadata import prepare_metadata_for_response
 
 
 def setup_database() -> Session:
@@ -129,10 +137,71 @@ def test_cashflow_endpoint() -> None:
     assert response.metadata.organization_id == org_id
     assert response.current_cash < 0  # cash reduced by spend
     assert response.metadata.forecast_diagnostics is not None
+    diagnostics = response.metadata.forecast_diagnostics
+    assert diagnostics is not None
+    assert isinstance(diagnostics.get("last_observation_label"), str)
     assert response.metadata.forecast_status == "success"
     assert response.metadata.forecast_timezone == "UTC"
 
     session.close()
+
+
+def test_prepare_metadata_for_response_serialises_diagnostics() -> None:
+    raw = {
+        "forecast_diagnostics": {
+            "last_observation_label": "2024-03-01T00:00:00+00:00",
+            "observations": 10,
+            "baseline_value": Decimal("12.5"),
+            "flag": True,
+            "detail": None,
+        }
+    }
+
+    normalised = prepare_metadata_for_response(raw)
+
+    diagnostics = normalised["forecast_diagnostics"]
+    assert diagnostics["last_observation_label"] == "2024-03-01T00:00:00+00:00"
+    assert diagnostics["observations"] == 10
+    assert diagnostics["baseline_value"] == 12.5
+    assert diagnostics["flag"] is True
+    assert "detail" not in diagnostics
+
+
+def test_response_from_cashflow_serialises_forecast_diagnostics() -> None:
+    forecast = ForecastResult(
+        horizon=3,
+        points=[("2024-01", 1.0)],
+        model_order=(1, 1, 1),
+        diagnostics={
+            "observations": 4,
+            "baseline": Decimal("2.50"),
+            "generated_at": datetime(2024, 3, 1, tzinfo=timezone.utc),
+            "notes": None,
+        },
+        timezone="UTC",
+    )
+    report = CashflowReport(
+        historical=[],
+        forecast=forecast,
+        current_cash=0.0,
+        average_monthly_flow=None,
+        metadata={
+            "generated_at": datetime(2024, 3, 1, tzinfo=timezone.utc),
+            "forecast_status": "success",
+            "forecast_diagnostics": {"existing": "cached", "baseline": 1.0},
+        },
+        csv_export="",
+    )
+
+    response = _response_from_cashflow(report)
+
+    diagnostics = response.metadata.forecast_diagnostics
+    assert diagnostics == {
+        "existing": "cached",
+        "observations": 4,
+        "baseline": 2.5,
+        "generated_at": "2024-03-01T00:00:00+00:00",
+    }
 
 
 def test_budget_vs_actual_rejects_cross_org_access() -> None:

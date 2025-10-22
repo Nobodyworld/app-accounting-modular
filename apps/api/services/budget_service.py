@@ -27,6 +27,7 @@ from ..models.models import (
     Transaction,
 )
 from .forecast_service import ForecastResult, ForecastService
+from ..utils.metadata import merge_forecast_diagnostics
 
 
 logger = logging.getLogger(__name__)
@@ -331,12 +332,14 @@ class BudgetService:
         if forecast_result:
             forecast_status = "success"
             if forecast_result.diagnostics:
-                metadata["forecast_diagnostics"] = forecast_result.diagnostics
+                merge_forecast_diagnostics(metadata, forecast_result.diagnostics)
             if forecast_result.timezone:
                 metadata["forecast_timezone"] = forecast_result.timezone
         elif forecast_error:
             forecast_status = "error"
-            metadata["forecast_diagnostics"] = {"status": "error", "detail": forecast_error}
+            merge_forecast_diagnostics(
+                metadata, {"status": "error", "detail": forecast_error}
+            )
         metadata["forecast_status"] = forecast_status
 
         return CashflowReport(
