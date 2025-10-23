@@ -1,3 +1,5 @@
+"""Metadata utility tests covering normalisation and serialisation helpers."""
+
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -118,3 +120,6 @@ def test_prepare_metadata_for_response_combines_normalisation_steps() -> None:
 
     assert prepared["generated_at"].tzinfo == timezone.utc
     assert prepared["forecast_diagnostics"] == {"observations": 5, "flag": True}
+
+
+# TODO - (metadata) Test resilience when metadata contains deeply nested arrays.

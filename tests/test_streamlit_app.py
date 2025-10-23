@@ -1,3 +1,5 @@
+"""Streamlit app smoke tests verifying dashboard data rendering flows."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -7,6 +9,7 @@ from streamlit.testing.v1 import AppTest
 
 
 class DummyResponse:
+    """Simple response stub to simulate ``requests`` interactions."""
     def __init__(self, payload: dict, status_code: int = 200):
         self._payload = payload
         self.status_code = status_code
@@ -21,6 +24,7 @@ class DummyResponse:
 
 @pytest.fixture
 def fake_requests(monkeypatch):
+    """Override requests layer to provide deterministic dashboard responses."""
     from apps.web import app as streamlit_app
 
     budget_payload = {
@@ -145,3 +149,6 @@ def test_cashflow_flow(fake_requests):
     assert "cashflow_report_payload" in at.session_state
     payload = at.session_state["cashflow_report_payload"]
     assert payload["current_cash"] == pytest.approx(-180.0)
+
+
+# TODO - (web) Exercise real HTTP interactions once API client abstraction lands.

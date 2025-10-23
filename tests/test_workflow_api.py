@@ -1,3 +1,5 @@
+"""Workflow API integration tests exercising staging and approval lifecycle."""
+
 from __future__ import annotations
 
 import pytest
@@ -16,6 +18,7 @@ from apps.api.security import get_current_user
 
 
 def create_client() -> tuple[TestClient, Session]:
+    """Create a FastAPI test client with in-memory workflow data stores."""
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -102,3 +105,6 @@ def test_workflow_api_end_to_end() -> None:
     assert list_response.status_code == 200
     listing = list_response.json()
     assert len(listing) >= 2
+
+
+# TODO - (workflow) Cover approval and rejection transitions via API routes.

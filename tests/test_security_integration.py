@@ -1,3 +1,5 @@
+"""Integration tests for security flows and permission gating."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -17,6 +19,7 @@ from apps.api.routers import auth as auth_router
 
 @pytest.fixture()
 def api_context():
+    """Provision a FastAPI test client with isolated in-memory persistence."""
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -35,6 +38,7 @@ def api_context():
 
     auth_router._failed_attempts.clear()
     auth_router._lockouts.clear()
+    # TODO - (auth) Add integration coverage once lockouts use shared cache state.
 
     with Session(engine, expire_on_commit=False) as session:
         org1 = Organization(name="Org One")

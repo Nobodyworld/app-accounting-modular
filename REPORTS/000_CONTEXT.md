@@ -1,33 +1,32 @@
 # Repository Context Report
 
 ## Stack Overview
-- **Primary Language:** Python 3.11 (per `pyproject.toml` Black target) with FastAPI backend and Streamlit frontend.
-- **Frameworks & Libraries:** FastAPI, SQLModel, Pydantic v2, APScheduler, Streamlit, pandas/numpy, statsmodels for forecasting.
-- **Testing Tooling:** Pytest test suite under `tests/` covering services, routers, CLI, scheduler, and Streamlit smoke checks.
-- **Formatting & Linting:** Black (line-length 88), Ruff (E/F rules). No JS/TS tooling detected.
+- **Primary Language:** Python 3.11 with FastAPI backend and Streamlit frontend.
+- **Frameworks & Libraries:** FastAPI, SQLModel, Pydantic v2, APScheduler, Streamlit, pandas/numpy, statsmodels for forecasting, Click for CLI orchestration.
+- **Testing Tooling:** Pytest-based suite under `tests/` covering services, routers, CLI commands, scheduler behaviour, and Streamlit smoke checks.
+- **Formatting & Linting:** Black (line length 88) and Ruff with import sorting; Markdown/YAML handled by Prettier via pre-commit.
 
 ## Dependency & Build Tooling
-- **Dependency Management:** `requirements.txt` (pinned versions). No poetry/pnpm; plain pip.
-- **Containerization:** `docker-compose.yml` and `docker/` definitions for API, scheduler, db, web.
-- **Environment Configuration:** `.env.example`, `apps/api/config.py` loads `pydantic_settings` (env-based settings).
+- **Dependency Management:** `requirements.txt` / `requirements-dev.txt` pinned for reproducibility.
+- **Containerisation:** `docker-compose.yml` plus `docker/` assets for API, scheduler, database, and web console.
+- **Configuration:** Centralised `apps/api/config.py` using Pydantic settings with `.env` support; documented comprehensively in `docs/CONFIGURATION.md`.
 
 ## Project Structure
-- `apps/api`: FastAPI application (config, routers, services, models, scheduler, security).
-- `apps/web`: Streamlit UI (financial dashboards/reporting).
-- `cli`: CLI utilities (Typer likely; confirm later during diagnostics).
-- `plugins`: Pluggable providers (FX, market data, tax, etc.).
-- `docs`: Existing documentation (`ARCHITECTURE.md`, `PLUGINS.md`, etc.).
-- `tests`: Extensive pytest coverage for API/services/CLI.
-- `REPORT.md`: Legacy report file.
+- `apps/api` – FastAPI application (config, routers, services, scheduler, security, observability helpers).
+- `apps/web` – Streamlit UI composing charts and operational dashboards.
+- `cli` – Click-based administrative commands for data ingestion and sync workflows.
+- `plugins` – Provider implementations for FX, market data, and tax (dynamically imported by the plugin loader).
+- `docs` – Expanded documentation suite (architecture, forecasting, plugins, AI interface, tax model, configuration).
+- `tests` – Pytest suite with fixtures for SQLModel sessions and provider stubs.
 
-## CI/CD & Ops Signals
-- No GitHub Actions or CI configs present in repo root. Tests expected via manual invocation.
-- Docker orchestration implies production deploy via containers.
+## CI/CD & Operations
+- GitHub Actions workflows run linting, formatting, tests, and CodeQL scans. Badges are published in `README.md`.
+- Renovate configuration automates dependency updates.
+- Structured logging funnels through `apps/observability/logging.py`, with correlation IDs exposed across API, scheduler, and CLI contexts.
 
-## Conventions & Patterns
-- Python modules use snake_case, Pydantic models for schemas, SQLModel for persistence.
-- Services live under `apps/api/services` and consumed by routers; uses dependency injection via `dependencies.py`.
-- Logging via Python `logging` module; audit trail module present.
+## Documentation Health
+- `README.md` and `docs/` now include usage examples, architecture diagrams, and provider development guidance to support rapid onboarding.
+- Governance and support files (`CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md`) align with contribution expectations defined in `CONTRIBUTING.md`.
 
 ## Next Steps
-Proceed to deep diagnostic scanning for code quality, architecture concerns, and TODO/FIXME triage.
+Continue executing the modernisation plan outlined in `PLAN.md`: broaden strict typing coverage, introduce metrics/telemetry, and build on the refreshed documentation to streamline contributor onboarding.

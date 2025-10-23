@@ -1,3 +1,5 @@
+"""Time-series forecasting utilities for Modular Accounting services."""
+
 from __future__ import annotations
 
 import warnings
@@ -23,6 +25,8 @@ class ForecastResult:
 
 
 class ForecastService:
+    """ARIMA-backed forecaster with sensible defaults and fallbacks."""
+
     def __init__(
         self,
         candidate_orders: Iterable[tuple[int, int, int]] | None = None,

@@ -1,3 +1,5 @@
+"""Pytest configuration utilities and compatibility shims for test suite."""
+
 from __future__ import annotations
 
 import sys
@@ -9,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 
 def _ensure_multipart_stub() -> None:
+    """Inject a minimal multipart parser stub when dependency is absent."""
     try:
         import multipart  # type: ignore  # noqa: F401
     except ImportError:
@@ -42,3 +45,6 @@ def _ensure_multipart_stub() -> None:
 
 
 _ensure_multipart_stub()
+
+
+# TODO - (tests) Replace stub when official lightweight multipart dependency is chosen.

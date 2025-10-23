@@ -1,3 +1,5 @@
+"""Scheduler tests ensuring forecast refresh tasks handle failure isolation."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -11,6 +13,7 @@ from apps.api.models.models import ForecastPlan
 
 
 class StubBudgetService:
+    """Instrumented budget service capturing scheduler-triggered calls."""
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -52,6 +55,9 @@ def clean_forecast_plans() -> None:
     with Session(engine) as session:
         session.exec(delete(ForecastPlan))
         session.commit()
+
+
+# TODO - (scheduler) Simulate distributed job runners once queue integration lands.
 
 
 def test_run_scheduled_refresh_logs_failures_and_continues(monkeypatch, caplog) -> None:

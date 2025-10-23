@@ -1,3 +1,5 @@
+"""Budget service unit tests covering reporting and forecasting flows."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -19,12 +21,14 @@ from apps.api.services.ledger_service import LedgerService
 
 
 def create_session() -> Session:
+    """Construct an in-memory SQLModel session for budget service tests."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
     return Session(engine, expire_on_commit=False)
 
 
 def seed_basic_ledger(session: Session) -> tuple[int, int]:
+    """Populate ledger activity and budget scaffolding for downstream tests."""
     org = Organization(name="Test Org")
     session.add(org)
     session.commit()
@@ -113,6 +117,8 @@ def test_cashflow_forecast_handles_history() -> None:
             select(func.count()).select_from(ForecastOutput).where(ForecastOutput.report_type == "cashflow_forecast")
         ).one()[0]
         assert cashflow_outputs == 1
+
+    # TODO - (budget) Extend coverage to include stress tests for seasonal projections.
 
 
 def test_budget_vs_actual_requires_budget() -> None:

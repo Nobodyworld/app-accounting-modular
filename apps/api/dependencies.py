@@ -30,6 +30,8 @@ def session_with_audit_context(
     x_org_id: str | None = Header(default=None),
     x_user_label: str | None = Header(default=None),
 ) -> Iterator[Session]:
+    """Yield a database session while seeding the audit actor context."""
+
     actor = AuditActor(
         request_id=x_request_id or str(uuid4()),
         user_id=_parse_optional_int(x_user_id),
@@ -38,5 +40,6 @@ def session_with_audit_context(
         user_label=x_user_label,
     )
     # TODO - Validate header provenance to prevent spoofed audit metadata.
+    # TODO - (security) Bind actor context to auth session identifiers for replay protection.
     with use_actor(actor):
         yield s

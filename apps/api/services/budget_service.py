@@ -1,4 +1,10 @@
-"""Budget and forecast orchestration services."""
+"""Budget and forecast orchestration services.
+
+The service layer composes ledger data, forecast plans, and diagnostics into
+coherent artefacts exposed over the API. Helper dataclasses capture the shape
+of responses while keeping the persistence layer isolated from presentation
+formatting concerns.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +41,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class BudgetVarianceLine:
+    """Denormalised view of a single budget line with observed performance."""
+
     account_id: int
     account_code: str | None
     account_name: str
@@ -48,6 +56,8 @@ class BudgetVarianceLine:
 
 @dataclass(slots=True)
 class BudgetReport:
+    """Structured representation of a budget variance report."""
+
     lines: list[BudgetVarianceLine]
     total_budget: float
     total_actual: float
@@ -59,6 +69,8 @@ class BudgetReport:
 
 @dataclass(slots=True)
 class CashflowReport:
+    """Historical and forecast cashflow data packaged for API responses."""
+
     historical: list[tuple[str, float]]
     forecast: ForecastResult | None
     current_cash: float

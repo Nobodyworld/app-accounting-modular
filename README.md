@@ -3,85 +3,142 @@
 [![CI](https://github.com/modular-accounting/modular-accounting/actions/workflows/ci.yml/badge.svg)](https://github.com/modular-accounting/modular-accounting/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/modular-accounting/modular-accounting/actions/workflows/codeql.yml/badge.svg)](https://github.com/modular-accounting/modular-accounting/actions/workflows/codeql.yml)
 
-A modular accounting platform composed of a FastAPI backend, Streamlit operations console, and pluggable data providers for FX, market data, tax, budgeting, and forecasting workflows.
+Modular Accounting ("ModAcct") is a composable finance platform that blends a FastAPI backend, a Streamlit operator console, and a plugin-driven integration layer. Teams can stand up ledgering, reporting, FX, market-data, tax, and forecasting workflows without committing to a monolithic vendor stack.
 
 ## Table of Contents
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
+- [Key Capabilities](#key-capabilities)
+- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
+- [Architecture Overview](#architecture-overview)
+- [Service and API Map](#service-and-api-map)
 - [Configuration](#configuration)
 - [Developer Workflow](#developer-workflow)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
 - [Community & Support](#community--support)
 
-## Architecture
-- **API Backend (`apps/api`)**: FastAPI service exposing REST endpoints for auth, ledger, reporting, forecasting, FX, market, tax, audit, and workflow orchestration.
-- **Streamlit Web (`apps/web`)**: Analyst-facing dashboards backed by the API.
-- **Scheduler (`apps/api/scheduler.py`)**: APScheduler jobs refreshing forecasts and provider data.
-- **Observability (`apps/observability/logging.py`)**: Structured logging with correlation IDs shared across the API, scheduler, CLI, and Uvicorn access/error loggers plus async context helpers.
-- **CLI (`cli/macli.py`)**: Administrative commands for bootstrapping accounts, ingesting data, and generating reports.
-- **Plugins (`plugins/`)**: Provider contracts for FX, market, and tax integrations.
-- **Docs (`docs/`)**: Architecture, forecasting, plugin, and domain references.
+## Key Capabilities
+- **Ledger & Reporting** – SQLModel-backed double-entry primitives, cashflow and budget variance APIs, and Streamlit dashboards for finance teams.
+- **Forecasting** – Forecast and budgeting services with ARIMA baselines and hooks for exogenous signals (events, FX volatility, macro inputs).
+- **Integrations** – Pluggable provider contracts for FX, market pricing, and jurisdiction-specific tax rules with first-party examples under `plugins/`.
+- **Observability** – Structured logging with correlation IDs across API, scheduler, and CLI plus audit trails on authentication events.
+- **Portability** – Ships with SQLite for zero-setup dev environments but can target any SQLAlchemy-compatible database.
 
-## Getting Started
-### Prerequisites
-- Python 3.11+
-- (Optional) Docker & Docker Compose
-
-### Installation
+## Quick Start
 ```bash
-git clone https://github.com/modular-accounting/modular-accounting.git
-cd modular-accounting
+# Clone & bootstrap
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
-pre-commit install --install-hooks
-pre-commit install --hook-type commit-msg
+cp .env.example .env
+
+# Launch API (http://localhost:8000/docs)
+uvicorn apps.api.main:app --reload
+
+# Launch Streamlit console (http://localhost:8501)
+streamlit run apps/web/app.py
 ```
 
-### Running Locally
-- **API**:
-  ```bash
-  uvicorn apps.api.main:app --reload
-  ```
-- **Streamlit UI**:
-  ```bash
-  streamlit run apps/web/app.py
-  ```
-- **Docker Compose**:
-  ```bash
-  docker-compose up --build
-  ```
+Docker users can run the entire stack (API + Streamlit + background workers) using:
+
+```bash
+docker-compose up --build
+```
+
+## Usage Examples
+### Authenticate & Post a Transaction
+```bash
+# Obtain an access token
+curl -X POST http://localhost:8000/auth/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'username=demo@example.com&password=demo-password'
+
+# Use the token to create a journal entry
+curl -X POST http://localhost:8000/ledger/transactions \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "organization_id": 1,
+        "description": "Invoice payment",
+        "postings": [
+          {"account_id": 100, "amount": "-1250.00", "currency": "USD"},
+          {"account_id": 200, "amount": "1250.00", "currency": "USD"}
+        ]
+      }'
+```
+
+### Sync FX Rates from the CLI
+```bash
+python -m cli.macli sync-fx --base EUR --provider ecb_reference_via_exchangerate_host
+```
+
+### Explore Dashboards
+Launch the Streamlit console and navigate to **Reports → Cashflow Forecast** to visualise ledger balances, FX overlays, and forecast diagnostics.
+
+### Add a Custom Provider
+1. Create a folder under `plugins/your_provider` with a `provider.py` exporting `provider()`.
+2. Implement the required protocol (see [docs/PLUGINS.md](docs/PLUGINS.md)).
+3. Configure the provider key in `.env` or the database.
+4. Verify the provider appears in `GET /core/providers`.
+
+## Architecture Overview
+```
+┌────────────────────────────┐      ┌───────────────────────┐
+│ Streamlit Operations UI    │◀────▶│ FastAPI REST Backend  │◀─┐
+│ (apps/web)                 │      │ (apps/api)            │  │
+└──────────────┬─────────────┘      └───────────┬───────────┘  │
+               │                                │              │
+               │                                ▼              │
+               │                     Services (ledger, fx,     │
+               │                     market, tax, forecast,    │
+               │                     workflow)                 │
+               │                                │              │
+               ▼                                ▼              │
+        CLI Utilities                    SQLModel Persistence   │
+        (cli/macli.py)                   (SQLite/Postgres)      │
+               │                                │              │
+               └──────────────┬─────────────────┴──────────────┘
+                              ▼
+                       Plugin Ecosystem
+                       (plugins/*)
+```
+
+- **Scheduler** – `apps/api/scheduler.py` orchestrates recurring jobs (e.g., FX/market refresh). Startup and shutdown hooks integrate with the FastAPI lifespan manager.
+- **Observability** – `apps/observability/logging.py` configures JSON/text logging, correlation IDs, and request middleware shared across entry points.
+- **Audit Trail** – Authentication flows record structured entries via `apps/api/audit.py`.
+
+## Service and API Map
+| Area | Module | Representative Endpoints |
+| --- | --- | --- |
+| Core | `apps/api/routers/core.py` | `GET /core/health`, `GET /core/providers` |
+| Auth & Security | `apps/api/routers/auth.py`, `apps/api/security.py` | `POST /auth/token`, `GET /auth/me` |
+| Ledger | `apps/api/services/ledger_service.py`, `apps/api/routers/ledger.py` | `POST /ledger/transactions`, `GET /ledger/accounts` |
+| FX | `apps/api/services/fx_service.py`, `apps/api/routers/fx.py` | `POST /fx/sync`, `GET /fx/rates` |
+| Market Data | `apps/api/services/market_service.py`, `apps/api/routers/market.py` | `POST /market/prices`, `GET /market/instruments` |
+| Tax | `apps/api/services/tax_service.py`, `apps/api/routers/tax.py` | `POST /tax/rules/sync`, `GET /tax/rules` |
+| Forecasting & Reports | `apps/api/services/forecast_service.py`, `apps/api/routers/forecast.py`, `apps/api/routers/reports.py` | `POST /forecast/series`, `GET /reports/budget-vs-actual` |
+| Workflow | `apps/api/services/workflow_service.py`, `apps/api/routers/workflow.py` | `POST /workflow/run`, `GET /workflow/status` |
+
+Full schema documentation lives at `/docs` (Swagger UI) and `/redoc` once the API is running.
 
 ## Configuration
-
-- Copy [`.env.example`](.env.example) to `.env` (or another path) and populate the values with deployment-specific credentials.
-- At runtime the application loads configuration using `Settings.load`, which honours the `MODACCT_`-prefixed environment variables, legacy aliases, and optional dotenv files.
-- Refer to [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full list of supported keys, validation rules, and loading precedence.
+- Settings are centralised in `apps/api/config.py` using Pydantic settings. They honour `MODACCT_`-prefixed environment variables with `.env` support.
+- Review [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for variable reference tables, dotenv handling, and security notes.
 
 ## Developer Workflow
-- Lint & format:
+- Install tooling and hooks via `pre-commit install --install-hooks --hook-type commit-msg`.
+- Run formatters and linters locally:
   ```bash
   pre-commit run --all-files
   ```
-- Run tests:
+- Execute the application test suite:
   ```bash
   pytest
   ```
-- Static type checks (targeted strict baseline):
-  ```bash
-  mypy
-  ```
-- See [CONTRIBUTING.md](CONTRIBUTING.md) for branching strategy, Conventional Commit guidelines, and review expectations.
-- Repository settings and future workstreams are documented in [PLAN.md](PLAN.md) and [REPORT.md](REPORT.md).
+- Type checking (gradually stricter coverage) leverages mypy; see [PLAN.md](PLAN.md) for rollout milestones.
 
 ## Testing
-The repository includes pytest-based unit and integration tests covering:
-- API routers, services, and scheduler behaviours.
-- CLI command smoke tests.
-- Streamlit component smoke coverage.
-
-Run `pytest` locally or rely on GitHub Actions (`ci.yml`) for automated validation. Coverage reporting will be integrated in a future milestone.
+The pytest suite covers routers, services, the scheduler, observability utilities, and CLI entry points. Streamlit smoke tests ensure dashboards mount successfully. CI executes `pytest` and code quality checks on every push.
 
 ## Project Structure
 ```
@@ -95,7 +152,7 @@ tests/        Pytest suite
 ```
 
 ## Community & Support
-- Review [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.
-- Adhere to the [Code of Conduct](CODE_OF_CONDUCT.md).
-- For security issues, follow the [Security Policy](SECURITY.md).
-- Support channels and SLAs are detailed in [SUPPORT.md](SUPPORT.md).
+- Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Security disclosures: [SECURITY.md](SECURITY.md)
+- Support channels and SLAs: [SUPPORT.md](SUPPORT.md)

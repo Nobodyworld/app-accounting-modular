@@ -1,3 +1,5 @@
+"""Ledger service unit tests covering trial balance reporting behaviours."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -10,6 +12,7 @@ from apps.api.services.ledger_service import LedgerService, TrialBalanceRow
 
 
 def create_session():
+    """Construct an isolated SQLModel session for ledger-related tests."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
     return Session(engine, expire_on_commit=False)
@@ -145,3 +148,6 @@ def test_post_transaction_requires_existing_account() -> None:
                     {"account_id": cash.id, "debit": 0.0, "credit": 100.0},
                 ],
             )
+
+
+# TODO - (ledger) Extend coverage to reversing entries and multi-org postings.
