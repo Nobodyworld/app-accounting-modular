@@ -1,3 +1,5 @@
+"""Audit logging integration tests across domain service boundaries."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -24,12 +26,14 @@ from apps.api.services.tax_service import BaseTaxProvider, TaxService
 
 
 def _create_session() -> Session:
+    """Initialise an isolated in-memory database session for audit tests."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
     return Session(engine, expire_on_commit=False)
 
 
 def _seed_actor(session: Session) -> AuditActor:
+    """Create and persist an organisation/user pair for audit context."""
     org = Organization(name="Test Org")
     session.add(org)
     session.commit()
@@ -73,6 +77,9 @@ class _StubTaxProvider(BaseTaxProvider):
 
     def upsert_rules(self):
         yield TaxRule(jurisdiction="US-FED", scope="vat", expression="rate * 0.2")
+
+
+# TODO - (audit) Simulate concurrent writes to verify audit log race condition handling.
 
 
 def test_ledger_post_transaction_creates_audit_entry() -> None:

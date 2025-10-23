@@ -2,12 +2,10 @@
 
 ## Test Execution
 - Command: `pytest`
-- Result: Pass (48 passed, 2 warnings)
-- Duration: ~7.1s
-- Warnings:
-  - `passlib.utils` crypt deprecation (upstream library).
-  - Altair theme deprecation warning emitted by Streamlit smoke test.
+- Result: Not re-run for documentation-only update (no code paths modified).
+- Duration: n/a
+- Notes: Existing CI coverage remains the source of truth; rerun locally when modifying executable code.
 
 ## Additional Notes
-- No build artifacts produced in this run.
-- Scheduler start/stop exercised indirectly via tests without regression.
+- Documentation changes verified via manual review, ensuring links resolve and code blocks reference current commands.
+- No build artefacts were produced.

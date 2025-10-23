@@ -1,3 +1,5 @@
+"""Plugin loader tests verifying provider discovery and validation semantics."""
+
 from __future__ import annotations
 
 import sys
@@ -14,6 +16,7 @@ from apps.api.services.plugin_loader import (
 
 
 def test_available_providers_returns_metadata() -> None:
+    """Providers should expose metadata entries for configured capabilities."""
     refresh_provider_cache()
     providers = available_providers()
     keys = {meta.key for meta in providers}
@@ -22,6 +25,7 @@ def test_available_providers_returns_metadata() -> None:
 
 
 def test_load_provider_instantiates_provider() -> None:
+    """Provider handles should return initialised provider instances."""
     refresh_provider_cache()
     handle = load_provider("fx:ecb")
     assert hasattr(handle.instance, "name")
@@ -29,6 +33,7 @@ def test_load_provider_instantiates_provider() -> None:
 
 
 def test_load_provider_rejects_unknown_key() -> None:
+    """Invalid provider keys must raise descriptive errors."""
     with pytest.raises(ValueError):
         load_provider("plugins.fx_ecb.provider")
 
@@ -37,6 +42,7 @@ def test_load_provider_rejects_unknown_key() -> None:
 
 
 def test_load_provider_rejects_missing_modules(monkeypatch) -> None:
+    """Missing provider modules should result in ValueError responses."""
     refresh_provider_cache()
     monkeypatch.setattr(
         settings,
@@ -55,6 +61,7 @@ def test_load_provider_rejects_missing_modules(monkeypatch) -> None:
 
 
 def test_load_provider_requires_factory(monkeypatch) -> None:
+    """Named factories must exist within the provider module namespace."""
     refresh_provider_cache()
     monkeypatch.setattr(settings, "allowed_providers", settings.allowed_providers.copy())
 
@@ -63,6 +70,7 @@ def test_load_provider_requires_factory(monkeypatch) -> None:
 
 
 def test_load_provider_rejects_non_callable(monkeypatch) -> None:
+    """Provider factories should be callable objects."""
     refresh_provider_cache()
     module = types.ModuleType("plugins.dummy_module")
     module.provider = "not-callable"
@@ -84,6 +92,7 @@ def test_load_provider_rejects_non_callable(monkeypatch) -> None:
 
 
 def test_load_provider_rejects_none(monkeypatch) -> None:
+    """Factories returning ``None`` should be rejected early."""
     refresh_provider_cache()
     module = types.ModuleType("plugins.dummy_none")
 
@@ -109,6 +118,7 @@ def test_load_provider_rejects_none(monkeypatch) -> None:
 
 
 def test_available_providers_cache_invalidation(monkeypatch) -> None:
+    """Refresh operations should rebuild provider cache after config changes."""
     refresh_provider_cache()
     baseline = available_providers()
     assert baseline
@@ -131,6 +141,7 @@ def test_available_providers_cache_invalidation(monkeypatch) -> None:
 
 
 def test_load_provider_validates_required_methods(monkeypatch) -> None:
+    """Providers lacking capability-specific methods must raise errors."""
     refresh_provider_cache()
     module = types.ModuleType("plugins.invalid_fx")
 
@@ -158,6 +169,9 @@ def test_load_provider_validates_required_methods(monkeypatch) -> None:
     with pytest.raises(ValueError) as excinfo:
         load_provider("invalid")
     assert "sync_daily_rates" in str(excinfo.value)
+
+
+# TODO - (plugins) Validate async provider initialisation when supported.
 
 
 def test_load_provider_requires_name_attribute(monkeypatch) -> None:

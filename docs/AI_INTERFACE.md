@@ -1,43 +1,53 @@
-# AI Interface Guide
+# AI & Automation Interface
 
-This document summarises the structured entry points that agent frameworks can call when integrating with Modular Accounting.
+Automation agents, workflow orchestrators, and AI copilots can interact with Modular Accounting through a small set of stable touch points. This guide consolidates authentication, REST usage, CLI wrappers, and observability expectations so external tooling can integrate safely.
 
-## REST API Surface
-- **Base URL:** `https://{host}/` (default `http://localhost:8000` in development).
-- **Authentication:** Bearer tokens issued via `POST /auth/token` (requires username/password). Tokens expire based on `MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES`.
-- **Core Endpoints:**
-  - `GET /core/health` – readiness/liveness probe (no auth).
-  - `GET /providers` family – discover configured FX, market, and tax providers.
-  - `POST /ledger/accounts` – create ledger accounts (requires organization context).
-  - `POST /ledger/transactions` – post double-entry transactions.
-  - `GET /reports/trial-balance` – fetch balances for an organization.
-  - `POST /forecast/refresh` – trigger budget forecast refresh.
+## Base URL & Authentication
+- **API base**: `http://localhost:8000/` during development (configure host/port per deployment).
+- **Token endpoint**: `POST /auth/token` expects `application/x-www-form-urlencoded` credentials (`username`, `password`).
+- **Headers**: include `Authorization: Bearer <token>` plus optional scoping headers (`X-Organization-ID`, `X-User-ID`, `X-Request-ID`) when calling protected endpoints. The `session_with_audit_context` dependency records these into the audit log.
 
-The FastAPI application exposes an OpenAPI schema at `/openapi.json` suitable for dynamic agent ingestion.
+Example token retrieval:
+```bash
+curl -X POST http://localhost:8000/auth/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'username=agent@example.com&password=s3cret'
+```
 
-## Authentication Flow for Agents
-1. Obtain credentials for a service account stored securely (e.g., Vault).
-2. Request an access token via `/auth/token`.
-3. Include the header `Authorization: Bearer <token>` and the organization scoping headers (`X-Organization-ID`) as required by routers.
-4. Handle HTTP 429 responses from `/auth/token` by backing off exponentially.
+## Core REST Endpoints for Agents
+| Capability | Endpoint | Notes |
+| --- | --- | --- |
+| Health checks | `GET /core/health` | unauthenticated readiness probe for orchestrators |
+| Provider discovery | `GET /core/providers` | inspect available FX/market/tax providers before invoking sync commands |
+| Ledger operations | `POST /ledger/transactions`, `GET /ledger/accounts` | scoped by organisation; expect validation errors (`422`) for imbalanced postings |
+| Reporting | `GET /reports/trial-balance`, `GET /reports/cashflow-forecast` | return structured JSON with metadata links to artefacts |
+| Forecasting | `POST /forecast/refresh`, `POST /forecast/series` | asynchronous refresh vs inline modelling |
+| Audit access | `GET /audit/logs` (planned) | review structured audit entries once implemented |
 
-Every authentication attempt is written to the audit log (`AuditAction.ACCESS`), making usage traceable.
-
-## Scheduler & Automation Hooks
-- Forecast refreshes are scheduled in-process using APScheduler. Agents can query `GET /reports/status` (planned) or trigger manual runs when necessary.
-- The scheduler start/stop lifecycle is idempotent, enabling agent-driven API restarts without duplicate cron jobs.
+The OpenAPI schema is exposed at `/openapi.json` and `/docs`. Agents can ingest the schema to generate strongly typed clients.
 
 ## CLI Automation
-The `cli/` package exposes Typer commands (see `cli/__main__.py`) that agents can invoke via subprocess for maintenance tasks such as database seeding or plugin syncs.
+The Click-based CLI (`python -m cli.macli`) shares service implementations with the API. Useful commands for agents include:
+```bash
+python -m cli.macli sync-fx --base USD --provider ecb_reference_via_exchangerate_host
+python -m cli.macli sync-prices AAPL --start 2024-01-01 --end 2024-01-31
+python -m cli.macli ingest-ledger --file data/transactions.csv
+```
 
-## Extending via Plugins
-Custom data sources can be registered by implementing the provider protocols in `apps/api/services/*_service.py` and placing the module under `plugins/`. Agents can then select providers via API parameters.
+Wrap CLI calls in subprocesses or job runners when REST endpoints do not yet expose the required workflow. CLI logging honours the same structured logging context (correlation IDs, request IDs) as the API.
 
-## Response Schemas
-All responses rely on Pydantic v2 schemas declared in `apps/api/schemas.py`. Agents should expect standard FastAPI validation errors (`422`) with field-level details.
+## Observability Hooks
+- Every authenticated request records an audit entry via `apps/api/audit.py`. Query the audit log (future endpoint) or inspect database tables to trace agent activity.
+- Structured logs include `correlation_id`, `request_id`, and domain-specific metadata. Capture STDOUT/STDERR from CLI invocations to feed into your observability stack.
+- Failed authentications emit warnings and audit records; implement exponential backoff on `401`/`429` responses to respect throttling limits.
 
-## Observability
-- Structured authentication logs are emitted via the Python logging subsystem.
-- Persistent audit entries can be fetched via `GET /audit/logs` with pagination (planned enhancement).
+## Extending the Platform
+- **Plugins** – Implement provider contracts described in [PLUGINS.md](PLUGINS.md) to surface new FX/market/tax data for agents.
+- **Webhooks** – For outward notifications, contribute router endpoints or background jobs that call out to your automation framework.
+- **Custom APIs** – Add FastAPI routers under `apps/api/routers/` with appropriate dependencies; document them alongside agent workflows.
 
-For tighter integrations (LangChain, MCP, AgentKit), wrap the REST endpoints or CLI commands described above into tool declarations referencing this schema.
+## Best Practices for Agent Builders
+1. Cache the OpenAPI schema and refresh it periodically to detect contract changes.
+2. Log request IDs returned in responses to correlate with server-side logs.
+3. Handle pagination and rate limiting gracefully—future endpoints may introduce cursors and 429 responses.
+4. Run integration tests against the local stack (via docker-compose or uvicorn) before deploying automations to production environments.

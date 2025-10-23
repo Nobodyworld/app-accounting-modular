@@ -1,8 +1,10 @@
+"""Observability logging tests ensuring formatters and context utilities behave."""
+
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import asyncio
 from typing import Any
 
 import pytest
@@ -132,3 +134,6 @@ def test_request_context_middleware_assigns_request_ids() -> None:
     assert auto_body["correlation_id"] != body["correlation_id"]
     assert auto_body["state_correlation"] == auto_body["correlation_id"]
     assert auto_body["state_request_id"] == auto_body["request_id"]
+
+
+# TODO - (logging) Validate structured logging under multiprocessing executors.

@@ -1,3 +1,5 @@
+"""CLI CSV import tests covering ledger ingestion pipelines."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -14,12 +16,14 @@ from cli.macli import _load_transactions_from_csv
 
 
 def create_session():
+    """Construct an in-memory session for CLI import operations."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
     return Session(engine, expire_on_commit=False)
 
 
 def write_csv(tmp_path: Path, rows: list[dict[str, str]]) -> Path:
+    """Write a transactional CSV fixture with canonical headers for tests."""
     headers = ["date", "description", "account_code", "account_name", "account_type", "debit", "credit", "currency"]
     file_path = tmp_path / "import.csv"
     with file_path.open("w", encoding="utf-8", newline="") as handle:
@@ -108,3 +112,6 @@ def test_load_transactions_from_csv_rejects_unbalanced(tmp_path) -> None:
 
         with pytest.raises(click.ClickException):
             _load_transactions_from_csv(ledger, csv_path)
+
+
+# TODO - (cli) Add coverage for multi-currency CSV imports and exchange rate lookup.

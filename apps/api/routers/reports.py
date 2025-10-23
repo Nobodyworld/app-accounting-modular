@@ -98,6 +98,8 @@ def budget_vs_actual(
     refresh: bool = Query(default=False),
     session: Session = Depends(get_session),
 ) -> BudgetReportResponse:
+    """Return a budget variance view, optionally forcing a recalculation."""
+
     _ensure_budget_scope(session, budget_id, organization_id)
     service = BudgetService(session)
     effective_horizon = _coerce_optional_int(horizon)
@@ -121,7 +123,10 @@ def cashflow_forecast(
     refresh: bool = Query(default=False),
     session: Session = Depends(get_session),
 ) -> CashflowForecastResponse:
+    """Return a rolling cashflow forecast for an organisation."""
+
     # TODO - Cache refresh results to reduce repeated model runs for identical parameters.
+    # TODO - (perf) Stream forecast payloads when the CSV export grows beyond memory limits.
     service = BudgetService(session)
     effective_horizon = _coerce_optional_int(horizon)
     try:

@@ -1,37 +1,39 @@
 # Diagnostic Report
 
 ## Code Health Overview
-- **Database bootstrap** (`apps/api/db.py`): relying on `SQLModel.metadata.create_all` in runtime path. Lacks Alembic migrations and executes in request path for SQLite, risking race conditions.
-- **Scheduler lifecycle** (`apps/api/scheduler.py` & `apps/api/main.py`): background scheduler starts on import without guard against duplicate jobs under auto-reload; no retry/backoff for DB outages.
-- **Security gaps** (`apps/api/security.py` & routers): Missing login throttling/MFA, refresh tokens, auth audit logging. Token decoding lacks structured error logging.
-- **Router parameter validation**: multiple routers TODO pagination and scoping (e.g., `reports`, `workflow`) leaving potential denial-of-service via large responses.
-- **Plugin loader**: does not validate plugin interfaces or cache provider metadata; runtime errors possible on invalid plugin entrypoints.
-- **Docs drift**: README structure list duplicated docker note; docs outdated vs code.
+- **Database Bootstrap** (`apps/api/db.py`): still uses `SQLModel.metadata.create_all` at runtime; Alembic migrations remain a TODO for production hardening.
+- **Scheduler Lifecycle** (`apps/api/scheduler.py` & `apps/api/main.py`): lifecycle guards prevent duplicate job registration, but resilience improvements (retry/backoff) are still open.
+- **Security Gaps** (`apps/api/security.py` & routers): refresh tokens, MFA, and rate limiting are outstanding TODOs though audit logging is in place.
+- **Router Validation**: pagination and scoping placeholders remain in several routers (`reports`, `workflow`, `market`), risking large responses.
+- **Plugin Loader**: interface validation and richer metadata caching are noted TODOs to avoid runtime surprises.
 
 ## Typing & Style Issues
-- Several modules missing type aliases/docstrings; services return plain dicts without Pydantic models (e.g., forecast/budget services), impacting clarity.
-- No Ruff/Black automation; inconsistent blank lines and import ordering observed in various services.
+- Strict mypy coverage now spans config, audit, security, and metadata utilities; remaining services and routers require additional annotations.
+- Plugin packages lacked docstrings/exports but have now been standardised to aid discovery and typing.
 
 ## Testing & CI
-- Pytest suite exists but no automated CI. Scheduler/background interactions mostly untested beyond smoke tests.
-- Streamlit smoke test depends on environment variable defaults; potential flakes.
+- Pytest suite exercises core paths; CI (GitHub Actions) runs linting, tests, and CodeQL scanning.
+- Scheduler/background workflows have smoke coverage but could benefit from resilience-focused integration tests.
+
+## Documentation State
+- README and `docs/` have been expanded with end-to-end usage examples, reducing earlier drift between code and docs.
+- CONTRIBUTING now codifies documentation expectations; future changes should treat doc updates as part of the Definition of Done.
 
 ## TODO / FIXME Classification
 - **Critical:**
-  - Security hardening tasks in `apps/api/security.py` and `routers/auth.py` (audit logging, refresh tokens, MFA/throttling).
-  - Report router TODO enforcing org scoping (`apps/api/routers/reports.py`).
-  - Scheduler retry/backoff TODOs for database resilience.
+  - Implement rate limiting and refresh tokens in the authentication flow.
+  - Enforce organisation scoping and pagination across reports/workflow routers.
+  - Introduce migration tooling to replace runtime `create_all` calls.
 - **Moderate:**
-  - Pagination and caching TODOs across routers/services to avoid heavy payloads.
-  - Database migration TODOs for uniqueness constraints and Alembic adoption.
-  - Forecast service enhancements (model strategies, timezone handling).
+  - Enhance plugin loader validation, cache invalidation, and health checks.
+  - Expand type coverage for remaining services.
+  - Add scheduler resilience (retry/backoff, metrics integration).
 - **Minor:**
-  - Metadata caching improvements, audit pagination, doc improvements, plugin validations.
+  - Continue fleshing out forecasting strategies, audit pagination, and observability metrics.
 
 ## Recommended Modes
-- **Architecture Alignment:** Needed to clarify module boundaries (config/services/routers) and guard scheduler lifecycle.
-- **Zero-Bloat Refactor:** Remove redundant imports, tighten service utilities, ensure routers/services instantiate dependencies efficiently.
-- **Full-System Polish:** Enforce Black/Ruff, improve docstrings, refresh README.
-- **Test & Verify:** Run pytest suite; ensure scheduler/forecast tests stable.
-- **Security & Stability Audit:** Patch immediate security gaps (token error handling, secret configuration warnings) and document TODO ownership.
-- **AI-Ready Refactor:** Provide structured API docs/schema (OpenAPI already, but add AI interface doc and ensure deterministic service entrypoints).
+- **Architecture Alignment** – clarify boundaries around scheduler resiliency and plugin lifecycle.
+- **Zero-Bloat Refactor** – remove remaining duplication in services/routers as type coverage increases.
+- **Full-System Polish** – continue enforcing documentation and linting standards repo-wide.
+- **Test & Verify** – build targeted integration tests for background jobs and plugin failure modes.
+- **Security & Stability Audit** – prioritise authentication hardening and migration tooling.

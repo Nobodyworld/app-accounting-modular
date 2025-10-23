@@ -1,18 +1,21 @@
+"""Forecast service unit tests covering ARIMA flow edge cases."""
+
 from __future__ import annotations
 
+import warnings
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-import warnings
+from typing import Sequence, cast
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
-from typing import Sequence, cast
 
 from apps.api.services.forecast_service import ForecastResult, ForecastService
 
 
 def generate_series(count: int = 30) -> list[tuple[datetime, float]]:
+    """Produce a simple linear time series for deterministic testing."""
     base = datetime(2024, 1, 1)
     return [(base + timedelta(days=i), float(100 + i * 2)) for i in range(count)]
 
@@ -189,3 +192,6 @@ def test_forecast_service_configuration_guards() -> None:
 
     with pytest.raises(ValueError):
         ForecastService(fallback_strategy="unsupported")  # type: ignore[arg-type]
+
+
+# TODO - (forecast) Cover seasonal decomposition strategies when implemented.

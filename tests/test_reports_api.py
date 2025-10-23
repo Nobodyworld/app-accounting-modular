@@ -1,3 +1,5 @@
+"""Tests covering reporting router endpoints and helper formatting routines."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -23,6 +25,7 @@ from apps.api.utils.metadata import prepare_metadata_for_response
 
 
 def setup_database() -> Session:
+    """Initialise the in-memory database and bind the global engine for tests."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     db.engine = engine
     SQLModel.metadata.create_all(engine)
@@ -30,6 +33,7 @@ def setup_database() -> Session:
 
 
 def seed_data(session: Session) -> tuple[int, int]:
+    """Populate base ledger and budgeting fixtures for report assertions."""
     org = Organization(name="API Org")
     session.add(org)
     session.commit()
@@ -93,6 +97,9 @@ def seed_data(session: Session) -> tuple[int, int]:
     )
     session.commit()
     return org.id, budget.id
+
+
+# TODO - (reports) Add scenarios with multi-currency budgets to validate conversions.
 
 
 def test_budget_vs_actual_endpoint() -> None:

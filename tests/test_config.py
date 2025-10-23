@@ -1,6 +1,6 @@
-from __future__ import annotations
+"""Configuration model tests validating environment parsing and defaults."""
 
-from pathlib import Path
+from __future__ import annotations
 
 import pytest
 
@@ -8,6 +8,7 @@ from apps.api.config import DEFAULT_LOG_FORMAT, MAX_ACCESS_TOKEN_MINUTES, Settin
 
 
 def test_settings_reads_prefixed_environment(monkeypatch) -> None:
+    """Settings.load should respect modern MODACCT_ prefixed environment vars."""
     monkeypatch.setenv("MODACCT_DATABASE_URL", "postgresql://user:pass@localhost/db")
     monkeypatch.setenv("LOG_LEVEL", " debug ")
     monkeypatch.setenv("NEWSAPI_KEY", "  token  ")
@@ -21,6 +22,7 @@ def test_settings_reads_prefixed_environment(monkeypatch) -> None:
 
 
 def test_settings_supports_legacy_env_names(monkeypatch) -> None:
+    """Legacy env variable names should remain backwards compatible."""
     monkeypatch.delenv("MODACCT_DATABASE_URL", raising=False)
     monkeypatch.setenv("DATABASE_URL", "sqlite:///test.db")
 
@@ -30,6 +32,7 @@ def test_settings_supports_legacy_env_names(monkeypatch) -> None:
 
 
 def test_settings_warns_and_marks_ephemeral_secret(monkeypatch, caplog) -> None:
+    """Ephemeral JWT secrets are generated with warning instrumentation."""
     monkeypatch.delenv("MODACCT_JWT_SECRET_KEY", raising=False)
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
     caplog.set_level("WARNING", logger="apps.api.config")
@@ -42,6 +45,7 @@ def test_settings_warns_and_marks_ephemeral_secret(monkeypatch, caplog) -> None:
 
 
 def test_settings_marks_persistent_secret(monkeypatch, caplog) -> None:
+    """User-specified JWT secrets bypass ephemeral generation warnings."""
     monkeypatch.setenv("MODACCT_JWT_SECRET_KEY", "  persistent-secret  ")
     caplog.set_level("WARNING", logger="apps.api.config")
 
@@ -53,6 +57,7 @@ def test_settings_marks_persistent_secret(monkeypatch, caplog) -> None:
 
 
 def test_settings_rejects_invalid_log_level(monkeypatch) -> None:
+    """Invalid log level input should raise a validation error."""
     monkeypatch.setenv("MODACCT_LOG_LEVEL", "notalevel")
 
     with pytest.raises(ValueError) as exc:
@@ -62,6 +67,7 @@ def test_settings_rejects_invalid_log_level(monkeypatch) -> None:
 
 
 def test_settings_rejects_invalid_jwt_algorithm(monkeypatch) -> None:
+    """Unsupported JWT algorithms trigger descriptive validation errors."""
     monkeypatch.setenv("MODACCT_JWT_ALGORITHM", "md5")
 
     with pytest.raises(ValueError) as exc:
@@ -72,12 +78,16 @@ def test_settings_rejects_invalid_jwt_algorithm(monkeypatch) -> None:
 
 
 def test_settings_rejects_invalid_expiry(monkeypatch) -> None:
+    """Token expiries below threshold result in configuration errors."""
     monkeypatch.setenv("MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES", "0")
 
     with pytest.raises(ValueError) as exc:
         Settings.load()
 
     assert "greater than zero" in str(exc.value)
+
+
+# TODO - (config) Cover settings overrides for per-environment log destinations.
 
     monkeypatch.setenv(
         "MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES",

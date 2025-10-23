@@ -1,66 +1,28 @@
-# Modular Accounting (ModAcct)
+# Modular Accounting Documentation
 
-An extensible, **portable** accounting platform with a plugin system for **tax rules**, **FX**, **market data**, **commodities**, and **event-aware forecasting**.
+This directory collects deep-dive references for core platform areas—architecture, configuration, forecasting, plugins, AI integrations, and the tax domain model. Each guide is written for engineers onboarding to the codebase as well as operators deploying the stack in production.
 
-- Backend: **FastAPI** + **SQLModel** (SQLite by default for zero-setup portability)
-- UI: **Streamlit** (lightweight) + **OpenAPI docs** at `/docs`
-- Plugins: Drop-in modules for data providers and tax rules
-- Forecasting: Basic ARIMA via statsmodels (pluggable)
-- CLI: `python -m cli.macli` for imports, syncs, and reports
-- Docker: `docker-compose up` for a two-service dev stack
+## Navigating the Docs
+| Guide | Description |
+| --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | High-level system and data-flow overview including scheduler, observability, and plugin lifecycle diagrams. |
+| [CONFIGURATION.md](CONFIGURATION.md) | Runtime settings, environment variables, and deployment hardening recommendations. |
+| [FORECASTING.md](FORECASTING.md) | Forecasting and budgeting workflows, API/CLI entry points, and diagnostics artefacts. |
+| [PLUGINS.md](PLUGINS.md) | Provider contracts, discovery process, and packaging guidance for custom integrations. |
+| [AI_INTERFACE.md](AI_INTERFACE.md) | How external agents and automation frameworks should authenticate and interact with the platform. |
+| [TAX_MODEL.md](TAX_MODEL.md) | Domain-specific schema for tax rules and jurisdiction metadata. |
 
-> Use `# TODO` markers inside code to highlight expansion points.
+## Quick Orientation
+- **Start here** if you are new to the platform: read [ARCHITECTURE.md](ARCHITECTURE.md) for component responsibilities, then scan [CONFIGURATION.md](CONFIGURATION.md) to bootstrap credentials and runtime settings.
+- **Extending the system**: build providers following [PLUGINS.md](PLUGINS.md); wire their configuration using the environment variable tables in [CONFIGURATION.md](CONFIGURATION.md).
+- **Automating workflows**: combine REST examples from [AI_INTERFACE.md](AI_INTERFACE.md) with CLI commands described in [FORECASTING.md](FORECASTING.md) and [docs/PLUGINS.md](PLUGINS.md).
+- **Understanding compliance surfaces**: [TAX_MODEL.md](TAX_MODEL.md) documents jurisdictional rules and planned enhancements.
 
-## Quickstart
+## Documentation Style
+All guides follow these conventions:
+- Concise introductions outlining the problem the component solves.
+- Step-by-step usage sections with copy-pastable code blocks (`curl`, CLI, or Python snippets).
+- Architecture diagrams using ASCII or Mermaid syntax to make data flow explicit.
+- Callouts for TODOs and roadmap items that reference existing code comments when relevant.
 
-```bash
-# 1) Python env
-pip install -r requirements.txt
-cp .env.example .env
-
-# 2) Run API
-uvicorn apps.api.main:app --reload
-
-# 3) Run UI
-streamlit run apps/web/app.py
-```
-
-Open the API docs at http://localhost:8000/docs and the UI at http://localhost:8501.
-
-## Key Ideas
-
-- **Modularity first**: Everything is a provider or plugin with a clear interface.
-- **Portable**: SQLite by default, swap to Postgres by changing `DATABASE_URL`.
-- **Auditable**: Double-entry ledger primitives, typed models, and versioned ETL runs.
-- **Global-aware**: Country + jurisdiction taxonomy for tax rules, rates, and regulatory data.
-- **Event-informed**: Optional event-feeds (e.g., GDELT/NewsAPI) to nudge forecasts with ML extensions planned.
-
-## Features (MVP + Stubs)
-
-- Ledger: Accounts, Transactions, JournalEntries, Reports (P&L, Balance Sheet)
-- Data Providers:
-  - FX (`ECB`, `OpenExchangeRates` with API keys configured via environment)
-  - Markets (`yfinance` for equities/ETFs; extensible to commodities and futures providers)
-  - Macro (WorldBank/OECD integrations pluggable)
-- Tax:
-  - Core tax schema + rule engine
-  - OECD VAT scaffold with provider hook for automated refreshers
-  - US Federal/State stubs awaiting full table ingestion
-- Forecasting:
-  - ARIMA baseline with automatic order selection
-  - Event signals placeholder ready for NLP + causal feature enrichments
-- CLI:
-  - Import CSV
-  - Sync FX and Market prices
-  - Generate reports
-
-## Roadmap
-
-- [ ] Rich plugin discovery via entry points
-- [ ] Multi-tenant bookkeeping
-- [ ] Advanced reconciliation (bank feeds, Plaid integration)
-- [ ] Caching layer + job queue
-- [ ] Fine-grained permissions and audit trail
-- [ ] Web UI (React) option alongside Streamlit
-
-See more in `docs/ARCHITECTURE.md` and `docs/PLUGINS.md`.
+If you spot stale content or missing context, open an issue or PR—documentation maintenance is part of the Definition of Done for every change touching the affected component.
