@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 2024-11-01: Refocused the project on portable modular accounting with domain models, adapter protocols, an in-memory demo CLI, refreshed documentation, and a proprietary license notice.
 - 2024-10-25: Comprehensive documentation sweep adding module docstrings for
   built-in plugins, expanding README/architecture/configuration references with
   usage examples, and aligning AI/forecasting/tax guides for contributor
