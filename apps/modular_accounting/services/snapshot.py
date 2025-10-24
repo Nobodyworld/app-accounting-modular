@@ -1,14 +1,21 @@
-"""Composite services that materialise accounting snapshots."""
+"""Deprecated wrapper forwarding to the application snapshot service."""
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from ..adapters import CommodityDataAdapter, FXDataAdapter, TaxDataAdapter
-from ..domain import CommodityQuote, FXRate, TaxRule
+from ..application.snapshots import DataSnapshot, DataSnapshotService, SnapshotRequest
 
+warnings.warn(
+    "apps.modular_accounting.services.snapshot is deprecated; "
+    "import from apps.modular_accounting.application instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
+__all__ = ["DataSnapshot", "DataSnapshotService", "SnapshotRequest"]
 @dataclass(slots=True)
 class DataSnapshot:
     """Container aggregating data fetched from the configured adapters.

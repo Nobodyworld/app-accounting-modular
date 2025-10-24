@@ -1,5 +1,6 @@
-"""Adapter interfaces and utilities for modular data sources."""
+"""Infrastructure adapters for modular data sources."""
 
+from ..domain.ports import CommodityDataPort, FXDataPort, TaxDataPort
 from .base import CommodityDataAdapter, FXDataAdapter, TaxDataAdapter
 from .in_memory import (
     InMemoryCommodityAdapter,
@@ -9,9 +10,12 @@ from .in_memory import (
 
 __all__ = [
     "CommodityDataAdapter",
+    "CommodityDataPort",
     "FXDataAdapter",
-    "TaxDataAdapter",
+    "FXDataPort",
     "InMemoryCommodityAdapter",
     "InMemoryFXAdapter",
     "InMemoryTaxAdapter",
+    "TaxDataAdapter",
+    "TaxDataPort",
 ]

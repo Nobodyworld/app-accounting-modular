@@ -4,8 +4,8 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
 
 ## What
 - **Domain primitives** for money, FX rates, commodity quotes, tax rules, and journal transactions under `apps/modular_accounting/domain`.
-- **Adapter contracts** describing how to load tax, FX, and commodity data plus in-memory reference implementations in `apps/modular_accounting/adapters`.
-- **Snapshot orchestration** service that coordinates adapters and returns a consolidated view of rates, quotes, and rules.
+- **Adapter contracts** describing how to load tax, FX, and commodity data in `apps/modular_accounting/domain/ports.py` plus in-memory reference implementations in `apps/modular_accounting/adapters`.
+- **Snapshot orchestration** service in `apps/modular_accounting/application` that coordinates adapters and returns a consolidated view of rates, quotes, and rules via immutable `SnapshotRequest` payloads.
 - **Demo CLI** (`python -m cli.demo_cli snapshot`) that streams adapter output as JSON for quick experiments or integration smoke tests.
 
 ## Why
@@ -24,7 +24,7 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
    ```bash
    python -m cli.demo_cli snapshot --base USD --commodity XAU --commodity XAG
    ```
-3. Implement custom adapters by satisfying the protocols in [`apps/modular_accounting/adapters/base.py`](apps/modular_accounting/adapters/base.py) and wiring them into your own CLI, service, or background job.
+3. Implement custom adapters by satisfying the runtime-checkable ports in [`apps/modular_accounting/domain/ports.py`](apps/modular_accounting/domain/ports.py) and wiring them into your own CLI, service, or background job. Compose `SnapshotRequest` instances to pass around snapshot intent, using `None` as the jurisdiction scope when you want the application layer to fetch the default/global tax rules. Provide an explicit empty iterable to skip tax lookups entirely, or a deduplicated iterable to avoid redundant adapter calls.
 
 ## Documentation
 Extended guides live under the [`docs/`](docs/index.md) folder:

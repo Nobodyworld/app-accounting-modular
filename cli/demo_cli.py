@@ -14,8 +14,8 @@ from apps.modular_accounting.adapters import (
     InMemoryFXAdapter,
     InMemoryTaxAdapter,
 )
+from apps.modular_accounting.application import DataSnapshotService, SnapshotRequest
 from apps.modular_accounting.domain import TaxRule
-from apps.modular_accounting.services import DataSnapshotService
 
 
 def _seed_tax_rules() -> Iterable[TaxRule]:
@@ -86,11 +86,12 @@ def snapshot(
     tax_adapter = InMemoryTaxAdapter(_seed_tax_rules())
     service = DataSnapshotService(fx_adapter, commodity_adapter, tax_adapter)
 
-    snapshot = service.build_snapshot(
+    request = SnapshotRequest(
         base_currency=base_currency,
         commodity_symbols=commodity_symbols,
         jurisdictions=jurisdictions or None,
     )
+    snapshot = service.create_snapshot(request)
 
     payload = {
         "fx_rates": [
