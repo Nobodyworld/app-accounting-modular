@@ -16,8 +16,8 @@ from datetime import date
 from decimal import Decimal
 
 from apps.modular_accounting.adapters import InMemoryCommodityAdapter, InMemoryFXAdapter, InMemoryTaxAdapter
+from apps.modular_accounting.application import DataSnapshotService, SnapshotRequest
 from apps.modular_accounting.domain import TaxRule
-from apps.modular_accounting.services import DataSnapshotService
 
 fx = InMemoryFXAdapter({"USD": Decimal("1.08")})
 commodities = InMemoryCommodityAdapter({"XAU": Decimal("2029.12")}, currency="EUR")
@@ -26,5 +26,10 @@ taxes = InMemoryTaxAdapter([
 ])
 
 service = DataSnapshotService(fx, commodities, taxes)
-snapshot = service.build_snapshot(base_currency="EUR", commodity_symbols=["XAU"])
+request = SnapshotRequest(
+    base_currency="EUR",
+    commodity_symbols=["XAU"],
+    jurisdictions=None,
+)
+snapshot = service.create_snapshot(request)
 ```

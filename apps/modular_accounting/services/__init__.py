@@ -1,5 +1,16 @@
-"""Services orchestrating modular accounting data."""
+"""Deprecated service facade maintained for backward compatibility."""
 
-from .snapshot import DataSnapshotService
+from __future__ import annotations
 
-__all__ = ["DataSnapshotService"]
+import warnings
+
+from ..application import DataSnapshot, DataSnapshotService, SnapshotRequest
+
+warnings.warn(
+    "apps.modular_accounting.services is deprecated; "
+    "use apps.modular_accounting.application instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+__all__ = ["DataSnapshot", "DataSnapshotService", "SnapshotRequest"]
