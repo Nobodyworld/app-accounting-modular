@@ -50,7 +50,8 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
 ## Pull Request Checklist
 - [ ] Tests passing locally (`pytest`).
 - [ ] `pre-commit run --all-files` clean.
-- [ ] Documentation updated (including docstrings where appropriate).
+- [ ] Documentation updated (including docstrings where appropriate) and new
+      guides linked from `docs/index.md` when applicable.
 - [ ] Added/updated entry in `CHANGELOG.md` if behaviour changed.
 - [ ] Screenshots attached for Streamlit/visual changes.
 - [ ] Linked issue(s) referenced in the PR body.

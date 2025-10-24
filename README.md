@@ -22,16 +22,19 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
    ```
 2. Run the demonstration CLI to view a consolidated snapshot:
    ```bash
-   python -m cli.demo_cli snapshot --base USD --commodity XAU --commodity XAG
+   python -m cli.demo_cli snapshot --base USD --commodity XAU --commodity XAG --format table
    ```
-3. Implement custom adapters by satisfying the runtime-checkable ports in [`apps/modular_accounting/domain/ports.py`](apps/modular_accounting/domain/ports.py) and wiring them into your own CLI, service, or background job. Compose `SnapshotRequest` instances to pass around snapshot intent, using `None` as the jurisdiction scope when you want the application layer to fetch the default/global tax rules. Provide an explicit empty iterable to skip tax lookups entirely, or a deduplicated iterable to avoid redundant adapter calls.
+   The `--format` flag toggles between JSON and a friendly ASCII table so you can choose the representation that works best for demos, debugging, or documentation snippets. Input is validated before adapters run to save round trips.
+3. Implement custom adapters by satisfying the runtime-checkable ports in [`apps/modular_accounting/domain/ports.py`](apps/modular_accounting/domain/ports.py) and wiring them into your own CLI, service, or background job. Compose `SnapshotRequest` instances (or call `DataSnapshotService.build_snapshot`) to pass around snapshot intent. The service now caches adapter responses per scope, preventing duplicate API calls when the same request is executed repeatedly within a process.
 
 ## Documentation
 Extended guides live under the [`docs/`](docs/index.md) folder:
 - [Setup](docs/setup.md)
+- [Architecture overview](docs/architecture.md)
 - [Adapter contracts](docs/adapters.md)
 - [Examples](docs/examples.md)
 - [Roadmap](docs/roadmap.md)
+- [Dependency and security posture](docs/DEPENDENCIES.md)
 
 ## Contributing
 Contributions are welcome. Please review the existing governance files (`CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`) before opening a pull request.
