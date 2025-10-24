@@ -21,3 +21,5 @@
 - Rotate API keys and secrets regularly; never commit secrets to the repository.
 - Run `pre-commit run --all-files` to ensure secret scanning hooks execute.
 - Use environment variables (see `.env.example`) to configure sensitive settings.
+- Review [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) quarterly for updated
+  security posture notes and dependency audit status.

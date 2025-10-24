@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import Sequence
 
 import pytest
 
@@ -13,7 +14,46 @@ from apps.modular_accounting.adapters import (
     InMemoryTaxAdapter,
 )
 from apps.modular_accounting.domain import TaxRule
-from apps.modular_accounting.services import DataSnapshotService
+from apps.modular_accounting.services import (
+    DataSnapshotService,
+    SnapshotRequest,
+)
+
+
+class RecordingCommodityAdapter(InMemoryCommodityAdapter):
+    """Test double that records requested symbols for assertions."""
+
+    def __init__(self, quotes: dict[str, Decimal]) -> None:
+        super().__init__(quotes)
+        self.seen: list[Sequence[str]] = []
+
+    def get_quotes(self, symbols: Sequence[str]):  # type: ignore[override]
+        self.seen.append(tuple(symbols))
+        return super().get_quotes(symbols)
+
+
+class CountingFXAdapter(InMemoryFXAdapter):
+    """FX adapter that records how many times rates are requested."""
+
+    def __init__(self, rates: dict[str, Decimal]) -> None:
+        super().__init__(rates)
+        self.calls = 0
+
+    def get_rates(self, base_currency: str):  # type: ignore[override]
+        self.calls += 1
+        return super().get_rates(base_currency)
+
+
+class CountingTaxAdapter(InMemoryTaxAdapter):
+    """Tax adapter that records requested jurisdictions."""
+
+    def __init__(self, rules: Sequence[TaxRule]) -> None:
+        super().__init__(rules)
+        self.requested: list[str | None] = []
+
+    def get_rules(self, jurisdiction: str | None = None):  # type: ignore[override]
+        self.requested.append(jurisdiction)
+        return super().get_rules(jurisdiction)
 
 
 @pytest.fixture
@@ -58,11 +98,12 @@ def test_init_with_positional_args(fx_adapter, commodity_adapter, tax_adapter):
 
 def test_init_with_legacy_keyword_args(fx_adapter, commodity_adapter, tax_adapter):
     """Test DataSnapshotService accepts legacy keyword argument names."""
-    service = DataSnapshotService(
-        fx_adapter=fx_adapter,
-        commodity_adapter=commodity_adapter,
-        tax_adapter=tax_adapter,
-    )
+    with pytest.warns(DeprecationWarning):
+        service = DataSnapshotService(
+            fx_adapter=fx_adapter,
+            commodity_adapter=commodity_adapter,
+            tax_adapter=tax_adapter,
+        )
     assert service is not None
 
 
@@ -79,48 +120,53 @@ def test_init_with_new_keyword_args(fx_adapter, commodity_adapter, tax_adapter):
 def test_init_with_mixed_args(fx_adapter, commodity_adapter, tax_adapter):
     """Test DataSnapshotService accepts mixed legacy and new keyword names."""
     # New port names take precedence
-    service = DataSnapshotService(
-        fx_adapter=fx_adapter,
-        commodity_port=commodity_adapter,
-        tax_adapter=tax_adapter,
-    )
+    with pytest.warns(DeprecationWarning):
+        service = DataSnapshotService(
+            fx_adapter=fx_adapter,
+            commodity_port=commodity_adapter,
+            tax_adapter=tax_adapter,
+        )
     assert service is not None
 
 
 def test_init_raises_without_fx(commodity_adapter, tax_adapter):
     """Test DataSnapshotService raises TypeError when FX adapter is missing."""
-    with pytest.raises(TypeError, match="fx_adapter or fx_port"):
-        DataSnapshotService(
-            commodity_adapter=commodity_adapter,
-            tax_adapter=tax_adapter,
-        )
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(TypeError, match="fx_adapter or fx_port"):
+            DataSnapshotService(
+                commodity_adapter=commodity_adapter,
+                tax_adapter=tax_adapter,
+            )
 
 
 def test_init_raises_without_commodity(fx_adapter, tax_adapter):
     """Test DataSnapshotService raises TypeError when commodity adapter is missing."""
-    with pytest.raises(TypeError, match="commodity_adapter or commodity_port"):
-        DataSnapshotService(
-            fx_adapter=fx_adapter,
-            tax_adapter=tax_adapter,
-        )
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(TypeError, match="commodity_adapter or commodity_port"):
+            DataSnapshotService(
+                fx_adapter=fx_adapter,
+                tax_adapter=tax_adapter,
+            )
 
 
 def test_init_raises_without_tax(fx_adapter, commodity_adapter):
     """Test DataSnapshotService raises TypeError when tax adapter is missing."""
-    with pytest.raises(TypeError, match="tax_adapter or tax_port"):
-        DataSnapshotService(
-            fx_adapter=fx_adapter,
-            commodity_adapter=commodity_adapter,
-        )
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(TypeError, match="tax_adapter or tax_port"):
+            DataSnapshotService(
+                fx_adapter=fx_adapter,
+                commodity_adapter=commodity_adapter,
+            )
 
 
 def test_build_snapshot_with_legacy_args(fx_adapter, commodity_adapter, tax_adapter):
     """Test build_snapshot works correctly with legacy keyword args."""
-    service = DataSnapshotService(
-        fx_adapter=fx_adapter,
-        commodity_adapter=commodity_adapter,
-        tax_adapter=tax_adapter,
-    )
+    with pytest.warns(DeprecationWarning):
+        service = DataSnapshotService(
+            fx_adapter=fx_adapter,
+            commodity_adapter=commodity_adapter,
+            tax_adapter=tax_adapter,
+        )
     
     snapshot = service.build_snapshot(
         base_currency="USD",
@@ -158,14 +204,15 @@ def test_port_args_take_precedence_over_adapter_args(commodity_adapter, tax_adap
     """Test that when both adapter and port args are provided, port takes precedence."""
     fx_adapter_1 = InMemoryFXAdapter({"EUR": Decimal("0.93")})
     fx_adapter_2 = InMemoryFXAdapter({"GBP": Decimal("0.79")})
-    
-    service = DataSnapshotService(
-        fx_adapter=fx_adapter_1,
-        fx_port=fx_adapter_2,  # This should be used
-        commodity_adapter=commodity_adapter,
-        tax_adapter=tax_adapter,
-    )
-    
+
+    with pytest.warns(DeprecationWarning):
+        service = DataSnapshotService(
+            fx_adapter=fx_adapter_1,
+            fx_port=fx_adapter_2,  # This should be used
+            commodity_adapter=commodity_adapter,
+            tax_adapter=tax_adapter,
+        )
+
     snapshot = service.build_snapshot(
         base_currency="USD",
         commodity_symbols=[],
@@ -174,3 +221,80 @@ def test_port_args_take_precedence_over_adapter_args(commodity_adapter, tax_adap
     # Should have 1 FX rate from fx_adapter_2 (GBP), not 2 from fx_adapter_1 (EUR)
     assert len(snapshot.fx_rates) == 1
     assert snapshot.fx_rates[0].quote_currency == "GBP"
+
+
+def test_build_snapshot_rejects_blank_base_currency(fx_adapter, commodity_adapter, tax_adapter):
+    """Ensure callers receive clear feedback when base currency is invalid."""
+
+    with pytest.warns(DeprecationWarning):
+        service = DataSnapshotService(
+            fx_adapter=fx_adapter,
+            commodity_adapter=commodity_adapter,
+            tax_adapter=tax_adapter,
+        )
+
+    with pytest.raises(ValueError, match="base_currency"):
+        service.build_snapshot(
+            base_currency="  ",
+            commodity_symbols=["XAU"],
+        )
+
+
+def test_build_snapshot_deduplicates_symbols_and_jurisdictions(
+    fx_adapter, tax_adapter
+):
+    """Commodity and tax scopes should be normalised before adapter access."""
+
+    commodity_adapter = RecordingCommodityAdapter({"XAU": Decimal("2034.23")})
+    with pytest.warns(DeprecationWarning):
+        service = DataSnapshotService(
+            fx_adapter=fx_adapter,
+            commodity_adapter=commodity_adapter,
+            tax_adapter=tax_adapter,
+        )
+
+    snapshot = service.build_snapshot(
+        base_currency="usd",
+        commodity_symbols=["XAU", "xau", "", "XAU"],
+        jurisdictions=["us-ca", "us-ca", "  "],
+    )
+
+    assert snapshot.tax_rules  # Jurisdiction filtered to just one entry
+    assert commodity_adapter.seen == [("XAU",)]
+
+
+def test_create_snapshot_reuses_cached_adapter_calls():
+    """Subsequent requests with identical scopes reuse cached adapter responses."""
+
+    fx = CountingFXAdapter({"EUR": Decimal("0.93")})
+    commodity = RecordingCommodityAdapter({"XAU": Decimal("2034.23")})
+    tax = CountingTaxAdapter(
+        (
+            TaxRule(
+                jurisdiction="us-ca",
+                rate=Decimal("0.0825"),
+                description="California sales tax",
+                effective_from=date(2024, 1, 1),
+            ),
+        )
+    )
+
+    with pytest.warns(DeprecationWarning):
+        service = DataSnapshotService(
+            fx_adapter=fx,
+            commodity_adapter=commodity,
+            tax_adapter=tax,
+        )
+
+    request = SnapshotRequest.from_primitives(
+        base_currency="USD",
+        commodity_symbols=["XAU"],
+        jurisdictions=["us-ca"],
+    )
+
+    service.create_snapshot(request)
+    service.create_snapshot(request)
+
+    assert fx.calls == 1
+    assert commodity.seen == [("XAU",)]
+    assert tax.requested == ["us-ca"]

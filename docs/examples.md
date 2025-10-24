@@ -2,12 +2,12 @@
 
 ## Produce a Snapshot with Custom Symbols
 ```bash
-python -m cli.demo_cli snapshot --base EUR --commodity XAU --commodity XPT
+python -m cli.demo_cli snapshot --base EUR --commodity XAU --commodity XPT --format table
 ```
 
 ## Filter Tax Rules by Jurisdiction
 ```bash
-python -m cli.demo_cli snapshot --jurisdiction uk
+python -m cli.demo_cli snapshot --jurisdiction uk --format json
 ```
 
 ## Embed the Service in Python Code
@@ -39,4 +39,8 @@ service = DataSnapshotService(fx_adapter=fx, commodity_adapter=commodities, tax_
 service = DataSnapshotService(fx_port=fx, commodity_port=commodities, tax_port=taxes)
 
 snapshot = service.build_snapshot(base_currency="EUR", commodity_symbols=["XAU"])
+
+# Cached results can be reused within the same process
+snapshot_again = service.create_snapshot(request)
+assert snapshot_again.fx_rates is snapshot.fx_rates  # tuple identity preserved
 ```
