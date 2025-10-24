@@ -25,6 +25,7 @@ taxes = InMemoryTaxAdapter([
     TaxRule("eu", Decimal("0.21"), "EU VAT", effective_from=date(2024, 1, 1)),
 ])
 
+# Positional arguments
 service = DataSnapshotService(fx, commodities, taxes)
 request = SnapshotRequest(
     base_currency="EUR",
@@ -32,4 +33,10 @@ request = SnapshotRequest(
     jurisdictions=None,
 )
 snapshot = service.create_snapshot(request)
+# Or with keyword arguments (legacy names)
+service = DataSnapshotService(fx_adapter=fx, commodity_adapter=commodities, tax_adapter=taxes)
+# Or with keyword arguments (port/adapter pattern names)
+service = DataSnapshotService(fx_port=fx, commodity_port=commodities, tax_port=taxes)
+
+snapshot = service.build_snapshot(base_currency="EUR", commodity_symbols=["XAU"])
 ```
