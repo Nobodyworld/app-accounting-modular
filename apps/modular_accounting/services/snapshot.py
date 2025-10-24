@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Iterable, Sequence
 
 from ..adapters import CommodityDataAdapter, FXDataAdapter, TaxDataAdapter
 from ..domain import CommodityQuote, FXRate, TaxRule
@@ -33,13 +33,38 @@ class DataSnapshotService:
 
     def __init__(
         self,
-        fx_adapter: FXDataAdapter,
-        commodity_adapter: CommodityDataAdapter,
-        tax_adapter: TaxDataAdapter,
+        fx_adapter: FXDataAdapter | None = None,
+        commodity_adapter: CommodityDataAdapter | None = None,
+        tax_adapter: TaxDataAdapter | None = None,
+        *,
+        fx_port: FXDataAdapter | None = None,
+        commodity_port: CommodityDataAdapter | None = None,
+        tax_port: TaxDataAdapter | None = None,
     ) -> None:
-        self._fx_adapter = fx_adapter
-        self._commodity_adapter = commodity_adapter
-        self._tax_adapter = tax_adapter
+        # Support both legacy (adapter) and new (port) keyword argument names
+        # for backward compatibility
+        if fx_port is not None:
+            self._fx_adapter = fx_port
+        elif fx_adapter is not None:
+            self._fx_adapter = fx_adapter
+        else:
+            raise TypeError("Either fx_adapter or fx_port must be provided")
+
+        if commodity_port is not None:
+            self._commodity_adapter = commodity_port
+        elif commodity_adapter is not None:
+            self._commodity_adapter = commodity_adapter
+        else:
+            raise TypeError(
+                "Either commodity_adapter or commodity_port must be provided"
+            )
+
+        if tax_port is not None:
+            self._tax_adapter = tax_port
+        elif tax_adapter is not None:
+            self._tax_adapter = tax_adapter
+        else:
+            raise TypeError("Either tax_adapter or tax_port must be provided")
 
     def build_snapshot(
         self,
