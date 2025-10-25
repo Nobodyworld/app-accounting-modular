@@ -12,7 +12,14 @@ from typing import Any, Literal, Mapping, cast
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
-__all__ = ["LogFormat", "ProviderInfo", "Settings", "get_settings", "settings"]
+__all__ = [
+    "LogFormat",
+    "ProviderInfo",
+    "ExtensionInfo",
+    "Settings",
+    "get_settings",
+    "settings",
+]
 
 LogFormat = Literal["JSON", "TEXT"]
 
@@ -57,6 +64,15 @@ class ProviderInfo(BaseModel):
     capabilities: tuple[str, ...] = Field(default_factory=tuple)
 
 
+class ExtensionInfo(BaseModel):
+    """Configuration describing an optional extension module."""
+
+    module: str
+    description: str | None = None
+    capabilities: tuple[str, ...] = Field(default_factory=tuple)
+    enabled: bool = True
+
+
 DEFAULT_ALLOWED_PROVIDERS: dict[str, ProviderInfo] = {
     "fx:ecb": ProviderInfo(
         module="plugins.fx_ecb.provider",
@@ -76,6 +92,15 @@ DEFAULT_ALLOWED_PROVIDERS: dict[str, ProviderInfo] = {
         description="Demonstration tax rules sourced from an OECD stub",
         capabilities=("tax",),
     ),
+}
+
+
+DEFAULT_ALLOWED_EXTENSIONS: dict[str, ExtensionInfo] = {
+    "observability:demo": ExtensionInfo(
+        module="plugins.analytics_baseline.extension",
+        description="Baseline analytics instrumentation extension",
+        capabilities=("analytics", "observability"),
+    )
 }
 
 # TODO - Load provider catalog from persistence so admin edits survive restarts.
@@ -136,6 +161,12 @@ class Settings(BaseModel):
         default_factory=lambda: {
             key: value.model_copy(deep=True)
             for key, value in DEFAULT_ALLOWED_PROVIDERS.items()
+        }
+    )
+    allowed_extensions: dict[str, ExtensionInfo] = Field(
+        default_factory=lambda: {
+            key: value.model_copy(deep=True)
+            for key, value in DEFAULT_ALLOWED_EXTENSIONS.items()
         }
     )
     jwt_secret_key: str = Field(

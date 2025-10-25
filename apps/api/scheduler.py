@@ -6,7 +6,7 @@ import logging
 from contextlib import contextmanager
 from datetime import timedelta
 from threading import Lock
-from typing import Iterator
+from typing import Any, Iterator
 from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -21,6 +21,7 @@ from .services.budget_service import BudgetService
 __all__ = [
     "start_scheduler",
     "shutdown_scheduler",
+    "get_scheduler_state",
 ]
 
 _scheduler: BackgroundScheduler | None = None
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 @contextmanager
 def _session_scope() -> Iterator[Session]:
     session = Session(engine)
-    # TODO - Implement retry/backoff for transient database connectivity issues.
+    # TODO[P2][3d]: Implement retry/backoff for transient database connectivity issues.
     try:
         yield session
     finally:
@@ -56,7 +57,7 @@ def _run_scheduled_refresh() -> None:
         job="forecast-refresh",
     ):
         logger.info("Running scheduled forecast refresh job")
-        # TODO - Emit metrics or alerts when refresh frequency falls behind schedule.
+        # TODO[P2][2d]: Emit metrics or alerts when refresh cadence falls behind schedule.
         with _session_scope() as session:
             service = BudgetService(session)
             plans = session.exec(
@@ -97,7 +98,7 @@ def start_scheduler() -> None:
             id="report-refresh",
             replace_existing=True,
         )
-        # TODO - Externalize refresh cadence into configuration per organization.
+        # TODO[P3][5d]: Externalize refresh cadence into configuration per organization.
         try:
             scheduler.start()
         except Exception:  # pragma: no cover - protective guard
@@ -118,3 +119,24 @@ def shutdown_scheduler() -> None:
             _scheduler.shutdown(wait=False)
             _scheduler = None
             logger.info("Background scheduler stopped")
+
+
+def get_scheduler_state() -> dict[str, Any]:
+    """Return scheduler runtime metadata for diagnostics and health checks."""
+
+    with _scheduler_lock:
+        scheduler = _scheduler
+        if scheduler is None:
+            return {"running": False, "jobs": 0, "next_run": None}
+        jobs = scheduler.get_jobs()
+        next_run = None
+        for job in jobs:
+            if job.next_run_time is None:
+                continue
+            if next_run is None or job.next_run_time < next_run:
+                next_run = job.next_run_time
+        return {
+            "running": scheduler.running,
+            "jobs": len(jobs),
+            "next_run": next_run.isoformat() if next_run else None,
+        }

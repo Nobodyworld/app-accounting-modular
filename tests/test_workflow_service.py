@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlmodel import SQLModel, Session, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from apps.api.models.models import StagedPosting, WorkflowStatus
 from apps.api.services.ledger_service import LedgerService
@@ -13,7 +13,7 @@ from apps.api.services.workflow_service import WorkflowService
 
 def create_session():
     """Build an in-memory database session for isolated workflow tests."""
-    # TODO - (tests) Promote this helper to a shared fixture for reuse across modules.
+    # TODO[P3][2d]: Promote this helper to a shared fixture for reuse across modules.
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
     return Session(engine, expire_on_commit=False)

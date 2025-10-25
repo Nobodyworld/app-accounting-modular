@@ -13,8 +13,7 @@ the automated test suite.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+make install
 ```
 
 ## Running the Demo CLI
@@ -28,7 +27,7 @@ python -m cli.demo_cli snapshot --base USD --commodity XAU --commodity XAG --for
 
 ## Executing Tests & Linters
 ```bash
-pytest
+make quality
 ```
 
 The snapshot service caches adapter responses by request scope, so tests focus

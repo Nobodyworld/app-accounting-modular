@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- 2024-11-04: Added Prometheus-compatible metrics, health probes, and extension
+  scaffolding. Shipping CLI tooling (`macli health`, `macli extensions`),
+  Makefile quality gates, and companion docs (`ARCHITECTURE_OVERVIEW.md`,
+  `EXTENSION_GUIDE.md`, `AUTOMATION.md`) to stabilise long-term operations.
+- 2024-11-03: Hardened snapshot caching by enforcing lint/type compliance,
+  capturing deterministic coverage artifacts, and documenting verification
+  outputs for release readiness.
 - 2024-11-02: Documented architecture/dependency posture, added CLI table
   output with validation, cached snapshot adapter calls, and expanded tests to
   cover caching plus UX flows.

@@ -13,9 +13,11 @@ __all__ = [
     "MarketService",
     "ProviderHandle",
     "ProviderMetadata",
+    "active_extensions",
     "TaxService",
     "WorkflowService",
     "available_providers",
+    "load_configured_extensions",
     "load_provider",
 ]
 
@@ -27,9 +29,14 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MarketService": ("apps.api.services.market_service", "MarketService"),
     "ProviderHandle": ("apps.api.services.plugin_loader", "ProviderHandle"),
     "ProviderMetadata": ("apps.api.services.plugin_loader", "ProviderMetadata"),
+    "active_extensions": ("apps.api.services.extension_loader", "active_extensions"),
     "TaxService": ("apps.api.services.tax_service", "TaxService"),
     "WorkflowService": ("apps.api.services.workflow_service", "WorkflowService"),
     "available_providers": ("apps.api.services.plugin_loader", "available_providers"),
+    "load_configured_extensions": (
+        "apps.api.services.extension_loader",
+        "load_configured_extensions",
+    ),
     "load_provider": ("apps.api.services.plugin_loader", "load_provider"),
 }
 

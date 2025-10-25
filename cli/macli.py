@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import logging
 from collections import defaultdict
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Iterator, cast
+from typing import cast
 from uuid import uuid4
 
 import click
@@ -19,13 +21,18 @@ from apps.api.audit import AuditActor, apply_creation_metadata, use_actor
 from apps.api.config import LogFormat, get_settings
 from apps.api.db import engine, init_db
 from apps.api.models.models import AccountType, Organization, User, WorkflowStatus
+from apps.api.services.extension_loader import (
+    active_extensions,
+    load_configured_extensions,
+)
 from apps.api.services.fx_service import FXService
+from apps.api.services.health import register_default_health_checks
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import MarketService
 from apps.api.services.plugin_loader import available_providers, load_provider
 from apps.api.services.workflow_service import WorkflowService
+from apps.observability.health import health_registry
 from apps.observability.logging import configure_logging, logging_context
-
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +95,12 @@ def cli(ctx: click.Context, log_format: str | None) -> None:
 
 
 @cli.command()
-@click.option("--base", default="USD", show_default=True, help="Base currency to synchronise")
+@click.option(
+    "--base",
+    default="USD",
+    show_default=True,
+    help="Base currency to synchronise",
+)
 @click.option(
     "--provider",
     "provider_key",
@@ -119,7 +131,8 @@ def sync_fx(base: str, provider_key: str) -> None:
             },
         )
         click.echo(
-            f"Synced {count} FX rates via {handle.metadata.name} ({handle.metadata.key})"
+            f"Synced {count} FX rates via {handle.metadata.name} "
+            f"({handle.metadata.key})"
         )
 
 
@@ -165,12 +178,18 @@ def sync_prices(symbol: str, start: str, end: str, provider_key: str) -> None:
             },
         )
         click.echo(
-            f"Synced {count} prices for {symbol} via {handle.metadata.name} ({handle.metadata.key})"
+            f"Synced {count} prices for {symbol} "
+            f"via {handle.metadata.name} ({handle.metadata.key})"
         )
 
 
 @cli.command()
-@click.option("--file", "file_", required=True, type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--file",
+    "file_",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+)
 def import_csv(file_: Path) -> None:
     """Import journal postings from a CSV file."""
 
@@ -190,8 +209,12 @@ def import_csv(file_: Path) -> None:
                 )
                 results = workflow.process_transactions([txn.id for txn in staged])
 
-        posted = sum(1 for result in results if result.status == WorkflowStatus.POSTED)
-        failed = [result for result in results if result.status == WorkflowStatus.FAILED]
+        posted = sum(
+            1 for result in results if result.status == WorkflowStatus.POSTED
+        )
+        failed = [
+            result for result in results if result.status == WorkflowStatus.FAILED
+        ]
 
         if failed:
             logger.warning(
@@ -214,7 +237,10 @@ def import_csv(file_: Path) -> None:
         for result in failed:
             message = "; ".join(result.validation_errors or []) or "Unknown error"
             click.echo(
-                f"Transaction {result.staged_transaction_id} failed validation: {message}",
+                (
+                    f"Transaction {result.staged_transaction_id} "
+                    f"failed validation: {message}"
+                ),
                 err=True,
             )
 
@@ -222,6 +248,46 @@ def import_csv(file_: Path) -> None:
             f"Processed {len(results)} transactions from {file_.name} "
             f"({posted} posted, {len(failed)} failed)"
         )
+
+
+@cli.command()
+def health() -> None:
+    """Execute registered health checks and display their status."""
+
+    with _command_scope("health"):
+        register_default_health_checks()
+        load_configured_extensions()
+        reports = asyncio.run(health_registry.evaluate())
+        overall = all(report.healthy for report in reports)
+        for report in reports:
+            state = "PASS" if report.healthy else "FAIL"
+            details = ", ".join(
+                f"{key}={value}" for key, value in report.details.items()
+            )
+            click.echo(
+                (
+                    f"[{state}] {report.name} "
+                    f"(severity={report.severity}) {details}"
+                ).strip()
+            )
+        click.echo("Overall status: OK" if overall else "Overall status: DEGRADED")
+
+
+@cli.command(name="extensions")
+def list_extensions() -> None:
+    """List configured extensions and their activation state."""
+
+    with _command_scope("extensions"):
+        load_configured_extensions()
+        statuses = active_extensions()
+        if not statuses:
+            click.echo("No extensions configured")
+            return
+        for status in statuses:
+            state = "enabled" if status.enabled else "disabled"
+            manifest = status.manifest
+            description = manifest.description if manifest else "<not loaded>"
+            click.echo(f"{status.key}: {state} - {description}")
 
 
 def _load_transactions_from_csv(
@@ -243,7 +309,10 @@ def _load_transactions_from_csv(
             missing_list = ", ".join(sorted(missing))
             raise click.ClickException(f"CSV missing required columns: {missing_list}")
 
-        account_key = next((field for field in optional_account_fields if field in header), None)
+        account_key = next(
+            (field for field in optional_account_fields if field in header),
+            None,
+        )
         if account_key is None:
             raise click.ClickException(
                 "CSV must include either 'account_code' or 'account_name' column"
@@ -260,7 +329,9 @@ def _load_transactions_from_csv(
                 raw_date = (row.get("date") or "").strip()
                 txn_date = date.fromisoformat(raw_date)
             except (ValueError, AttributeError) as exc:
-                raise click.ClickException(f"Row {idx}: invalid or missing date") from exc
+                raise click.ClickException(
+                    f"Row {idx}: invalid or missing date"
+                ) from exc
 
             description = (row.get("description") or "").strip()
             if not description:
@@ -276,9 +347,13 @@ def _load_transactions_from_csv(
             credit = _to_decimal(row.get("credit"), idx, "credit")
 
             if debit < 0 or credit < 0:
-                raise click.ClickException(f"Row {idx}: debit and credit must be non-negative")
+                raise click.ClickException(
+                    f"Row {idx}: debit and credit must be non-negative"
+                )
             if debit == 0 and credit == 0:
-                raise click.ClickException(f"Row {idx}: either debit or credit must be provided")
+                raise click.ClickException(
+                    f"Row {idx}: either debit or credit must be provided"
+                )
             if debit != 0 and credit != 0:
                 raise click.ClickException(
                     f"Row {idx}: provide only one of debit or credit for a posting"
@@ -393,7 +468,9 @@ def _to_decimal(value: str | None, row_number: int, field: str) -> Decimal:
     try:
         amount = Decimal(text)
     except InvalidOperation as exc:
-        raise click.ClickException(f"Row {row_number}: invalid {field} '{value}'") from exc
+        raise click.ClickException(
+            f"Row {row_number}: invalid {field} '{value}'"
+        ) from exc
     return amount
 
 

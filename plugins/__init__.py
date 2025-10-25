@@ -8,6 +8,7 @@ well-documented helps external contributors model their own extensions.
 """
 
 __all__ = [
+    "analytics_baseline",
     "fx_ecb",
     "market_yfinance",
     "tax_oecd_stub",

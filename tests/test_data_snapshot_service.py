@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
-from typing import Sequence
 
 import pytest
 
@@ -54,6 +54,19 @@ class CountingTaxAdapter(InMemoryTaxAdapter):
     def get_rules(self, jurisdiction: str | None = None):  # type: ignore[override]
         self.requested.append(jurisdiction)
         return super().get_rules(jurisdiction)
+
+
+class MutableClock:
+    """Deterministic monotonic clock used for cache expiry tests."""
+
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
 
 
 @pytest.fixture
@@ -200,6 +213,168 @@ def test_build_snapshot_with_new_args(fx_adapter, commodity_adapter, tax_adapter
     assert snapshot.tax_rules[0].jurisdiction == "uk"
 
 
+def test_clear_cache_forces_refresh():
+    fx_adapter = CountingFXAdapter({"EUR": Decimal("0.93")})
+    commodity_adapter = RecordingCommodityAdapter({"XAU": Decimal("2034.23")})
+    tax_rule = TaxRule(
+        jurisdiction="us-ca",
+        rate=Decimal("0.0825"),
+        description="California sales tax",
+        effective_from=date(2024, 1, 1),
+    )
+    tax_adapter = CountingTaxAdapter([tax_rule])
+
+    service = DataSnapshotService(
+        fx_port=fx_adapter,
+        commodity_port=commodity_adapter,
+        tax_port=tax_adapter,
+    )
+
+    request = SnapshotRequest(
+        base_currency="USD",
+        commodity_symbols=("XAU",),
+        jurisdictions=("us-ca",),
+    )
+
+    service.create_snapshot(request)
+    service.create_snapshot(request)
+    assert fx_adapter.calls == 1
+    assert commodity_adapter.seen == [("XAU",)]
+    assert tax_adapter.requested == ["us-ca"]
+
+    service.clear_cache()
+
+    service.create_snapshot(request)
+    assert fx_adapter.calls == 2
+    assert commodity_adapter.seen == [("XAU",), ("XAU",)]
+    assert tax_adapter.requested == ["us-ca", "us-ca"]
+
+
+def test_cache_expiration_respects_ttl():
+    clock = MutableClock()
+    fx_adapter = CountingFXAdapter({"EUR": Decimal("0.93")})
+    commodity_adapter = RecordingCommodityAdapter({"XAU": Decimal("2034.23")})
+    tax_rule = TaxRule(
+        jurisdiction="us-ca",
+        rate=Decimal("0.0825"),
+        description="California sales tax",
+        effective_from=date(2024, 1, 1),
+    )
+    tax_adapter = CountingTaxAdapter([tax_rule])
+
+    service = DataSnapshotService(
+        fx_port=fx_adapter,
+        commodity_port=commodity_adapter,
+        tax_port=tax_adapter,
+        default_cache_ttl=10,
+        clock=clock,
+    )
+
+    request = SnapshotRequest(
+        base_currency="USD",
+        commodity_symbols=("XAU",),
+        jurisdictions=("us-ca",),
+    )
+
+    service.create_snapshot(request)
+    assert fx_adapter.calls == 1
+    assert commodity_adapter.seen == [("XAU",)]
+    assert tax_adapter.requested == ["us-ca"]
+
+    clock.advance(5)
+    service.create_snapshot(request)
+    assert fx_adapter.calls == 1
+    assert commodity_adapter.seen == [("XAU",)]
+    assert tax_adapter.requested == ["us-ca"]
+
+    clock.advance(6)
+    service.create_snapshot(request)
+    assert fx_adapter.calls == 2
+    assert commodity_adapter.seen == [("XAU",), ("XAU",)]
+    assert tax_adapter.requested == ["us-ca", "us-ca"]
+
+
+def test_disable_caching_calls_ports_each_time():
+    fx_adapter = CountingFXAdapter({"EUR": Decimal("0.93")})
+    commodity_adapter = RecordingCommodityAdapter({"XAU": Decimal("2034.23")})
+    tax_rule = TaxRule(
+        jurisdiction="us-ca",
+        rate=Decimal("0.0825"),
+        description="California sales tax",
+        effective_from=date(2024, 1, 1),
+    )
+    tax_adapter = CountingTaxAdapter([tax_rule])
+
+    service = DataSnapshotService(
+        fx_port=fx_adapter,
+        commodity_port=commodity_adapter,
+        tax_port=tax_adapter,
+        enable_caching=False,
+    )
+
+    request = SnapshotRequest(
+        base_currency="USD",
+        commodity_symbols=("XAU",),
+        jurisdictions=("us-ca",),
+    )
+
+    service.create_snapshot(request)
+    service.create_snapshot(request)
+
+    assert fx_adapter.calls == 2
+    assert commodity_adapter.seen == [("XAU",), ("XAU",)]
+    assert tax_adapter.requested == ["us-ca", "us-ca"]
+
+
+def test_invalid_ttl_configuration_raises(fx_adapter, commodity_adapter, tax_adapter):
+    with pytest.raises(ValueError):
+        DataSnapshotService(
+            fx_port=fx_adapter,
+            commodity_port=commodity_adapter,
+            tax_port=tax_adapter,
+            default_cache_ttl=0,
+        )
+
+
+def test_cache_stats_report_hits_and_misses():
+    fx_adapter = CountingFXAdapter({"EUR": Decimal("0.93")})
+    commodity_adapter = RecordingCommodityAdapter({"XAU": Decimal("2034.23")})
+    tax_rule = TaxRule(
+        jurisdiction="us-ca",
+        rate=Decimal("0.0825"),
+        description="California sales tax",
+        effective_from=date(2024, 1, 1),
+    )
+    tax_adapter = CountingTaxAdapter([tax_rule])
+
+    service = DataSnapshotService(
+        fx_port=fx_adapter,
+        commodity_port=commodity_adapter,
+        tax_port=tax_adapter,
+    )
+
+    stats = service.cache_stats()
+    assert stats["fx"].size == 0
+    assert stats["fx"].hits == 0
+    assert stats["fx"].misses == 0
+
+    request = SnapshotRequest(
+        base_currency="USD",
+        commodity_symbols=("XAU",),
+        jurisdictions=("us-ca",),
+    )
+
+    service.create_snapshot(request)
+    stats = service.cache_stats()
+    assert stats["fx"].size == 1
+    assert stats["fx"].misses == 1
+
+    service.create_snapshot(request)
+    stats = service.cache_stats()
+    assert stats["fx"].hits == 1
+    assert stats["fx"].misses == 1
+
+
 def test_port_args_take_precedence_over_adapter_args(commodity_adapter, tax_adapter):
     """Test that when both adapter and port args are provided, port takes precedence."""
     fx_adapter_1 = InMemoryFXAdapter({"EUR": Decimal("0.93")})
@@ -223,7 +398,9 @@ def test_port_args_take_precedence_over_adapter_args(commodity_adapter, tax_adap
     assert snapshot.fx_rates[0].quote_currency == "GBP"
 
 
-def test_build_snapshot_rejects_blank_base_currency(fx_adapter, commodity_adapter, tax_adapter):
+def test_build_snapshot_rejects_blank_base_currency(
+    fx_adapter, commodity_adapter, tax_adapter
+):
     """Ensure callers receive clear feedback when base currency is invalid."""
 
     with pytest.warns(DeprecationWarning):
