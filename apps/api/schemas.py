@@ -7,11 +7,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
+from apps.modular_accounting.application.cache import CacheStats
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .models.models import AccountType, AuditAction, WorkflowStatus
 from .services.ledger_service import TrialBalanceRow
 from .services.workflow_service import WorkflowResult
+from .services.snapshot_service import SnapshotResult
 
 __all__ = [
     "AccountCreate",
@@ -35,6 +37,13 @@ __all__ = [
     "StagedPostingRead",
     "StagedTransactionIngest",
     "StagedTransactionRead",
+    "CacheStatsSchema",
+    "CommodityQuoteSchema",
+    "FXRateSchema",
+    "MoneySchema",
+    "SnapshotRequestSchema",
+    "SnapshotResponse",
+    "TaxRuleSchema",
 ]
 
 
@@ -366,3 +375,121 @@ class CashflowForecastResponse(BaseModel):
     current_cash: float
     average_monthly_flow: float | None = None
     csv_export: str
+
+
+class MoneySchema(BaseModel):
+    """Representation of a money value."""
+
+    amount: Decimal
+    currency: str
+
+
+class FXRateSchema(BaseModel):
+    """Foreign exchange rate observation."""
+
+    base_currency: str
+    quote_currency: str
+    rate: Decimal
+    as_of: datetime
+
+
+class CommodityQuoteSchema(BaseModel):
+    """Commodity quote with associated price."""
+
+    symbol: str
+    price: MoneySchema
+    as_of: datetime
+
+
+class TaxRuleSchema(BaseModel):
+    """Jurisdiction-specific tax rule."""
+
+    jurisdiction: str
+    rate: Decimal
+    description: str
+    effective_from: date
+    effective_to: date | None = None
+
+
+class CacheStatsSchema(BaseModel):
+    """Cache utilisation metrics."""
+
+    size: int
+    hits: int
+    misses: int
+
+    @classmethod
+    def from_cache_stats(cls, stats: CacheStats) -> "CacheStatsSchema":
+        return cls(size=stats.size, hits=stats.hits, misses=stats.misses)
+
+
+class SnapshotRequestSchema(BaseModel):
+    """Snapshot request details returned to clients."""
+
+    base_currency: str
+    commodity_symbols: list[str]
+    jurisdictions: list[str] | None = None
+
+
+class SnapshotResponse(BaseModel):
+    """API payload describing a modular accounting snapshot."""
+
+    request: SnapshotRequestSchema
+    providers: dict[str, str]
+    fx_rates: list[FXRateSchema]
+    commodity_quotes: list[CommodityQuoteSchema]
+    tax_rules: list[TaxRuleSchema]
+    cache_stats: dict[str, CacheStatsSchema]
+
+    @classmethod
+    def from_result(cls, result: SnapshotResult) -> "SnapshotResponse":
+        request_schema = SnapshotRequestSchema(
+            base_currency=result.request.base_currency,
+            commodity_symbols=list(result.request.commodity_symbols),
+            jurisdictions=(
+                list(result.request.jurisdictions)
+                if result.request.jurisdictions is not None
+                else None
+            ),
+        )
+        fx_rates = [
+            FXRateSchema(
+                base_currency=rate.base_currency,
+                quote_currency=rate.quote_currency,
+                rate=rate.rate,
+                as_of=rate.as_of,
+            )
+            for rate in result.snapshot.fx_rates
+        ]
+        commodity_quotes = [
+            CommodityQuoteSchema(
+                symbol=quote.symbol,
+                price=MoneySchema(
+                    amount=quote.price.amount, currency=quote.price.currency
+                ),
+                as_of=quote.as_of,
+            )
+            for quote in result.snapshot.commodity_quotes
+        ]
+        tax_rules = [
+            TaxRuleSchema(
+                jurisdiction=rule.jurisdiction,
+                rate=rule.rate,
+                description=rule.description,
+                effective_from=rule.effective_from,
+                effective_to=rule.effective_to,
+            )
+            for rule in result.snapshot.tax_rules
+        ]
+        cache_stats = {
+            name: CacheStatsSchema.from_cache_stats(stats)
+            for name, stats in result.cache_stats.items()
+        }
+        return cls(
+            request=request_schema,
+            providers=dict(result.providers),
+            fx_rates=fx_rates,
+            commodity_quotes=commodity_quotes,
+            tax_rules=tax_rules,
+            cache_stats=cache_stats,
+        )
