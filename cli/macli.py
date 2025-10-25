@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import json
 import logging
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -29,23 +30,62 @@ from apps.api.services.fx_service import FXService
 from apps.api.services.health import register_default_health_checks
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import MarketService
-from apps.api.services.plugin_loader import available_providers, load_provider
+from apps.api.services.plugin_loader import (
+    ProviderHandle,
+    available_providers,
+    load_provider,
+)
+from apps.api.services.snapshot_service import SnapshotOrchestrator
 from apps.api.services.workflow_service import WorkflowService
 from apps.observability.health import health_registry
 from apps.observability.logging import configure_logging, logging_context
+from cli.snapshot_render import format_snapshot_table
 
 logger = logging.getLogger(__name__)
 
 
-def _provider_keys(capability: str) -> tuple[list[str], str | None]:
-    metas = available_providers(capability)
-    keys = [meta.key for meta in metas]
-    default = keys[0] if keys else None
-    return keys, default
+def _resolve_provider_key(capability: str, provider_key: str | None) -> str:
+    """Return a valid provider key, falling back to the configured default."""
+
+    catalog = available_providers(capability)
+    keys = [meta.key for meta in catalog]
+    if provider_key:
+        if provider_key not in keys:
+            message = (
+                f"Unknown {capability} provider '{provider_key}'. "
+                f"Configured providers: {', '.join(sorted(keys)) or 'none'}"
+            )
+            raise click.BadParameter(message, param_hint=f"--{capability}-provider")
+        return provider_key
+
+    if not catalog:
+        raise click.BadParameter(
+            f"No providers configured for capability '{capability}'",
+            param_hint=f"--{capability}-provider",
+        )
+    return keys[0]
 
 
-_FX_PROVIDER_KEYS, _DEFAULT_FX_PROVIDER = _provider_keys("fx")
-_MARKET_PROVIDER_KEYS, _DEFAULT_MARKET_PROVIDER = _provider_keys("market")
+def _execute_provider_command(
+    command: str,
+    capability: str,
+    provider_key: str | None,
+    scope_context: dict[str, object],
+    runner: Callable[[Session, ProviderHandle], int],
+) -> tuple[ProviderHandle, int]:
+    """Execute a provider-backed CLI operation within a logged scope."""
+
+    # agent-safe-task: provider orchestration for automated sync routines.
+
+    resolved_key = _resolve_provider_key(capability, provider_key)
+    with _command_scope(command, provider_key=resolved_key, **scope_context):
+        init_db()
+        handle = load_provider(resolved_key)
+        with Session(engine) as session:
+            actor = _ensure_cli_actor(session)
+            with use_actor(actor):
+                processed = runner(session, handle)
+        return handle, processed
 
 
 @contextmanager
@@ -104,36 +144,31 @@ def cli(ctx: click.Context, log_format: str | None) -> None:
 @click.option(
     "--provider",
     "provider_key",
-    type=click.Choice(_FX_PROVIDER_KEYS) if _FX_PROVIDER_KEYS else str,
-    default=_DEFAULT_FX_PROVIDER,
-    show_default=_DEFAULT_FX_PROVIDER is not None,
-    help="Configured FX provider key",
+    default=None,
+    help="Configured FX provider key (defaults to first configured provider).",
 )
-def sync_fx(base: str, provider_key: str) -> None:
+def sync_fx(base: str, provider_key: str | None) -> None:
     """Synchronise foreign-exchange rates using the configured provider."""
 
-    with _command_scope(
-        "sync-fx", base_currency=base, provider_key=provider_key
-    ):
-        init_db()
-        handle = load_provider(provider_key)
-        with Session(engine) as session:
-            actor = _ensure_cli_actor(session)
-            with use_actor(actor):
-                service = FXService(session, handle.instance)
-                count = service.sync(base=base)
-        logger.info(
-            "FX rates synchronised",
-            extra={
-                "provider": handle.metadata.key,
-                "base_currency": base,
-                "rates_synced": count,
-            },
-        )
-        click.echo(
-            f"Synced {count} FX rates via {handle.metadata.name} "
-            f"({handle.metadata.key})"
-        )
+    handle, count = _execute_provider_command(
+        "sync-fx",
+        "fx",
+        provider_key,
+        {"base_currency": base},
+        lambda session, handle: FXService(session, handle.instance).sync(base=base),
+    )
+    logger.info(
+        "FX rates synchronised",
+        extra={
+            "provider": handle.metadata.key,
+            "base_currency": base,
+            "rates_synced": count,
+        },
+    )
+    click.echo(
+        f"Synced {count} FX rates via {handle.metadata.name} "
+        f"({handle.metadata.key})"
+    )
 
 
 @cli.command()
@@ -143,44 +178,146 @@ def sync_fx(base: str, provider_key: str) -> None:
 @click.option(
     "--provider",
     "provider_key",
-    type=click.Choice(_MARKET_PROVIDER_KEYS) if _MARKET_PROVIDER_KEYS else str,
-    default=_DEFAULT_MARKET_PROVIDER,
-    show_default=_DEFAULT_MARKET_PROVIDER is not None,
-    help="Configured market data provider key",
+    default=None,
+    help="Configured market data provider key (defaults to first configured provider).",
 )
-def sync_prices(symbol: str, start: str, end: str, provider_key: str) -> None:
+def sync_prices(
+    symbol: str,
+    start: str,
+    end: str,
+    provider_key: str | None,
+) -> None:
     """Synchronise historical prices for ``symbol``."""
 
-    with _command_scope(
-        "sync-prices",
-        symbol=symbol,
-        start=start,
-        end=end,
-        provider_key=provider_key,
-    ):
-        init_db()
-        handle = load_provider(provider_key)
+    try:
         start_date = date.fromisoformat(start)
+    except ValueError as exc:  # pragma: no cover - defensive formatting branch
+        raise click.BadParameter("--start must be a valid ISO date") from exc
+    try:
         end_date = date.fromisoformat(end)
-        with Session(engine) as session:
-            actor = _ensure_cli_actor(session)
-            with use_actor(actor):
-                service = MarketService(session, handle.instance)
-                count = service.sync_prices(symbol, start_date, end_date)
-        logger.info(
-            "Market prices synchronised",
-            extra={
-                "provider": handle.metadata.key,
-                "symbol": symbol,
-                "start": start,
-                "end": end,
-                "prices_synced": count,
-            },
+    except ValueError as exc:  # pragma: no cover - defensive formatting branch
+        raise click.BadParameter("--end must be a valid ISO date") from exc
+
+    handle, count = _execute_provider_command(
+        "sync-prices",
+        "market",
+        provider_key,
+        {"symbol": symbol, "start": start, "end": end},
+        lambda session, handle: MarketService(session, handle.instance).sync_prices(
+            symbol, start_date, end_date
+        ),
+    )
+    logger.info(
+        "Market prices synchronised",
+        extra={
+            "provider": handle.metadata.key,
+            "symbol": symbol,
+            "start": start,
+            "end": end,
+            "prices_synced": count,
+        },
+    )
+    click.echo(
+        f"Synced {count} prices for {symbol} "
+        f"via {handle.metadata.name} ({handle.metadata.key})"
+    )
+
+
+@cli.command()
+# agent-entrypoint: expose snapshot orchestration for automation and agents.
+@click.option(
+    "--base",
+    "base_currency",
+    default="USD",
+    show_default=True,
+    help="Base currency used for FX rates.",
+)
+@click.option(
+    "--commodity",
+    "commodity_symbols",
+    multiple=True,
+    help="Commodity symbols to include; pass multiple times to add more.",
+)
+@click.option(
+    "--jurisdiction",
+    "jurisdictions",
+    multiple=True,
+    help="Jurisdictions used to filter tax rules.",
+)
+@click.option(
+    "--fx-provider",
+    "fx_provider_key",
+    default=None,
+    help="Override the configured FX provider key (defaults to service configuration).",
+)
+@click.option(
+    "--commodity-provider",
+    "commodity_provider_key",
+    default=None,
+    help=(
+        "Override the configured commodity provider key "
+        "(defaults to service configuration)."
+    ),
+)
+@click.option(
+    "--tax-provider",
+    "tax_provider_key",
+    default=None,
+    help="Override the configured tax provider key (defaults to service configuration).",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["json", "table"], case_sensitive=False),
+    default="json",
+    show_default=True,
+    help="Choose JSON or table output.",
+)
+def snapshot(
+    base_currency: str,
+    commodity_symbols: tuple[str, ...],
+    jurisdictions: tuple[str, ...],
+    fx_provider_key: str | None,
+    commodity_provider_key: str | None,
+    tax_provider_key: str | None,
+    output_format: str,
+) -> None:
+    """Build a consolidated snapshot across FX, commodity, and tax providers."""
+
+    with _command_scope(
+        "snapshot",
+        base_currency=base_currency,
+        commodities=list(commodity_symbols),
+        jurisdictions=list(jurisdictions),
+    ):
+        orchestrator = SnapshotOrchestrator(
+            fx_provider_key=fx_provider_key,
+            commodity_provider_key=commodity_provider_key,
+            tax_provider_key=tax_provider_key,
         )
-        click.echo(
-            f"Synced {count} prices for {symbol} "
-            f"via {handle.metadata.name} ({handle.metadata.key})"
+        result = orchestrator.build_snapshot(
+            base_currency=base_currency,
+            commodity_symbols=commodity_symbols or None,
+            jurisdictions=jurisdictions or None,
         )
+        payload = result.as_payload()
+        if output_format.lower() == "json":
+            click.echo(json.dumps(payload, indent=2, default=str))
+            return
+
+        provider_line = ", ".join(
+            f"{cap}={key}" for cap, key in sorted(result.providers.items())
+        )
+        click.echo(f"Providers: {provider_line}")
+        click.echo("")
+        click.echo(format_snapshot_table(result.snapshot))
+        if result.cache_stats:
+            stats_line = ", ".join(
+                f"{name}: hits={stats.hits}, misses={stats.misses}, size={stats.size}"
+                for name, stats in result.cache_stats.items()
+            )
+            click.echo("")
+            click.echo(f"Cache stats: {stats_line}")
 
 
 @cli.command()

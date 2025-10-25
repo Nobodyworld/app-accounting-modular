@@ -73,3 +73,10 @@ python -m cli.macli health
 ```bash
 python -m cli.macli extensions
 ```
+
+## Build provider-backed data snapshots
+```bash
+python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format json
+```
+The command returns a JSON payload containing FX rates, commodity quotes, tax rules, cache statistics, and the provider keys
+used for each capability. Switch to `--format table` for a human-friendly summary when demonstrating the workflow.

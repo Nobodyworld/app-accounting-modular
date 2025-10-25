@@ -1,6 +1,9 @@
 # Release Notes
 
 ## Highlights
+- Introduced a provider-backed snapshot orchestrator powering the `/snapshot`
+  API route and the `macli snapshot` CLI command, returning provider
+  provenance, cache metrics, and consolidated FX/commodity/tax data.
 - Introduced Prometheus-compatible metrics, request instrumentation middleware,
   and health endpoints under `/health/*` for observability.
 - Added an extension registry (`apps/extensions/`) with a baseline analytics

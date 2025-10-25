@@ -9,6 +9,7 @@ __all__ = [
     "health",
     "ledger",
     "market",
+    "snapshot",
     "reports",
     "tax",
     "workflow",

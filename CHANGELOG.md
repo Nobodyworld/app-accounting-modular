@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 2024-11-05: Added provider-backed snapshot orchestration via the `SnapshotOrchestrator`,
+  exposing a new `/snapshot` API route and `macli snapshot` command with shared
+  rendering utilities, provider provenance, and cache metrics.
 - 2024-11-04: Added Prometheus-compatible metrics, health probes, and extension
   scaffolding. Shipping CLI tooling (`macli health`, `macli extensions`),
   Makefile quality gates, and companion docs (`ARCHITECTURE_OVERVIEW.md`,
