@@ -1,0 +1,4 @@
+module,executed,total,coverage
+apps.modular_accounting.application.__init__,4,4,100.00
+apps.modular_accounting.application.cache,82,82,100.00
+apps.modular_accounting.application.snapshots,210,210,100.00

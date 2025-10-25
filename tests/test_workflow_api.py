@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import pytest
-
-pytest.importorskip("httpx")
-
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, Session, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from apps.api import db
-from apps.api.models.models import StagedPosting, User, WorkflowStatus
-from apps.api.services.ledger_service import LedgerService
 from apps.api.main import create_app
+from apps.api.models.models import StagedPosting, User, WorkflowStatus
 from apps.api.security import get_current_user
+from apps.api.services.ledger_service import LedgerService
+
+pytest.importorskip("httpx")
 
 
 def create_client() -> tuple[TestClient, Session]:
@@ -30,7 +29,12 @@ def create_client() -> tuple[TestClient, Session]:
     app = create_app()
 
     def _stub_user() -> User:
-        return User(id=1, email="tester@example.com", password_hash="stub", is_active=True)
+        return User(
+            id=1,
+            email="tester@example.com",
+            password_hash="stub",
+            is_active=True,
+        )
 
     app.dependency_overrides[get_current_user] = _stub_user
     return TestClient(app), Session(engine, expire_on_commit=False)
@@ -73,8 +77,9 @@ def test_workflow_api_end_to_end() -> None:
     assert len(data["staged_ids"]) == 2
     assert len(data["results"]) == 2
 
-    posted = next(r for r in data["results"] if r["status"] == WorkflowStatus.POSTED.value)
-    failed = next(r for r in data["results"] if r["status"] == WorkflowStatus.FAILED.value)
+    failed = next(
+        r for r in data["results"] if r["status"] == WorkflowStatus.FAILED.value
+    )
     assert "account 9999 not found" in failed["validation_errors"][0]
 
     with Session(db.engine, expire_on_commit=False) as session:
@@ -89,13 +94,16 @@ def test_workflow_api_end_to_end() -> None:
         session.commit()
 
     process_response = client.post(
-        "/workflow/process", json={"staged_ids": [failed["staged_transaction_id"]]}
+        "/workflow/process",
+        json={"staged_ids": [failed["staged_transaction_id"]]},
     )
     assert process_response.status_code == 200
     processed = process_response.json()
     assert processed[0]["status"] == WorkflowStatus.POSTED.value
 
-    detail_response = client.get(f"/workflow/{failed['staged_transaction_id']}")
+    detail_response = client.get(
+        f"/workflow/{failed['staged_transaction_id']}"
+    )
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["status"] == WorkflowStatus.POSTED.value
@@ -107,4 +115,4 @@ def test_workflow_api_end_to_end() -> None:
     assert len(listing) >= 2
 
 
-# TODO - (workflow) Cover approval and rejection transitions via API routes.
+# TODO[P2][4d]: Cover approval and rejection transitions via API routes.

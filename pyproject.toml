@@ -62,6 +62,15 @@ files = [
   "apps/api/routers/core.py",
   "apps/api/security.py",
   "apps/api/services/plugin_loader.py",
+  "apps/api/services/extension_loader.py",
+  "apps/api/services/health.py",
+  "apps/extensions/registry.py",
+  "apps/observability/health.py",
+  "apps/observability/metrics.py",
+  "apps/modular_accounting/application/cache.py",
+  "apps/modular_accounting/application/snapshots.py",
+  "apps/modular_accounting/services/telemetry.py",
+  "cli/macli.py",
 ]
 
 [[tool.mypy.overrides]]

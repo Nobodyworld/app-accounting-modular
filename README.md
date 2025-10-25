@@ -18,14 +18,19 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
    ```bash
    python -m venv .venv
    source .venv/bin/activate
-   pip install -r requirements.txt
+   make install
    ```
 2. Run the demonstration CLI to view a consolidated snapshot:
    ```bash
    python -m cli.demo_cli snapshot --base USD --commodity XAU --commodity XAG --format table
    ```
    The `--format` flag toggles between JSON and a friendly ASCII table so you can choose the representation that works best for demos, debugging, or documentation snippets. Input is validated before adapters run to save round trips.
-3. Implement custom adapters by satisfying the runtime-checkable ports in [`apps/modular_accounting/domain/ports.py`](apps/modular_accounting/domain/ports.py) and wiring them into your own CLI, service, or background job. Compose `SnapshotRequest` instances (or call `DataSnapshotService.build_snapshot`) to pass around snapshot intent. The service now caches adapter responses per scope, preventing duplicate API calls when the same request is executed repeatedly within a process.
+3. Implement custom adapters by satisfying the runtime-checkable ports in [`apps/modular_accounting/domain/ports.py`](apps/modular_accounting/domain/ports.py) and wiring them into your own CLI, service, or background job. Compose `SnapshotRequest` instances (or call `DataSnapshotService.build_snapshot`) to pass around snapshot intent. The service ships with thread-safe, TTL-aware caches that prevent duplicate adapter calls, expose hit/miss metrics, and can be disabled when a workload demands fresh data every time.
+4. Validate platform health and extension wiring:
+   ```bash
+   make health          # runs macli health under the hood
+   curl http://localhost:8000/health/ready
+   ```
 
 ## Documentation
 Extended guides live under the [`docs/`](docs/index.md) folder:
@@ -35,6 +40,9 @@ Extended guides live under the [`docs/`](docs/index.md) folder:
 - [Examples](docs/examples.md)
 - [Roadmap](docs/roadmap.md)
 - [Dependency and security posture](docs/DEPENDENCIES.md)
+- [High-level architecture map](ARCHITECTURE_OVERVIEW.md)
+- [Extension development guide](EXTENSION_GUIDE.md)
+- [Automation & agent playbook](AUTOMATION.md)
 
 ## Contributing
 Contributions are welcome. Please review the existing governance files (`CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`) before opening a pull request.

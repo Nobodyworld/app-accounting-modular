@@ -8,18 +8,16 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
    ```bash
    python -m venv .venv
    source .venv/bin/activate
-   pip install -U pip
-   pip install -r requirements.txt
-   pip install -r requirements-dev.txt
+   make install
    ```
 3. **Install pre-commit hooks** for formatting, linting, and commit message validation:
    ```bash
    pre-commit install --install-hooks
    pre-commit install --hook-type commit-msg
    ```
-4. **Run the test suite** before submitting changes:
+4. **Run the quality gates** before submitting changes:
    ```bash
-   pytest
+   make quality
    ```
 
 ## Branching & Commits
@@ -33,7 +31,8 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
 - Linting: **Ruff** (including import sorting) with project-level configuration in `pyproject.toml`.
 - Static typing: **mypy** gradually enforced—consult [PLAN.md](PLAN.md) for the current strict coverage map.
 - Front-end assets: **Prettier** for Markdown/YAML/JSON.
-- Run `pre-commit run --all-files` before pushing to catch style issues locally.
+- Run `pre-commit run --all-files` or `make quality` before pushing to catch style issues locally.
+- Health checks: `make health` exercises the CLI-based readiness probes.
 
 ## Testing Strategy
 - Add unit tests under `tests/` mirroring the module path (`tests/services/test_*.py`, etc.).
@@ -48,7 +47,7 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
 - Changelog entries go under the **Unreleased** section of `CHANGELOG.md`.
 
 ## Pull Request Checklist
-- [ ] Tests passing locally (`pytest`).
+- [ ] Quality gates passing locally (`make quality`).
 - [ ] `pre-commit run --all-files` clean.
 - [ ] Documentation updated (including docstrings where appropriate) and new
       guides linked from `docs/index.md` when applicable.

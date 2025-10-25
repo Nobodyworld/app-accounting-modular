@@ -8,12 +8,20 @@ actionable feedback before network-bound adapters are invoked.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import warnings
-from typing import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
+from time import perf_counter
+from typing import TypeVar
 
 from ..domain.models import CommodityQuote, FXRate, TaxRule
 from ..domain.ports import CommodityDataPort, FXDataPort, TaxDataPort
+from ..services.telemetry import SnapshotTelemetry, telemetry_provider
+from .cache import CacheStats, TTLCache
+
+EMPTY_CACHE_STATS = CacheStats(size=0, hits=0, misses=0)
+
+PortT = TypeVar("PortT", FXDataPort, CommodityDataPort, TaxDataPort)
 
 
 @dataclass(slots=True)
@@ -46,7 +54,7 @@ class SnapshotRequest:
         base_currency: str,
         commodity_symbols: Iterable[str] | None = None,
         jurisdictions: Iterable[str] | None = None,
-    ) -> "SnapshotRequest":
+    ) -> SnapshotRequest:
         """Create a normalised request from user-supplied primitives.
 
         Args:
@@ -104,12 +112,29 @@ class DataSnapshotService:
         fx_adapter: FXDataPort | None = None,
         commodity_adapter: CommodityDataPort | None = None,
         tax_adapter: TaxDataPort | None = None,
+        enable_caching: bool = True,
+        default_cache_ttl: float | None = None,
+        fx_cache_ttl: float | None = None,
+        commodity_cache_ttl: float | None = None,
+        tax_cache_ttl: float | None = None,
+        clock: Callable[[], float] | None = None,
+        telemetry: SnapshotTelemetry | None = None,
+        enable_telemetry: bool = True,
     ) -> None:
         """Initialise the service with adapters that satisfy the domain ports.
 
         Legacy ``*_adapter`` keywords are still accepted to avoid breaking older
         integrations.  When both the new ``*_port`` and legacy keyword are
         provided the port value takes precedence.
+
+        Args:
+            enable_caching: Toggle in-memory caching for adapter responses.
+            default_cache_ttl: Global TTL applied to caches when a specific
+                per-port TTL is not supplied. ``None`` keeps entries indefinitely.
+            fx_cache_ttl: Optional TTL for FX cache entries in seconds.
+            commodity_cache_ttl: Optional TTL for commodity cache entries.
+            tax_cache_ttl: Optional TTL for tax cache entries.
+            clock: Optional monotonic clock override used primarily for tests.
         """
 
         if fx_adapter is not None:
@@ -143,17 +168,71 @@ class DataSnapshotService:
             primary=tax_port, legacy=tax_adapter, label="tax_adapter or tax_port"
         )
 
-        self._fx_cache: dict[str, tuple[FXRate, ...]] = {}
-        self._commodity_cache: dict[tuple[str, ...], tuple[CommodityQuote, ...]] = {}
-        self._tax_cache: dict[tuple[str, ...] | None, tuple[TaxRule, ...]] = {}
+        self._enable_caching = enable_caching
+        self._clock = clock
+        self._telemetry = telemetry if enable_telemetry else None
+        if self._telemetry is None and enable_telemetry:
+            self._telemetry = telemetry_provider()
+
+        if enable_caching:
+            fx_ttl = self._validate_ttl(fx_cache_ttl, default_cache_ttl)
+            commodity_ttl = self._validate_ttl(commodity_cache_ttl, default_cache_ttl)
+            tax_ttl = self._validate_ttl(tax_cache_ttl, default_cache_ttl)
+            fx_observer = (
+                self._telemetry.cache_observer("snapshot_fx")
+                if self._telemetry is not None
+                else None
+            )
+            commodity_observer = (
+                self._telemetry.cache_observer("snapshot_commodities")
+                if self._telemetry is not None
+                else None
+            )
+            tax_observer = (
+                self._telemetry.cache_observer("snapshot_tax")
+                if self._telemetry is not None
+                else None
+            )
+            self._fx_cache: TTLCache[str, tuple[FXRate, ...]] | None = TTLCache(
+                default_ttl=fx_ttl, clock=clock, observer=fx_observer
+            )
+            self._commodity_cache: TTLCache[
+                tuple[str, ...], tuple[CommodityQuote, ...]
+            ] | None = TTLCache(
+                default_ttl=commodity_ttl,
+                clock=clock,
+                observer=commodity_observer,
+            )
+            self._tax_cache: TTLCache[
+                tuple[str, ...] | None, tuple[TaxRule, ...]
+            ] | None = TTLCache(
+                default_ttl=tax_ttl,
+                clock=clock,
+                observer=tax_observer,
+            )
+        else:
+            self._fx_cache = None
+            self._commodity_cache = None
+            self._tax_cache = None
+
+    @staticmethod
+    def _validate_ttl(
+        specific_ttl: float | None, default_ttl: float | None
+    ) -> float | None:
+        ttl = specific_ttl if specific_ttl is not None else default_ttl
+        if ttl is None:
+            return None
+        if ttl <= 0:
+            raise ValueError("Cache TTL must be greater than zero when provided")
+        return ttl
 
     @staticmethod
     def _choose_port(
         *,
-        primary: FXDataPort | CommodityDataPort | TaxDataPort | None,
-        legacy: FXDataPort | CommodityDataPort | TaxDataPort | None,
+        primary: PortT | None,
+        legacy: PortT | None,
         label: str,
-    ) -> FXDataPort | CommodityDataPort | TaxDataPort:
+    ) -> PortT:
         """Return the selected port, preferring ``primary`` over ``legacy``."""
 
         port = primary if primary is not None else legacy
@@ -188,23 +267,78 @@ class DataSnapshotService:
         """
 
         fx_rates = self._get_fx_rates(request.base_currency)
-        commodity_quotes = self._get_commodity_quotes(request.commodity_symbols)
-        tax_rules = self._resolve_tax_rules(request)
+        timer = self._clock or perf_counter
+        start = timer()
+        status = "success"
+        try:
+            commodity_quotes = self._get_commodity_quotes(request.commodity_symbols)
+            tax_rules = self._resolve_tax_rules(request)
+            snapshot = DataSnapshot(
+                fx_rates=fx_rates,
+                commodity_quotes=commodity_quotes,
+                tax_rules=tax_rules,
+            )
+        except Exception:
+            status = "error"
+            if self._telemetry is not None:
+                self._telemetry.record_failure(stage="create_snapshot")
+            raise
+        finally:
+            if self._telemetry is not None:
+                duration = timer() - start
+                self._telemetry.record_latency(status=status, duration=duration)
 
-        return DataSnapshot(
-            fx_rates=fx_rates,
-            commodity_quotes=commodity_quotes,
-            tax_rules=tax_rules,
+        return snapshot
+
+    def clear_cache(self) -> None:
+        """Invalidate all cached adapter responses."""
+
+        if not self._enable_caching:
+            return
+        if self._fx_cache is not None:
+            self._fx_cache.invalidate()
+        if self._commodity_cache is not None:
+            self._commodity_cache.invalidate()
+        if self._tax_cache is not None:
+            self._tax_cache.invalidate()
+
+    def cache_stats(self) -> dict[str, CacheStats]:
+        """Expose cache utilisation metrics for monitoring and tests."""
+
+        if not self._enable_caching:
+            return {
+                "fx": EMPTY_CACHE_STATS,
+                "commodities": EMPTY_CACHE_STATS,
+                "tax": EMPTY_CACHE_STATS,
+            }
+
+        fx_stats = (
+            self._fx_cache.stats()
+            if self._fx_cache is not None
+            else EMPTY_CACHE_STATS
         )
+        commodity_stats = (
+            self._commodity_cache.stats()
+            if self._commodity_cache is not None
+            else EMPTY_CACHE_STATS
+        )
+        tax_stats = (
+            self._tax_cache.stats()
+            if self._tax_cache is not None
+            else EMPTY_CACHE_STATS
+        )
+        return {"fx": fx_stats, "commodities": commodity_stats, "tax": tax_stats}
 
     def _get_fx_rates(self, base_currency: str) -> tuple[FXRate, ...]:
         """Return cached FX rates for the provided ``base_currency``."""
 
-        if base_currency not in self._fx_cache:
-            self._fx_cache[base_currency] = tuple(
-                self._fx_port.get_rates(base_currency=base_currency)
-            )
-        return self._fx_cache[base_currency]
+        if not self._enable_caching or self._fx_cache is None:
+            return tuple(self._fx_port.get_rates(base_currency=base_currency))
+
+        return self._fx_cache.get_or_set(
+            base_currency,
+            lambda: tuple(self._fx_port.get_rates(base_currency=base_currency)),
+        )
 
     def _get_commodity_quotes(
         self, symbols: tuple[str, ...]
@@ -214,11 +348,12 @@ class DataSnapshotService:
         if not symbols:
             return ()
 
-        if symbols not in self._commodity_cache:
-            self._commodity_cache[symbols] = tuple(
-                self._commodity_port.get_quotes(symbols)
-            )
-        return self._commodity_cache[symbols]
+        if not self._enable_caching or self._commodity_cache is None:
+            return tuple(self._commodity_port.get_quotes(symbols))
+
+        return self._commodity_cache.get_or_set(
+            symbols, lambda: tuple(self._commodity_port.get_quotes(symbols))
+        )
 
     def _resolve_tax_rules(self, request: SnapshotRequest) -> tuple[TaxRule, ...]:
         """Collect tax rules for the request's jurisdictions."""
@@ -227,21 +362,22 @@ class DataSnapshotService:
 
         if jurisdictions is None:
             scope: tuple[str, ...] | None = None
-            cache_key = None
+            cache_key: tuple[str, ...] | None = None
         else:
             scope = tuple(dict.fromkeys(jurisdictions))
             if not scope:
                 return ()
             cache_key = scope
 
-        if cache_key not in self._tax_cache:
+        def loader() -> tuple[TaxRule, ...]:
             if scope is None:
-                fetched = tuple(self._tax_port.get_rules(None))
-            else:
-                collected: list[TaxRule] = []
-                for jurisdiction in scope:
-                    collected.extend(self._tax_port.get_rules(jurisdiction))
-                fetched = tuple(collected)
-            self._tax_cache[cache_key] = fetched
+                return tuple(self._tax_port.get_rules(None))
+            collected: list[TaxRule] = []
+            for jurisdiction in scope:
+                collected.extend(self._tax_port.get_rules(jurisdiction))
+            return tuple(collected)
 
-        return self._tax_cache[cache_key]
+        if not self._enable_caching or self._tax_cache is None:
+            return loader()
+
+        return self._tax_cache.get_or_set(cache_key, loader)

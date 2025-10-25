@@ -1,10 +1,10 @@
 """Audit metadata helper tests ensuring timezone awareness is preserved."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlmodel import SQLModel
 
-from apps.api.audit import AuditActor, AuditLogger, apply_creation_metadata, get_current_actor, use_actor
+from apps.api.audit import AuditActor, apply_creation_metadata, use_actor
 
 
 class DummyRecord(SQLModel):
@@ -19,7 +19,13 @@ class DummyRecord(SQLModel):
 
 def test_apply_creation_metadata_sets_timezone_aware_fields():
     """Ensure creation metadata stamps timezone-aware values and actor IDs."""
-    actor = AuditActor(request_id="r1", user_id=42, organization_id=7, source="test", user_label="tester")
+    actor = AuditActor(
+        request_id="r1",
+        user_id=42,
+        organization_id=7,
+        source="test",
+        user_label="tester",
+    )
     record = DummyRecord()
     with use_actor(actor):
         apply_creation_metadata(record)
@@ -29,4 +35,4 @@ def test_apply_creation_metadata_sets_timezone_aware_fields():
     assert record.created_by_id == 42
     assert record.updated_by_id == 42
     assert record.organization_id == 7
-    # TODO - (audit) Add coverage for update metadata transitions once implemented.
+    # TODO[P2][2d]: Add coverage for update metadata transitions once implemented.
