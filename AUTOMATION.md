@@ -35,12 +35,18 @@ repository to remain safe, observable, and reversible.
 3. Validate runtime health before handoff:
    * `make health` – executes `macli health` to confirm database connectivity,
      scheduler state, metrics export, and extension probes.
+   * `python -m cli.macli inspect-extensions` – captures manifest metadata and
+     load status for each configured extension.
+   * `python -m cli.macli inspect-contracts` – lists automation contracts
+     published by extensions so orchestrators know which hooks are available.
    * `curl http://localhost:8000/health/ready` – verifies HTTP readiness when
      the API is running.
    * `curl http://localhost:8000/health/telemetry` – aggregates metrics,
       extension status, and health probes for dashboards or runbooks.
 4. Generate release collateral:
-   * Update `CHANGELOG.md` and `RELEASE_NOTES.md`.
+   * Update `CHANGELOG.md` and `RELEASE_NOTES.md` (or run
+     `make release PART=patch MESSAGE="<summary>"` to bump the version and
+     seed both files automatically).
    * Run `make audit` to refresh `REPORTS/audit-latest.md` with up-to-date
      metrics whenever steward reports are compiled. If trace collection is too
      slow, rerun `tools.audit_metrics --skip-trace` to reuse the prior coverage

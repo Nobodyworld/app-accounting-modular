@@ -1,7 +1,7 @@
 PYTHON ?= python
 PIP ?= pip
 
-.PHONY: install lint format typecheck test coverage quality security health audit
+.PHONY: install lint format typecheck test coverage quality security health audit release
 
 install:
 	$(PIP) install -r requirements-dev.txt
@@ -31,4 +31,7 @@ health:
 	$(PYTHON) -m cli.macli health
 
 audit:
-	$(PYTHON) -m tools.audit_metrics --format markdown --output REPORTS/audit-latest.md
+        $(PYTHON) -m tools.audit_metrics --format markdown --output REPORTS/audit-latest.md
+
+release:
+        $(PYTHON) -m tools.release_manager bump --part $${PART:-patch} --message "$${MESSAGE:-TODO: describe release}"

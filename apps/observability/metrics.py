@@ -148,6 +148,8 @@ __all__ = [
     "instrument_call",
     "SnapshotTelemetryAdapter",
     "snapshot_telemetry",
+    "ScenarioTelemetryAdapter",
+    "scenario_telemetry",
     "ExtensionTelemetryAdapter",
     "extension_telemetry",
 ]
@@ -176,6 +178,9 @@ class MetricsRegistry:
     extension_load_total: Counter
     extension_load_latency_seconds: Histogram
     extension_enabled: Gauge
+    scenario_runs_total: Counter
+    scenario_latency_seconds: Histogram
+    scenario_inflight: Gauge
 
     @classmethod
     def create(cls) -> MetricsRegistry:
@@ -283,6 +288,37 @@ class MetricsRegistry:
             labelnames=("module",),
             registry=registry,
         )
+        scenario_runs_total = Counter(
+            "modacct_scenario_runs_total",
+            "Total scenario executions grouped by status.",
+            labelnames=("scenario", "tags", "status"),
+            registry=registry,
+        )
+        scenario_latency = Histogram(
+            "modacct_scenario_latency_seconds",
+            "Latency of scenario executions grouped by status.",
+            labelnames=("scenario", "tags", "status"),
+            registry=registry,
+            buckets=(
+                0.001,
+                0.005,
+                0.01,
+                0.025,
+                0.05,
+                0.1,
+                0.25,
+                0.5,
+                1,
+                2,
+                5,
+            ),
+        )
+        scenario_inflight = Gauge(
+            "modacct_scenario_inflight",
+            "Number of scenarios currently executing.",
+            labelnames=("scenario", "tags"),
+            registry=registry,
+        )
         return cls(
             registry=registry,
             request_total=request_total,
@@ -296,6 +332,9 @@ class MetricsRegistry:
             extension_load_total=extension_load_total,
             extension_load_latency_seconds=extension_load_latency,
             extension_enabled=extension_enabled,
+            scenario_runs_total=scenario_runs_total,
+            scenario_latency_seconds=scenario_latency,
+            scenario_inflight=scenario_inflight,
         )
 
     def render_latest(self) -> bytes:
@@ -375,6 +414,54 @@ class ExtensionTelemetryAdapter:
 
 
 extension_telemetry = ExtensionTelemetryAdapter(metrics_registry)
+
+
+class ScenarioTelemetryAdapter:
+    """Helper encapsulating metrics around scenario execution."""
+
+    def __init__(self, registry: MetricsRegistry) -> None:
+        self._registry = registry
+
+    @contextmanager
+    def track(
+        self,
+        *,
+        scenario: str,
+        tags: tuple[str, ...] = (),
+    ) -> Iterator[None]:
+        """Track metrics for a scenario run within a context manager."""
+
+        label_base = {
+            "scenario": scenario,
+            "tags": ",".join(sorted(tags)) if tags else "<none>",
+        }
+        start = time.perf_counter()
+        with self._registry.scenario_inflight.labels(**label_base).track_inprogress():
+            try:
+                yield
+            except Exception:
+                self._record(status="error", start=start, label_base=label_base)
+                raise
+            else:
+                self._record(status="success", start=start, label_base=label_base)
+
+    def _record(
+        self,
+        *,
+        status: str,
+        start: float,
+        label_base: dict[str, str],
+    ) -> None:
+        duration = time.perf_counter() - start
+        labels = {**label_base, "status": status}
+        try:
+            self._registry.scenario_runs_total.labels(**labels).inc()
+            self._registry.scenario_latency_seconds.labels(**labels).observe(duration)
+        except Exception as exc:  # pragma: no cover - defensive
+            _logger.debug("Unable to update scenario metrics", exc_info=exc)
+
+
+scenario_telemetry = ScenarioTelemetryAdapter(metrics_registry)
 
 
 class RequestMetricsMiddleware(BaseHTTPMiddleware):

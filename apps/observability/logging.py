@@ -25,24 +25,15 @@ from __future__ import annotations
 import json
 import logging
 import logging.config
+import time
+from collections.abc import AsyncIterator, Iterable, Iterator, Mapping, MutableMapping
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar, Token
-from datetime import datetime, timezone
-import time
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    AsyncIterator,
-    Iterable,
-    Iterator,
-    Literal,
-    Mapping,
-    MutableMapping,
-)
+from datetime import UTC, datetime
+from typing import Any, Literal
 from uuid import uuid4
 
-if TYPE_CHECKING:
-    from starlette.types import ASGIApp
+from starlette.types import ASGIApp
 
 __all__ = [
     "LogFormat",
@@ -127,7 +118,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc)
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC)
             .isoformat()
             .replace("+00:00", "Z"),
             "service": self.service_name,
@@ -158,7 +149,10 @@ class TextFormatter(logging.Formatter):
         template = (
             "%(asctime)s %(levelname)s [%(name)s] "
             f"[{service_name}] "
-            "cid=%(correlation_id)s req=%(request_id)s %(request_method)s %(request_path)s - %(message)s"
+            "cid=%(correlation_id)s "
+            "req=%(request_id)s "
+            "%(request_method)s %(request_path)s - "
+            "%(message)s"
         )
         super().__init__(template, datefmt="%Y-%m-%dT%H:%M:%SZ")
         # Always format in UTC so that local developer settings do not influence
@@ -294,7 +288,7 @@ def configure_logging(
 class RequestContextMiddleware:
     """ASGI middleware that assigns correlation IDs to each request."""
 
-    def __init__(self, app: "ASGIApp", header_name: str = "x-request-id") -> None:
+    def __init__(self, app: ASGIApp, header_name: str = "x-request-id") -> None:
         self.app = app
         self._header_name = header_name.lower().encode("latin-1")
         self._correlation_header = b"x-correlation-id"
@@ -332,8 +326,8 @@ class RequestContextMiddleware:
                 }
             )
         else:
-            setattr(state, "correlation_id", correlation_str)
-            setattr(state, "request_id", request_str)
+            state.correlation_id = correlation_str
+            state.request_id = request_str
 
         token = bind_context(
             correlation_id=correlation_str,

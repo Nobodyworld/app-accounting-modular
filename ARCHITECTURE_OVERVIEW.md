@@ -53,10 +53,16 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    gauge whether a module is both enabled and successfully initialised.
 3. **Application services** orchestrate domain operations. For example,
    `DataSnapshotService` normalises `SnapshotRequest` payloads, resolves data
-   through ports, and now records cache utilisation and latency metrics via the
-   telemetry adapter. `compute_snapshot_diagnostics` converts the immutable
-   snapshot into freshness and coverage metrics so every surface can surface a
-   consistent health summary without reimplementing the analysis.
+   through ports, and records cache utilisation and latency metrics via the
+   telemetry adapter. `ScenarioSnapshotRunner` layers on top of the snapshot
+   service to execute multiple `SnapshotScenario` definitions, aggregate
+   diagnostics, and expose the batch to both the CLI and HTTP endpoint without
+   duplicating orchestration logic. Scenario executions emit dedicated metrics
+   (`modacct_scenario_runs_total`, `modacct_scenario_latency_seconds`, and
+   `modacct_scenario_inflight`) so dashboards can correlate orchestration load
+   with cache performance. `compute_snapshot_diagnostics` converts the
+   immutable snapshot into freshness and coverage metrics so every surface can
+   surface a consistent health summary without reimplementing the analysis.
 4. **Domain ports and providers** continue to act as the integration boundary
    for external data. Providers are loaded via the existing plugin loader and
    the new extension registry complements rather than replaces this system.
@@ -67,14 +73,17 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    exporter configuration, and extension readiness. Extensions can register
    additional probes without touching API code. The tracing module ships a
    `_noop_exporter` sentinel so spans cleanly downgrade to console logging when
-   OpenTelemetry exporters are unavailable.
+   OpenTelemetry exporters are unavailable. `/extensions/contracts` and the
+   companion `macli inspect-contracts` command extend observability to the
+   automation plane by surfacing which contracts are currently published.
 
 ## Operational safeguards
 
 * Health probes cover database connectivity, scheduler state, metrics export,
   tracing configuration, and extension readiness. CLI tooling mirrors these
-  checks via `macli health` and the new `macli inspect-extensions` snapshot
-  command.
+  checks via `macli health`, `macli inspect-extensions`, and
+  `macli inspect-contracts` so automation has a consistent view of manifests and
+  published contracts.
 * The `Makefile` standardises quality gates: linting, type checks, tests with a
   coverage threshold, optional safety scans, and the `audit` target for
   trace-based coverage + complexity metrics.
@@ -88,8 +97,9 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    `observability:demo` and the disabled `reporting:cashflow` reference).
 2. Implement a `register(registry)` function that publishes a manifest and
    registers optional hooks.
-3. The loader imports the module on application startup, populating manifests
-   and exposing metadata to the CLI (`macli extensions`) and HTTP API.
+3. The loader imports the module on application startup, populating manifests,
+   registering optional contracts, and exposing metadata to the CLI (`macli
+   inspect-extensions`, `macli inspect-contracts`) and HTTP API.
 
 This design allows new feature packs—report exporters, automation bridges, or
 AI agents—to be bolted on by registering extensions instead of modifying core
@@ -110,6 +120,10 @@ a reference for emitting extension-specific telemetry.
   context. The telemetry adapters already label metrics by module path, making
   it straightforward to add tenant labels in the future.
 * **Automation hooks** – Extension manifests surface capabilities so automation
-  agents can decide which module to invoke. Coupled with the incident response
+  agents can decide which module to invoke, while explicit contracts document
+  the callable surfaces available to agents. Coupled with the incident response
   guidelines in `AUTOMATION.md`, this enables future agentic tooling to safely
   orchestrate new connectors.
+* **Release automation** – `tools.release_manager` underpins `make release`,
+  which bumps semantic versions and seeds changelog/release notes to keep
+  provenance tight as the platform evolves.

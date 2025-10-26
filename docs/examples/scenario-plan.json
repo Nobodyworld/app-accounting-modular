@@ -1,0 +1,18 @@
+{
+  "scenarios": [
+    {
+      "name": "usd_metals",
+      "base_currency": "USD",
+      "commodity_symbols": ["XAU", "XAG"],
+      "jurisdictions": ["US", "US-CA"],
+      "tags": ["demo", "metals"]
+    },
+    {
+      "name": "eur_fx_only",
+      "base_currency": "EUR",
+      "commodity_symbols": [],
+      "jurisdictions": null,
+      "tags": ["fx"]
+    }
+  ]
+}

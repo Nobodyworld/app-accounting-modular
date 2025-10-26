@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Callable, Iterable
+from datetime import UTC, date, datetime
 
 from .snapshots import DataSnapshot, SnapshotRequest
 
@@ -56,7 +56,7 @@ def compute_snapshot_diagnostics(
         is also useful when writing deterministic tests.
     """
 
-    now_fn = now or (lambda: datetime.now(tz=timezone.utc))
+    now_fn = now or (lambda: datetime.now(tz=UTC))
     today_fn = today or date.today
 
     base_currency = _resolve_base_currency(snapshot, request)
@@ -145,7 +145,7 @@ def _max_age_seconds(values: Iterable, now_fn: Callable[[], datetime]) -> float 
 def _normalise_datetime(moment: datetime) -> datetime:
     if moment.tzinfo is None:
         return moment.replace(tzinfo=None)
-    return moment.astimezone(timezone.utc).replace(tzinfo=None)
+    return moment.astimezone(UTC).replace(tzinfo=None)
 
 
 def _count_active_rules(rules, today_fn: Callable[[], date]) -> int:

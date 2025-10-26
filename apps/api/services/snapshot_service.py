@@ -12,8 +12,11 @@ from typing import Any, Callable, Iterable, Sequence
 from apps.modular_accounting.application import (
     DataSnapshot,
     DataSnapshotService,
+    ScenarioBatchResult,
+    ScenarioSnapshotRunner,
     SnapshotDiagnostics,
     SnapshotRequest,
+    SnapshotScenario,
     compute_snapshot_diagnostics,
 )
 from apps.modular_accounting.application.cache import CacheStats
@@ -37,6 +40,7 @@ __all__ = [
     "ProviderTaxPort",
     "SnapshotOrchestrator",
     "SnapshotResult",
+    "scenario_batch_to_payload",
 ]
 
 logger = logging.getLogger(__name__)
@@ -219,6 +223,11 @@ class SnapshotOrchestrator:
             commodity_port=self._commodity_port,
             tax_port=ProviderTaxPort(self._tax_handle.instance),
         )
+        self._providers = {
+            "fx": self._fx_handle.metadata.key,
+            "commodity": self._commodity_handle.metadata.key,
+            "tax": self._tax_handle.metadata.key,
+        }
 
     def _load_handle(self, capability: str, key: str | None) -> ProviderHandle:
         resolved_key = key or self._default_key(capability)
@@ -250,18 +259,29 @@ class SnapshotOrchestrator:
         snapshot = self._service.create_snapshot(request)
         diagnostics = compute_snapshot_diagnostics(snapshot, request=request)
         cache_stats = self._service.cache_stats()
-        providers = {
-            "fx": self._fx_handle.metadata.key,
-            "commodity": self._commodity_handle.metadata.key,
-            "tax": self._tax_handle.metadata.key,
-        }
         return SnapshotResult(
             request=request,
             snapshot=snapshot,
             diagnostics=diagnostics,
-            providers=providers,
+            providers=dict(self._providers),
             cache_stats=cache_stats,
         )
+
+    def run_scenarios(
+        self,
+        scenarios: Sequence[SnapshotScenario],
+        *,
+        reset_cache_between_runs: bool = False,
+    ) -> ScenarioBatchResult:
+        """Execute a batch of snapshot scenarios using the configured providers."""
+
+        if not scenarios:
+            raise ValueError("At least one scenario must be provided")
+
+        runner = ScenarioSnapshotRunner(
+            self._service, reset_cache_between_runs=reset_cache_between_runs
+        )
+        return runner.run(scenarios, providers=dict(self._providers))
 
 
 def snapshot_to_payload(
@@ -301,3 +321,54 @@ def snapshot_to_payload(
     if diagnostics is not None:
         payload["diagnostics"] = asdict(diagnostics)
     return payload
+
+
+def scenario_batch_to_payload(batch: ScenarioBatchResult) -> dict[str, object]:
+    """Convert a :class:`ScenarioBatchResult` into an API-friendly payload."""
+
+    results_payload: list[dict[str, object]] = []
+    for result in batch.results:
+        scenario_payload = snapshot_to_payload(
+            result.snapshot, diagnostics=result.diagnostics
+        )
+        scenario_payload.update(
+            {
+                "name": result.scenario.name,
+                "tags": list(result.scenario.tags),
+                "request": {
+                    "base_currency": result.scenario.base_currency,
+                    "commodity_symbols": list(result.scenario.commodity_symbols),
+                    "jurisdictions": (
+                        list(result.scenario.jurisdictions)
+                        if result.scenario.jurisdictions is not None
+                        else None
+                    ),
+                },
+                "providers": dict(result.providers) if result.providers else None,
+                "cache_stats": {
+                    name: asdict(stats)
+                    for name, stats in result.cache_stats.items()
+                },
+            }
+        )
+        results_payload.append(scenario_payload)
+
+    summary = batch.summary
+    summary_payload = {
+        "scenario_count": summary.scenario_count,
+        "base_currencies": list(summary.base_currencies),
+        "commodity_symbols": list(summary.commodity_symbols),
+        "jurisdictions": list(summary.jurisdictions),
+        "missing_sections": {
+            name: list(sections)
+            for name, sections in summary.missing_sections.items()
+        },
+        "total_fx_rates": summary.total_fx_rates,
+        "total_commodity_quotes": summary.total_commodity_quotes,
+        "total_tax_rules": summary.total_tax_rules,
+        "max_fx_age_seconds": summary.max_fx_age_seconds,
+        "max_commodity_age_seconds": summary.max_commodity_age_seconds,
+        "max_active_tax_rules": summary.max_active_tax_rules,
+    }
+
+    return {"results": results_payload, "summary": summary_payload}

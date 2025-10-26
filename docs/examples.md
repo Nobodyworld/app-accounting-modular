@@ -80,3 +80,14 @@ python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --form
 ```
 The command returns a JSON payload containing FX rates, commodity quotes, tax rules, cache statistics, and the provider keys
 used for each capability. Switch to `--format table` for a human-friendly summary when demonstrating the workflow.
+## Execute batch scenario plans
+```bash
+python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table
+```
+The command parses a JSON or TOML plan, reuses the configured providers for each scenario, and prints an aggregated summary
+alongside per-scenario diagnostics. Use the companion HTTP endpoint to automate the same workflow:
+```bash
+curl -X POST http://localhost:8000/snapshot/scenarios \
+  -H "Content-Type: application/json" \
+  -d @docs/examples/scenario-plan.json
+```

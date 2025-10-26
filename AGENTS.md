@@ -8,14 +8,16 @@ changes:
 2. **Use the Makefile** – `make ci` mirrors the full lint/type/test/security
    suite, while `make health` runs runtime probes. Run them before handing work
    back to humans.
-   Pair `make health` with `python -m cli.macli inspect-extensions` to snapshot
-   extension readiness.
+   Pair `make health` with `python -m cli.macli inspect-extensions` and
+   `python -m cli.macli inspect-contracts` to snapshot extension readiness and
+   published automation contracts.
 3. **Generate extensions via CLI** – prefer `macli scaffold-extension` over
    manual file creation to ensure tracing and health hooks are present.
 4. **Respect TODO tags** – new TODOs must use the `[priority][estimate]` format
    (e.g. `# TODO[P2][1d]: backfill forecast tracing`).
 5. **Document intent** – update `ARCHITECTURE_OVERVIEW.md` and `STEWARDS_REPORT.md`
    when altering cross-cutting concerns (observability, extension contracts,
-   release tooling).
+   release tooling). Use `make release PART=<patch|minor|major> MESSAGE="..."`
+   to bump versions and seed changelog notes when shipping larger changes.
 
 These conventions keep human and AI contributors aligned and auditable.

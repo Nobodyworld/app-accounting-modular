@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 __all__ = [
     "HealthReport",

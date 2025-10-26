@@ -6,8 +6,9 @@ import asyncio
 import csv
 import json
 import logging
+import tomllib
 from collections import defaultdict
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -35,13 +36,21 @@ from apps.api.services.plugin_loader import (
     available_providers,
     load_provider,
 )
-from apps.api.services.snapshot_service import SnapshotOrchestrator
+from apps.api.services.snapshot_service import (
+    SnapshotOrchestrator,
+    scenario_batch_to_payload,
+)
 from apps.api.services.workflow_service import WorkflowService
+from apps.extensions import extension_registry
 from apps.extensions import scaffold_extension as generate_extension
+from apps.modular_accounting.application import SnapshotScenario
 from apps.observability.health import health_registry
 from apps.observability.logging import configure_logging, logging_context
 from apps.observability.tracing import configure_tracing, traced
-from cli.snapshot_render import format_snapshot_table
+from cli.snapshot_render import (
+    format_scenario_batch_table,
+    format_snapshot_table,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +117,57 @@ def _command_scope(command: str, **context: object) -> Iterator[None]:
                 raise
             else:
                 logger.info("Completed CLI command")
+
+
+def _load_scenario_plan(path: Path) -> list[SnapshotScenario]:
+    """Load snapshot scenarios from a JSON or TOML plan file."""
+
+    try:
+        content = path.read_bytes()
+    except OSError as exc:  # pragma: no cover - filesystem errors are rare
+        raise click.BadParameter(
+            f"Failed to read scenario plan: {exc}", param_hint="--plan"
+        ) from exc
+
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".json":
+            payload = json.loads(content.decode("utf-8"))
+        elif suffix in {".toml", ".tml"}:
+            payload = tomllib.loads(content.decode("utf-8"))
+        else:
+            raise ValueError("Unsupported plan format (use .json or .toml)")
+    except (json.JSONDecodeError, tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        raise click.BadParameter(
+            f"Invalid plan content: {exc}", param_hint="--plan"
+        ) from exc
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="--plan") from exc
+
+    if not isinstance(payload, Mapping):
+        raise click.BadParameter(
+            "Scenario plan must define an object at the top level", param_hint="--plan"
+        )
+
+    raw_scenarios = payload.get("scenarios")
+    if not isinstance(raw_scenarios, Sequence) or isinstance(raw_scenarios, str | bytes):
+        raise click.BadParameter(
+            "Scenario plan must define a 'scenarios' array", param_hint="--plan"
+        )
+
+    scenarios: list[SnapshotScenario] = []
+    for index, entry in enumerate(raw_scenarios, start=1):
+        if not isinstance(entry, Mapping):
+            raise click.BadParameter(
+                f"Scenario entry #{index} must be a mapping", param_hint="--plan"
+            )
+        try:
+            scenario = SnapshotScenario.from_mapping(entry)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="--plan") from exc
+        scenarios.append(scenario)
+
+    return scenarios
 
 
 @click.group()
@@ -203,6 +263,79 @@ def inspect_extensions(output_format: str) -> None:
         click.echo(json.dumps(rows, indent=2, sort_keys=True))
         return
     click.echo(_render_table(rows))
+
+
+def _format_contract_rows() -> list[dict[str, str]]:
+    load_configured_extensions()
+    rows: list[dict[str, str]] = []
+    for status in active_extensions():
+        contracts = extension_registry.contracts_for(status.key)
+        for contract in contracts:
+            rows.append(
+                {
+                    "Extension": status.key,
+                    "Kind": contract.kind,
+                    "Name": contract.name,
+                    "Version": contract.version,
+                    "Entrypoint": contract.entrypoint or "-",
+                    "Tags": ", ".join(contract.tags) if contract.tags else "-",
+                }
+            )
+    rows.sort(key=lambda row: (row["Extension"], row["Kind"], row["Name"]))
+    return rows
+
+
+def _render_contract_table(rows: list[dict[str, str]]) -> str:
+    headers = ["Extension", "Kind", "Name", "Version", "Entrypoint", "Tags"]
+    if not rows:
+        return "No contracts registered."
+    widths = {header: len(header) for header in headers}
+    for row in rows:
+        for header in headers:
+            widths[header] = max(widths[header], len(row[header]))
+    lines = [
+        "  ".join(header.ljust(widths[header]) for header in headers),
+        "  ".join("-" * widths[header] for header in headers),
+    ]
+    for row in rows:
+        lines.append("  ".join(row[header].ljust(widths[header]) for header in headers))
+    return "\n".join(lines)
+
+
+@cli.command(name="inspect-contracts")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    default="table",
+    show_default=True,
+    help="Output format for the contract registry snapshot.",
+)
+def inspect_contracts(output_format: str) -> None:
+    """Display registered extension contracts for automation planning."""
+
+    rows = _format_contract_rows()
+    if output_format.lower() == "json":
+        snapshot: list[dict[str, object]] = []
+        for status in active_extensions():
+            manifest = status.manifest
+            contracts = [
+                contract.serialise()
+                for contract in extension_registry.contracts_for(status.key)
+            ]
+            snapshot.append(
+                {
+                    "key": status.key,
+                    "module": status.module,
+                    "enabled": status.enabled,
+                    "loaded": manifest is not None,
+                    "version": manifest.version if manifest else None,
+                    "contracts": contracts,
+                }
+            )
+        click.echo(json.dumps(snapshot, indent=2, sort_keys=True))
+        return
+    click.echo(_render_contract_table(rows))
 
 
 @cli.command()
@@ -391,6 +524,53 @@ def snapshot(
             click.echo(f"Cache stats: {stats_line}")
 
 
+@cli.command(name="snapshot-scenarios")
+@click.option(
+    "--plan",
+    "plan_path",
+    required=True,
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    help="Path to a JSON or TOML file describing snapshot scenarios.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["json", "table"], case_sensitive=False),
+    default="json",
+    show_default=True,
+    help="Choose JSON or table output for the batch report.",
+)
+@click.option(
+    "--reset-cache/--no-reset-cache",
+    "reset_cache",
+    default=False,
+    show_default=True,
+    help="Clear the service cache between scenarios for deterministic diagnostics.",
+)
+def snapshot_scenarios(
+    plan_path: Path, output_format: str, reset_cache: bool
+) -> None:
+    """Execute multiple snapshot scenarios from a plan file."""
+
+    scenarios = _load_scenario_plan(plan_path)
+    with _command_scope(
+        "snapshot-scenarios",
+        plan=str(plan_path),
+        scenario_count=len(scenarios),
+        reset_cache=reset_cache,
+    ):
+        orchestrator = SnapshotOrchestrator()
+        batch = orchestrator.run_scenarios(
+            scenarios, reset_cache_between_runs=reset_cache
+        )
+        if output_format.lower() == "json":
+            payload = scenario_batch_to_payload(batch)
+            click.echo(json.dumps(payload, indent=2, default=str))
+            return
+
+        click.echo(format_scenario_batch_table(batch))
+
+
 @cli.command()
 @click.option(
     "--file",
@@ -555,10 +735,7 @@ def scaffold_extension_command(
         for created in result.created_files:
             click.echo(f"created {created.relative_to(Path.cwd())}")
         click.echo(
-            "Extension package '{key}' scaffolded at {root}".format(
-                key=result.key,
-                root=result.root.relative_to(Path.cwd()),
-            )
+            f"Extension package '{result.key}' scaffolded at {result.root.relative_to(Path.cwd())}"
         )
 
 

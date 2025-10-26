@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from sqlmodel import SQLModel, Session, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from apps.api.audit import AuditActor, use_actor
 from apps.api.models.models import (
@@ -160,7 +160,6 @@ def test_fx_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) -
         provider = _StubFXProvider()
         svc = FXService(session, provider)
 
-        original_commit = session.commit
         original_rollback = session.rollback
         rollback_called = False
 
@@ -194,7 +193,6 @@ def test_market_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatc
 
         svc = MarketService(session, provider)
 
-        original_commit = session.commit
         original_rollback = session.rollback
         rollback_called = False
 
@@ -221,7 +219,6 @@ def test_tax_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) 
         provider = _StubTaxProvider()
         svc = TaxService(session, provider)
 
-        original_commit = session.commit
         original_rollback = session.rollback
         rollback_called = False
 

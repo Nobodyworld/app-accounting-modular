@@ -7,14 +7,23 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from apps.modular_accounting.application import SnapshotDiagnostics
-from apps.modular_accounting.application.cache import CacheStats
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from apps.extensions.contracts import ExtensionContract
+from apps.modular_accounting.application import (
+    ScenarioBatchResult,
+    ScenarioResult,
+    ScenarioSummary,
+    SnapshotDiagnostics,
+    SnapshotScenario,
+)
+from apps.modular_accounting.application.cache import CacheStats
+
 from .models.models import AccountType, AuditAction, WorkflowStatus
+from .services.extension_loader import ExtensionStatus
 from .services.ledger_service import TrialBalanceRow
-from .services.workflow_service import WorkflowResult
 from .services.snapshot_service import SnapshotResult
+from .services.workflow_service import WorkflowResult
 
 __all__ = [
     "AccountCreate",
@@ -46,6 +55,12 @@ __all__ = [
     "SnapshotResponse",
     "SnapshotDiagnosticsSchema",
     "TaxRuleSchema",
+    "ScenarioDefinition",
+    "ScenarioBatchRequest",
+    "ScenarioResultSchema",
+    "ScenarioSummarySchema",
+    "ScenarioBatchResponse",
+    "ExtensionContractSchema",
 ]
 
 
@@ -90,7 +105,7 @@ class Posting(BaseModel):
     currency: str | None = Field(default=None, max_length=12)
 
     @model_validator(mode="after")
-    def validate_amounts(self) -> "Posting":
+    def validate_amounts(self) -> Posting:
         if self.debit < 0 or self.credit < 0:
             raise ValueError("Debit and credit amounts must be non-negative")
         if self.debit and self.credit:
@@ -148,7 +163,7 @@ class TrialBalanceRowSchema(BaseModel):
     balance: Decimal
 
     @classmethod
-    def from_row(cls, row: TrialBalanceRow) -> "TrialBalanceRowSchema":
+    def from_row(cls, row: TrialBalanceRow) -> TrialBalanceRowSchema:
         return cls(
             account_id=row.account_id,
             account_code=row.account_code,
@@ -171,7 +186,7 @@ class TrialBalanceResponse(BaseModel):
     @classmethod
     def from_service(
         cls, payload: dict[str, Any]
-    ) -> "TrialBalanceResponse":
+    ) -> TrialBalanceResponse:
         rows = [TrialBalanceRowSchema.from_row(row) for row in payload["rows"]]
         return cls(
             rows=rows,
@@ -192,7 +207,7 @@ class StagedPostingIngest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_account_reference(self) -> "StagedPostingIngest":
+    def validate_account_reference(self) -> StagedPostingIngest:
         if self.account_id is None and not (self.account_code or self.account_name):
             raise ValueError("account reference is required")
         return self
@@ -243,7 +258,7 @@ class WorkflowResultSchema(BaseModel):
     validation_errors: list[str] | None = None
 
     @classmethod
-    def from_result(cls, result: WorkflowResult) -> "WorkflowResultSchema":
+    def from_result(cls, result: WorkflowResult) -> WorkflowResultSchema:
         return cls(
             staged_transaction_id=result.staged_transaction_id,
             status=result.status,
@@ -421,7 +436,7 @@ class CacheStatsSchema(BaseModel):
     misses: int
 
     @classmethod
-    def from_cache_stats(cls, stats: CacheStats) -> "CacheStatsSchema":
+    def from_cache_stats(cls, stats: CacheStats) -> CacheStatsSchema:
         return cls(size=stats.size, hits=stats.hits, misses=stats.misses)
 
 
@@ -451,7 +466,7 @@ class SnapshotDiagnosticsSchema(BaseModel):
     @classmethod
     def from_diagnostics(
         cls, diagnostics: SnapshotDiagnostics
-    ) -> "SnapshotDiagnosticsSchema":
+    ) -> SnapshotDiagnosticsSchema:
         return cls(
             base_currency=diagnostics.base_currency,
             fx_rate_count=diagnostics.fx_rate_count,
@@ -467,6 +482,166 @@ class SnapshotDiagnosticsSchema(BaseModel):
         )
 
 
+class ScenarioDefinition(BaseModel):
+    """Single scenario definition accepted by the batch snapshot endpoint."""
+
+    name: str = Field(min_length=1)
+    base_currency: str = Field(min_length=1)
+    commodity_symbols: list[str] = Field(default_factory=list)
+    jurisdictions: list[str] | None = None
+    tags: list[str] = Field(default_factory=list)
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "base_currency": self.base_currency,
+            "commodity_symbols": self.commodity_symbols,
+            "jurisdictions": self.jurisdictions,
+            "tags": self.tags,
+        }
+
+
+class ScenarioBatchRequest(BaseModel):
+    """Request payload for executing snapshot scenarios in bulk."""
+
+    scenarios: list[ScenarioDefinition] = Field(min_length=1)
+    reset_cache_between_runs: bool = False
+
+    def to_scenarios(self) -> list[SnapshotScenario]:
+        return [
+            SnapshotScenario.from_mapping(definition.to_mapping())
+            for definition in self.scenarios
+        ]
+
+
+class ScenarioResultSchema(BaseModel):
+    """Response payload describing an executed snapshot scenario."""
+
+    name: str
+    tags: list[str]
+    request: SnapshotRequestSchema
+    providers: dict[str, str] | None = None
+    fx_rates: list[FXRateSchema]
+    commodity_quotes: list[CommodityQuoteSchema]
+    tax_rules: list[TaxRuleSchema]
+    cache_stats: dict[str, CacheStatsSchema]
+    diagnostics: SnapshotDiagnosticsSchema
+
+    @classmethod
+    def from_result(cls, result: ScenarioResult) -> ScenarioResultSchema:
+        request_schema = SnapshotRequestSchema(
+            base_currency=result.scenario.base_currency,
+            commodity_symbols=list(result.scenario.commodity_symbols),
+            jurisdictions=(
+                list(result.scenario.jurisdictions)
+                if result.scenario.jurisdictions is not None
+                else None
+            ),
+        )
+        fx_rates = [
+            FXRateSchema(
+                base_currency=rate.base_currency,
+                quote_currency=rate.quote_currency,
+                rate=rate.rate,
+                as_of=rate.as_of,
+            )
+            for rate in result.snapshot.fx_rates
+        ]
+        commodity_quotes = [
+            CommodityQuoteSchema(
+                symbol=quote.symbol,
+                price=MoneySchema(
+                    amount=quote.price.amount, currency=quote.price.currency
+                ),
+                as_of=quote.as_of,
+            )
+            for quote in result.snapshot.commodity_quotes
+        ]
+        tax_rules = [
+            TaxRuleSchema(
+                jurisdiction=rule.jurisdiction,
+                rate=rule.rate,
+                description=rule.description,
+                effective_from=rule.effective_from,
+                effective_to=rule.effective_to,
+            )
+            for rule in result.snapshot.tax_rules
+        ]
+        cache_stats = {
+            name: CacheStatsSchema.from_cache_stats(stats)
+            for name, stats in result.cache_stats.items()
+        }
+        diagnostics = SnapshotDiagnosticsSchema.from_diagnostics(
+            result.diagnostics
+        )
+        return cls(
+            name=result.scenario.name,
+            tags=list(result.scenario.tags),
+            request=request_schema,
+            providers=(
+                dict(result.providers)
+                if result.providers is not None
+                else None
+            ),
+            fx_rates=fx_rates,
+            commodity_quotes=commodity_quotes,
+            tax_rules=tax_rules,
+            cache_stats=cache_stats,
+            diagnostics=diagnostics,
+        )
+
+
+class ScenarioSummarySchema(BaseModel):
+    """Aggregated metrics describing the executed scenario batch."""
+
+    scenario_count: int
+    base_currencies: list[str]
+    commodity_symbols: list[str]
+    jurisdictions: list[str]
+    missing_sections: dict[str, list[str]]
+    total_fx_rates: int
+    total_commodity_quotes: int
+    total_tax_rules: int
+    max_fx_age_seconds: float | None = None
+    max_commodity_age_seconds: float | None = None
+    max_active_tax_rules: int
+
+    @classmethod
+    def from_summary(cls, summary: ScenarioSummary) -> ScenarioSummarySchema:
+        return cls(
+            scenario_count=summary.scenario_count,
+            base_currencies=list(summary.base_currencies),
+            commodity_symbols=list(summary.commodity_symbols),
+            jurisdictions=list(summary.jurisdictions),
+            missing_sections={
+                name: list(sections)
+                for name, sections in summary.missing_sections.items()
+            },
+            total_fx_rates=summary.total_fx_rates,
+            total_commodity_quotes=summary.total_commodity_quotes,
+            total_tax_rules=summary.total_tax_rules,
+            max_fx_age_seconds=summary.max_fx_age_seconds,
+            max_commodity_age_seconds=summary.max_commodity_age_seconds,
+            max_active_tax_rules=summary.max_active_tax_rules,
+        )
+
+
+class ScenarioBatchResponse(BaseModel):
+    """Response payload for scenario batch execution."""
+
+    summary: ScenarioSummarySchema
+    results: list[ScenarioResultSchema]
+
+    @classmethod
+    def from_batch(cls, batch: ScenarioBatchResult) -> ScenarioBatchResponse:
+        return cls(
+            summary=ScenarioSummarySchema.from_summary(batch.summary),
+            results=[
+                ScenarioResultSchema.from_result(result) for result in batch.results
+            ],
+        )
+
+
 class SnapshotResponse(BaseModel):
     """API payload describing a modular accounting snapshot."""
 
@@ -479,7 +654,7 @@ class SnapshotResponse(BaseModel):
     diagnostics: SnapshotDiagnosticsSchema
 
     @classmethod
-    def from_result(cls, result: SnapshotResult) -> "SnapshotResponse":
+    def from_result(cls, result: SnapshotResult) -> SnapshotResponse:
         request_schema = SnapshotRequestSchema(
             base_currency=result.request.base_currency,
             commodity_symbols=list(result.request.commodity_symbols),
@@ -533,4 +708,36 @@ class SnapshotResponse(BaseModel):
             tax_rules=tax_rules,
             cache_stats=cache_stats,
             diagnostics=diagnostics,
+        )
+
+
+class ExtensionContractSchema(BaseModel):
+    """Serialized representation of an extension contract."""
+
+    extension_key: str
+    extension_enabled: bool
+    extension_loaded: bool
+    module: str
+    kind: str
+    name: str
+    version: str
+    entrypoint: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+    @classmethod
+    def from_status(
+        cls,
+        status: ExtensionStatus,
+        contract: ExtensionContract,
+    ) -> ExtensionContractSchema:
+        return cls(
+            extension_key=status.key,
+            extension_enabled=status.enabled,
+            extension_loaded=status.manifest is not None,
+            module=status.module,
+            kind=contract.kind,
+            name=contract.name,
+            version=contract.version,
+            entrypoint=contract.entrypoint,
+            tags=list(contract.tags),
         )

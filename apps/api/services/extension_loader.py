@@ -4,12 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from apps.extensions import ExtensionManifest, extension_registry, load_extensions
+from apps.extensions import (
+    ExtensionManifest,
+    extension_registry,
+    load_extensions,
+)
+from apps.extensions.contracts import ExtensionContract
 from apps.observability.metrics import extension_telemetry
 
 from ..config import ExtensionInfo, settings
 
-__all__ = ["ExtensionStatus", "active_extensions", "load_configured_extensions"]
+__all__ = [
+    "ExtensionStatus",
+    "active_extensions",
+    "load_configured_extensions",
+    "registered_contracts",
+]
 
 
 @dataclass(slots=True, frozen=True)
@@ -20,6 +30,9 @@ class ExtensionStatus:
     module: str
     manifest: ExtensionManifest | None
     enabled: bool
+
+    def contracts(self) -> tuple[ExtensionContract, ...]:
+        return extension_registry.contracts_for(self.key)
 
 
 def _enabled_modules(configured: dict[str, ExtensionInfo]) -> list[str]:
@@ -57,3 +70,13 @@ def active_extensions() -> list[ExtensionStatus]:
         )
     status.sort(key=lambda item: item.key)
     return status
+
+
+def registered_contracts() -> list[tuple[ExtensionStatus, ExtensionContract]]:
+    """Return extension contracts paired with their extension status."""
+
+    items: list[tuple[ExtensionStatus, ExtensionContract]] = []
+    for status in active_extensions():
+        for contract in extension_registry.contracts_for(status.key):
+            items.append((status, contract))
+    return items

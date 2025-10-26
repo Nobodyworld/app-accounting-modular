@@ -1,6 +1,16 @@
 # Release Notes
 
 ## Highlights
+- Instrumented scenario batches with dedicated metrics/tracing, exposed
+  extension contracts through `macli inspect-contracts` and the new
+  `/extensions/contracts` API, shipped the `scenarios:variance` reference
+  extension, and introduced `make release`/`tools.release_manager` to automate
+  version bumps alongside changelog and release note updates.
+- Normalised timezone helpers and modernised collections usage in the
+  observability/domain layers, collapsed deprecated snapshot/telemetry shims
+  onto the application equivalents, refreshed scenario orchestration utilities
+  plus CLI/tests, and lifted the lint/format line length budget to 120
+  characters to avoid spurious violations.
 - Simplified ledger CSV ingestion by modularising validation helpers, taught
   the audit metrics CLI to reuse cached trace coverage, refreshed stewardship
   metrics, and documented telemetry sentinel automation roles for long-term

@@ -3,7 +3,11 @@ from datetime import date
 from apps.api.models.models import Price, Rate
 from apps.api.models.models import TaxRule as DBTaxRule
 from apps.api.services.plugin_loader import ProviderHandle, ProviderMetadata
-from apps.api.services.snapshot_service import SnapshotOrchestrator
+from apps.api.services.snapshot_service import (
+    SnapshotOrchestrator,
+    scenario_batch_to_payload,
+)
+from apps.modular_accounting.application import SnapshotScenario
 
 
 class StubFXProvider:
@@ -113,3 +117,42 @@ def test_snapshot_orchestrator_builds_snapshot() -> None:
     assert payload["providers"]["fx"] == "fx:stub"
     assert payload["request"]["commodity_symbols"] == ["XAU"]
     assert payload["diagnostics"]["commodity_quote_count"] == 1
+
+
+def test_snapshot_orchestrator_runs_scenarios() -> None:
+    load, catalog = _resolver()
+    orchestrator = SnapshotOrchestrator(
+        provider_loader=load,
+        provider_catalog=catalog,
+        commodity_lookback_days=2,
+    )
+
+    scenarios = [
+        SnapshotScenario.from_mapping(
+            {
+                "name": "metals",
+                "base_currency": "USD",
+                "commodity_symbols": ["XAU"],
+                "jurisdictions": ["US"],
+            }
+        ),
+        SnapshotScenario.from_mapping(
+            {
+                "name": "fx_only",
+                "base_currency": "USD",
+                "commodity_symbols": [],
+                "jurisdictions": [],
+            }
+        ),
+    ]
+
+    batch = orchestrator.run_scenarios(scenarios)
+
+    assert batch.summary.scenario_count == 2
+    assert "fx_only" in batch.summary.missing_sections
+    assert batch.results[0].providers["fx"] == "fx:stub"
+
+    payload = scenario_batch_to_payload(batch)
+    assert payload["summary"]["scenario_count"] == 2
+    assert payload["results"][0]["name"] == "metals"
+    assert payload["results"][1]["providers"]["tax"] == "tax:stub"

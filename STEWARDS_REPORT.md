@@ -16,6 +16,10 @@
 - **CLI CSV ingestion is manageable after refactor.** Splitting `_load_transactions_from_csv` into smaller helpers trimmed the worst cyclomatic hotspot and clarified validation boundaries.
 - **Operational health remains degraded by design.** `make health` reports a non-running scheduler; decide whether to start the scheduler in local runs or downgrade the severity to avoid false alarms.
 - **Telemetry endpoints provide consistent coverage snapshots.** Coupling `/health/telemetry` with `REPORTS/audit-latest.md` offers both runtime and static coverage overviews for release readiness.
+- **Scenario orchestration is now observable.** Scenario batches emit
+  Prometheus metrics for run counts, latency, and inflight executions while
+  `/extensions/contracts` and `macli inspect-contracts` surface automation
+  hooks for downstream agents.
 
 ## Simplification Log
 - Decomposed `_load_transactions_from_csv` into validation, parsing, and assembly helpers so ledger import logic is easier to unit test and extend. 【F:cli/macli.py†L565-L676】
@@ -23,18 +27,30 @@
 - Snapshot diagnostics now live behind a reusable helper so API, CLI, and tests share freshness and coverage logic. 【F:apps/modular_accounting/application/diagnostics.py†L1-L132】
 - Replaced the tracing lambda sentinel with `_noop_exporter` to clarify exporter lifecycle and aid testing when OpenTelemetry extras are absent. 【F:apps/observability/tracing.py†L64-L137】
 - Extension loading emits metrics/traces so `/health/telemetry` and `macli inspect-extensions` surface readiness instantly. 【F:apps/extensions/registry.py†L1-L120】【F:apps/observability/metrics.py†L1-L280】
+- Instrumented scenario orchestration with trace/metric hooks and added
+  contract discovery helpers so CLI/API callers see published automation
+  surfaces. 【F:apps/modular_accounting/application/scenarios.py†L1-L220】【F:apps/observability/metrics.py†L1-L380】【F:cli/macli.py†L200-L340】
+- Added a release manager utility (`tools.release_manager`) and `make release`
+  target to bump semantic versions plus seed changelog/release notes in one
+  command. 【F:tools/release_manager.py†L1-L129】【F:Makefile†L1-L32】
 
 ## Knowledge & Automation Handover
 - `make audit` wraps `python -m tools.audit_metrics --format markdown` and writes the latest metrics to `REPORTS/audit-latest.md`; automation should attach the generated file to quarterly reports. 【F:Makefile†L1-L29】【F:README.md†L27-L55】
 - When full trace runs are impractical, invoke `python -m tools.audit_metrics --skip-trace --format json` to reuse the previous trace coverage while refreshing complexity and dependency metrics. 【F:tools/audit_metrics.py†L149-L215】
 - `AUTOMATION_ROLES.md` now enumerates telemetry- and quality-focused agent responsibilities so orchestration pipelines know which commands are `# agent-entrypoint` or `# agent-safe-task`. 【F:AUTOMATION_ROLES.md†L1-L60】
-- `/health/telemetry` and `macli inspect-extensions` continue to provide machine-friendly snapshots; capture both in incident playbooks for complete situational awareness. 【F:apps/api/routers/health.py†L1-L120】【F:cli/macli.py†L1-L220】
+- `/health/telemetry`, `macli inspect-extensions`, and `macli inspect-contracts`
+  provide machine-friendly snapshots; capture all three in incident playbooks
+  for complete situational awareness. 【F:apps/api/routers/health.py†L1-L120】【F:cli/macli.py†L200-L340】
+- `make release PART=<...> MESSAGE="..."` wraps the new release manager so
+  future agents can bump versions and seed documentation consistently.
 
 ## Future Roadmap
 ### Short Term (next sprint)
 - Increase CLI coverage around CSV import edge cases to push the CLI package past 60% coverage and lock in the refactored helpers.
 - Capture `REPORTS/audit-latest.md` and `/health/telemetry` payloads as CI artifacts to monitor drift across branches.
 - Decide on a minimal scheduler bootstrap (or severity downgrade) so health checks represent the expected local posture.
+- Monitor scenario metrics in dashboards and alert when failure rates spike or
+  latency exceeds thresholds once deployed.
 
 ### Mid Term (1–2 quarters)
 - Integrate OpenTelemetry exporters once dependencies are available so traces stream to observability backends without manual configuration.
@@ -45,3 +61,6 @@
 - Containerise the CLI/API stack with baked-in tracing and metrics so production deployments inherit the same instrumentation defaults.
 - Explore agent-driven scheduling that consumes `make audit` output to trigger remediation tasks when coverage or complexity thresholds regress.
 - Establish automated performance baselines (latency, memory) using synthetic workloads to complement the qualitative metrics recorded here.
+- Extend the release manager to update downstream artefacts (container image
+  tags, package metadata) so version bumps remain a single command post-
+  containerisation.
