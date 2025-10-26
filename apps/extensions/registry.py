@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import importlib
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from apps.observability.health import HealthReport
+
+from apps.observability.metrics import extension_telemetry
+from apps.observability.tracing import traced
 
 __all__ = [
     "ExtensionManifest",
@@ -89,15 +93,38 @@ extension_registry = ExtensionRegistry()
 def load_extension_module(module: str) -> None:
     """Import an extension module and allow it to register itself."""
 
-    mod = importlib.import_module(module)
-    register_fn = getattr(mod, "register", None)
-    if callable(register_fn):
-        register_fn(extension_registry)
+    start = time.perf_counter()
+    status = "success"
+    try:
+        with traced("extensions.load", module=module):
+            try:
+                mod = importlib.import_module(module)
+                register_fn = getattr(mod, "register", None)
+                if callable(register_fn):
+                    register_fn(extension_registry)
+            except Exception:
+                status = "error"
+                raise
+    finally:
+        extension_telemetry.record_load(
+            module=module,
+            status=status,
+            duration=time.perf_counter() - start,
+        )
 
 
 def load_extensions(modules: Iterable[str]) -> list[ExtensionManifest]:
     """Import a collection of extension modules and return their manifests."""
 
-    for module in modules:
-        load_extension_module(module)
+    module_list = list(modules)
+    for module in module_list:
+        extension_telemetry.set_enabled(module=module, enabled=False)
+    for module in module_list:
+        try:
+            load_extension_module(module)
+        except Exception:
+            extension_telemetry.set_enabled(module=module, enabled=False)
+            raise
+        else:
+            extension_telemetry.set_enabled(module=module, enabled=True)
     return extension_registry.manifests()

@@ -4,12 +4,23 @@ from decimal import Decimal
 
 from click.testing import CliRunner
 
-from apps.modular_accounting.application import DataSnapshot, SnapshotRequest
+from apps.modular_accounting.application import (
+    DataSnapshot,
+    SnapshotDiagnostics,
+    SnapshotRequest,
+    compute_snapshot_diagnostics,
+)
 from apps.modular_accounting.application.cache import CacheStats
 from apps.modular_accounting.domain import CommodityQuote, FXRate, Money, TaxRule
 
 
-def _stub_result() -> tuple[SnapshotRequest, DataSnapshot, dict[str, CacheStats], dict[str, str]]:
+def _stub_result() -> tuple[
+    SnapshotRequest,
+    DataSnapshot,
+    SnapshotDiagnostics,
+    dict[str, CacheStats],
+    dict[str, str],
+]:
     request = SnapshotRequest(
         base_currency="USD",
         commodity_symbols=("XAU",),
@@ -40,6 +51,12 @@ def _stub_result() -> tuple[SnapshotRequest, DataSnapshot, dict[str, CacheStats]
             ),
         ),
     )
+    diagnostics = compute_snapshot_diagnostics(
+        snapshot,
+        request=request,
+        now=lambda: datetime(2024, 1, 2, tzinfo=UTC),
+        today=lambda: datetime(2024, 1, 2, tzinfo=UTC).date(),
+    )
     cache_stats = {
         "fx": CacheStats(size=1, hits=1, misses=0),
         "commodities": CacheStats(size=1, hits=0, misses=0),
@@ -50,17 +67,18 @@ def _stub_result() -> tuple[SnapshotRequest, DataSnapshot, dict[str, CacheStats]
         "commodity": "market:stub",
         "tax": "tax:stub",
     }
-    return request, snapshot, cache_stats, providers
+    return request, snapshot, diagnostics, cache_stats, providers
 
 
 def test_macli_snapshot_json(monkeypatch) -> None:
     from cli import macli as macli_module
     from apps.api.services.snapshot_service import SnapshotResult
 
-    request, snapshot, cache_stats, providers = _stub_result()
+    request, snapshot, diagnostics, cache_stats, providers = _stub_result()
     snapshot_result = SnapshotResult(
         request=request,
         snapshot=snapshot,
+        diagnostics=diagnostics,
         providers=providers,
         cache_stats=cache_stats,
     )
@@ -113,16 +131,18 @@ def test_macli_snapshot_json(monkeypatch) -> None:
     payload = json.loads(output[start:end])
     assert payload["providers"]["fx"] == "fx:stub"
     assert payload["request"]["base_currency"] == "USD"
+    assert payload["diagnostics"]["tax_rule_count"] == 1
 
 
 def test_macli_snapshot_table(monkeypatch) -> None:
     from cli import macli as macli_module
     from apps.api.services.snapshot_service import SnapshotResult
 
-    request, snapshot, cache_stats, providers = _stub_result()
+    request, snapshot, diagnostics, cache_stats, providers = _stub_result()
     snapshot_result = SnapshotResult(
         request=request,
         snapshot=snapshot,
+        diagnostics=diagnostics,
         providers=providers,
         cache_stats=cache_stats,
     )
@@ -142,3 +162,4 @@ def test_macli_snapshot_table(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Providers:" in result.output
     assert "XAU" in result.output
+    assert "Diagnostics" in result.output

@@ -25,3 +25,12 @@ def test_metrics_endpoint() -> None:
     response = client.get("/health/metrics")
     assert response.status_code == 200
     assert "modacct_http_requests_total" in response.text
+
+
+def test_telemetry_endpoint() -> None:
+    response = client.get("/health/telemetry")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["metrics"]["lines"] >= 1
+    assert any(report["name"] == "extensions" for report in payload["health"])
+    assert isinstance(payload["extensions"], list)

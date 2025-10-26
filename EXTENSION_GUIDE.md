@@ -39,6 +39,12 @@ When `register` executes it can:
 * Interact with observability helpers (for example, expose new metrics).
 * Import and configure background jobs or routers as required.
 
+The `apps.observability.metrics.ExtensionTelemetryAdapter` automatically tracks
+load success and latency for every enabled module. Extensions can build on top
+of this by registering their own metrics—see the `plugins/ops_heartbeat`
+package for a reference that publishes a heartbeat gauge alongside its health
+probe.
+
 ## Wiring extensions into configuration
 
 Extensions are configured through `Settings.allowed_extensions`. The default
@@ -58,10 +64,13 @@ installation via:
 
 * `GET /health/ready` – the response will include health reports contributed by
   extensions.
+* `GET /health/telemetry` – aggregates metrics, health probes, and extension
+  load status for dashboards or automation.
 * `GET /health/metrics` – metrics registered by extensions appear in the
   Prometheus exposition.
-* `macli extensions` – the CLI lists configured extensions and whether they
-  loaded successfully.
+* `macli inspect-extensions` – the CLI lists configured extensions, manifest
+  metadata, and whether they loaded successfully. `--format json` produces a
+  machine-friendly snapshot for automation.
 * `macli scaffold-extension reporting:example` – generates a ready-to-edit
   package in `plugins/` to accelerate development. The scaffolder mirrors the
   reference `reporting:cashflow` extension that now ships disabled by default.
@@ -82,3 +91,6 @@ installation via:
   automation.
 * Use the Makefile quality targets (`make quality`) before publishing to ensure
   linting, typing, and coverage gates pass consistently.
+* Refer to `plugins/ops_heartbeat` when wiring observability for operational
+  add-ons; it demonstrates registering gauges, emitting heartbeat probes, and
+  integrating with the extension registry without touching core modules.

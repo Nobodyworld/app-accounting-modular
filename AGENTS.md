@@ -8,6 +8,8 @@ changes:
 2. **Use the Makefile** – `make ci` mirrors the full lint/type/test/security
    suite, while `make health` runs runtime probes. Run them before handing work
    back to humans.
+   Pair `make health` with `python -m cli.macli inspect-extensions` to snapshot
+   extension readiness.
 3. **Generate extensions via CLI** – prefer `macli scaffold-extension` over
    manual file creation to ensure tracing and health hooks are present.
 4. **Respect TODO tags** – new TODOs must use the `[priority][estimate]` format

@@ -1,6 +1,18 @@
 # Release Notes
 
 ## Highlights
+- Simplified ledger CSV ingestion by modularising validation helpers, taught
+  the audit metrics CLI to reuse cached trace coverage, refreshed stewardship
+  metrics, and documented telemetry sentinel automation roles for long-term
+  monitoring.
+- Instrumented extension loading with Prometheus counters/gauges, exposed a
+  `/health/telemetry` rollup endpoint, introduced `macli inspect-extensions`,
+  and shipped the `ops:heartbeat` reference extension plus refreshed
+  architecture/automation guides for long-term observability stewardship.
+- Hardened audit provenance helpers to default to UTC timestamps, tightened
+  tracing exporter fallbacks to avoid lambda sentinels, and smoothed Streamlit
+  snapshot tooling so observability remains predictable even without optional
+  dependencies.
 - Introduced lightweight tracing with HTTP middleware, CLI span helpers, and a
   tracing health probe so operators can follow requests end-to-end. Added an
   optional cashflow analytics reference extension and the `macli scaffold-extension`
@@ -35,6 +47,11 @@
   works; `make install` already handles this locally.
 - Update automation to call `make quality` and `make health` instead of ad-hoc
   lint/test scripts, and include `make audit` when compiling steward reports.
+- When re-running audits in constrained environments, prefer
+  `python -m tools.audit_metrics --skip-trace` to reuse the prior coverage
+  snapshot while still emitting complexity and dependency metrics.
+- Add `python -m cli.macli inspect-extensions` to operational checklists to
+  confirm extension manifests load and surface version metadata during releases.
 
 ## Known Issues / Follow Ups
 - Legacy TODOs still require priority/effort tags; future cleanup will align

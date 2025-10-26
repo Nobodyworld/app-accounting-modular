@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -147,6 +148,8 @@ __all__ = [
     "instrument_call",
     "SnapshotTelemetryAdapter",
     "snapshot_telemetry",
+    "ExtensionTelemetryAdapter",
+    "extension_telemetry",
 ]
 
 
@@ -170,6 +173,9 @@ class MetricsRegistry:
     cache_entries: Gauge
     snapshot_latency_seconds: Histogram
     snapshot_failures: Counter
+    extension_load_total: Counter
+    extension_load_latency_seconds: Histogram
+    extension_enabled: Gauge
 
     @classmethod
     def create(cls) -> MetricsRegistry:
@@ -247,6 +253,36 @@ class MetricsRegistry:
             labelnames=("stage",),
             registry=registry,
         )
+        extension_load_total = Counter(
+            "modacct_extension_load_total",
+            "Total extension load attempts grouped by outcome.",
+            labelnames=("module", "status"),
+            registry=registry,
+        )
+        extension_load_latency = Histogram(
+            "modacct_extension_load_latency_seconds",
+            "Time taken to import and register extension modules.",
+            labelnames=("module", "status"),
+            registry=registry,
+            buckets=(
+                0.001,
+                0.005,
+                0.01,
+                0.025,
+                0.05,
+                0.1,
+                0.25,
+                0.5,
+                1,
+                2,
+            ),
+        )
+        extension_enabled = Gauge(
+            "modacct_extension_enabled",
+            "Flag indicating whether an extension module is enabled and loaded.",
+            labelnames=("module",),
+            registry=registry,
+        )
         return cls(
             registry=registry,
             request_total=request_total,
@@ -257,6 +293,9 @@ class MetricsRegistry:
             cache_entries=cache_entries,
             snapshot_latency_seconds=snapshot_latency,
             snapshot_failures=snapshot_failures,
+            extension_load_total=extension_load_total,
+            extension_load_latency_seconds=extension_load_latency,
+            extension_enabled=extension_enabled,
         )
 
     def render_latest(self) -> bytes:
@@ -305,6 +344,37 @@ class SnapshotTelemetryAdapter:
 
 
 snapshot_telemetry = SnapshotTelemetryAdapter(metrics_registry)
+
+
+_logger = logging.getLogger(__name__)
+
+
+class ExtensionTelemetryAdapter:
+    """Helper that records extension lifecycle metrics."""
+
+    def __init__(self, registry: MetricsRegistry) -> None:
+        self._registry = registry
+
+    def record_load(self, *, module: str, status: str, duration: float) -> None:
+        labels = {"module": module, "status": status}
+        try:
+            self._registry.extension_load_total.labels(**labels).inc()
+            self._registry.extension_load_latency_seconds.labels(**labels).observe(
+                duration
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            _logger.debug("Unable to record extension load metrics", exc_info=exc)
+
+    def set_enabled(self, *, module: str, enabled: bool) -> None:
+        try:
+            self._registry.extension_enabled.labels(module=module).set(
+                1.0 if enabled else 0.0
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            _logger.debug("Unable to update extension enabled gauge", exc_info=exc)
+
+
+extension_telemetry = ExtensionTelemetryAdapter(metrics_registry)
 
 
 class RequestMetricsMiddleware(BaseHTTPMiddleware):

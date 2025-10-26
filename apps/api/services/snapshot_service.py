@@ -12,7 +12,9 @@ from typing import Any, Callable, Iterable, Sequence
 from apps.modular_accounting.application import (
     DataSnapshot,
     DataSnapshotService,
+    SnapshotDiagnostics,
     SnapshotRequest,
+    compute_snapshot_diagnostics,
 )
 from apps.modular_accounting.application.cache import CacheStats
 from apps.modular_accounting.domain import CommodityQuote, FXRate, Money, TaxRule
@@ -163,6 +165,7 @@ class SnapshotResult:
 
     request: SnapshotRequest
     snapshot: DataSnapshot
+    diagnostics: SnapshotDiagnostics
     providers: dict[str, str]
     cache_stats: dict[str, CacheStats]
 
@@ -170,7 +173,7 @@ class SnapshotResult:
         """Return a serialisable payload with snapshot data and metadata."""
 
         return {
-            **snapshot_to_payload(self.snapshot),
+            **snapshot_to_payload(self.snapshot, diagnostics=self.diagnostics),
             "request": {
                 "base_currency": self.request.base_currency,
                 "commodity_symbols": list(self.request.commodity_symbols),
@@ -245,6 +248,7 @@ class SnapshotOrchestrator:
             jurisdictions=jurisdictions,
         )
         snapshot = self._service.create_snapshot(request)
+        diagnostics = compute_snapshot_diagnostics(snapshot, request=request)
         cache_stats = self._service.cache_stats()
         providers = {
             "fx": self._fx_handle.metadata.key,
@@ -254,15 +258,18 @@ class SnapshotOrchestrator:
         return SnapshotResult(
             request=request,
             snapshot=snapshot,
+            diagnostics=diagnostics,
             providers=providers,
             cache_stats=cache_stats,
         )
 
 
-def snapshot_to_payload(snapshot: DataSnapshot) -> dict[str, object]:
+def snapshot_to_payload(
+    snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None
+) -> dict[str, object]:
     """Return a dictionary representation of :class:`DataSnapshot`."""
 
-    return {
+    payload = {
         "fx_rates": [
             {
                 "base_currency": rate.base_currency,
@@ -291,3 +298,6 @@ def snapshot_to_payload(snapshot: DataSnapshot) -> dict[str, object]:
             for rule in snapshot.tax_rules
         ],
     }
+    if diagnostics is not None:
+        payload["diagnostics"] = asdict(diagnostics)
+    return payload

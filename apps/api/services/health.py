@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from ..db import engine
 from ..scheduler import get_scheduler_state
+from .extension_loader import active_extensions
 
 __all__ = ["register_default_health_checks"]
 
@@ -100,6 +101,25 @@ def _tracing_health() -> HealthReport:
     )
 
 
+def _extensions_health() -> HealthReport:
+    statuses = active_extensions()
+    enabled = [status for status in statuses if status.enabled]
+    missing = [status for status in enabled if status.manifest is None]
+    severity = "warning" if missing else "info"
+    details = {
+        "configured": len(statuses),
+        "enabled": len(enabled),
+        "loaded": [status.key for status in enabled if status.manifest is not None],
+        "missing": [status.key for status in missing],
+    }
+    return _report(
+        name="extensions",
+        healthy=not missing,
+        severity=severity,
+        details=details,
+    )
+
+
 def register_default_health_checks() -> None:
     """Install the built-in health checks for API bootstrapping."""
     from apps.observability.health import register_health_check
@@ -108,3 +128,4 @@ def register_default_health_checks() -> None:
     register_health_check("metrics", _metrics_health)
     register_health_check("scheduler", _scheduler_health)
     register_health_check("tracing", _tracing_health)
+    register_health_check("extensions", _extensions_health)

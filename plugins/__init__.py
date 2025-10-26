@@ -11,6 +11,7 @@ __all__ = [
     "analytics_baseline",
     "fx_ecb",
     "market_yfinance",
+    "ops_heartbeat",
     "tax_oecd_stub",
 ]
 

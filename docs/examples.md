@@ -2,12 +2,12 @@
 
 ## Produce a Snapshot with Custom Symbols
 ```bash
-python -m cli.demo_cli snapshot --base EUR --commodity XAU --commodity XPT --format table
+python -m cli.demo_cli snapshot --base EUR --commodity XAU --commodity XPT --format table --include-diagnostics
 ```
 
 ## Filter Tax Rules by Jurisdiction
 ```bash
-python -m cli.demo_cli snapshot --jurisdiction uk --format json
+python -m cli.demo_cli snapshot --jurisdiction uk --format json --include-diagnostics
 ```
 
 ## Embed the Service in Python Code

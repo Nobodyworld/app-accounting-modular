@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from apps.extensions import ExtensionManifest, extension_registry, load_extensions
+from apps.observability.metrics import extension_telemetry
 
 from ..config import ExtensionInfo, settings
 
@@ -16,6 +17,7 @@ class ExtensionStatus:
     """Materialised view of configured extension state."""
 
     key: str
+    module: str
     manifest: ExtensionManifest | None
     enabled: bool
 
@@ -32,6 +34,8 @@ def load_configured_extensions() -> list[ExtensionManifest]:
     """Load enabled extensions based on configuration."""
 
     extension_registry.clear()
+    for info in settings.allowed_extensions.values():
+        extension_telemetry.set_enabled(module=info.module, enabled=False)
     modules = _enabled_modules(settings.allowed_extensions)
     return load_extensions(modules)
 
@@ -46,6 +50,7 @@ def active_extensions() -> list[ExtensionStatus]:
         status.append(
             ExtensionStatus(
                 key=key,
+                module=info.module,
                 manifest=manifest,
                 enabled=info.enabled,
             )

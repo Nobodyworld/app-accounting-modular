@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Iterator, Mapping
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from fastapi.encoders import jsonable_encoder
@@ -126,13 +127,13 @@ class AuditLogger:
         actor = get_current_actor()
         before_json = _jsonify(before)
         after_json = _jsonify(after)
-        if isinstance(entity_id, (int, float)):
+        if isinstance(entity_id, int | float):
             entity_id_value: str | None = str(entity_id)
         else:
             entity_id_value = entity_id if entity_id is None else str(entity_id)
 
         log_entry = AuditLog(
-            ts=datetime.now(timezone.utc),
+            ts=datetime.now(UTC),
             action=action,
             entity_name=entity_name,
             entity_id=entity_id_value,
@@ -157,19 +158,22 @@ def apply_creation_metadata(record: Any) -> None:
     """Populate provenance fields on new ORM objects when possible."""
 
     actor = get_current_actor()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
-    if hasattr(record, "created_at") and getattr(record, "created_at") is None:
-        setattr(record, "created_at", now)
+    if hasattr(record, "created_at"):
+        if getattr(record, "created_at", None) is None:
+            record.created_at = now  # type: ignore[attr-defined]
     if hasattr(record, "updated_at"):
-        setattr(record, "updated_at", now)
+        record.updated_at = now  # type: ignore[attr-defined]
 
     if actor is None:
         return
 
-    if hasattr(record, "created_by_id") and getattr(record, "created_by_id", None) is None:
-        setattr(record, "created_by_id", actor.user_id)
+    if hasattr(record, "created_by_id"):
+        if getattr(record, "created_by_id", None) is None:
+            record.created_by_id = actor.user_id  # type: ignore[attr-defined]
     if hasattr(record, "updated_by_id"):
-        setattr(record, "updated_by_id", actor.user_id)
-    if hasattr(record, "organization_id") and getattr(record, "organization_id", None) is None:
-        setattr(record, "organization_id", actor.organization_id)
+        record.updated_by_id = actor.user_id  # type: ignore[attr-defined]
+    if hasattr(record, "organization_id"):
+        if getattr(record, "organization_id", None) is None:
+            record.organization_id = actor.organization_id  # type: ignore[attr-defined]

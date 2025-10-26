@@ -33,7 +33,10 @@ composable while retaining testability.
    configured ports. Results are cached in-memory by request scope using
    thread-safe TTL caches so repeated calls reuse data until entries expire.
 3. A `DataSnapshot` object is returned, bundling the immutable results for
-   downstream processing, rendering, or persistence.
+   downstream processing, rendering, or persistence. Consumers can call
+   `compute_snapshot_diagnostics` to derive freshness metrics, jurisdiction
+   coverage, and missing-section indicators without reaching back into the
+   adapters.
 
 ## Extension points
 

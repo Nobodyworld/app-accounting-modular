@@ -24,7 +24,7 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
    ```bash
    python -m cli.demo_cli snapshot --base USD --commodity XAU --commodity XAG --format table
    ```
-   The `--format` flag toggles between JSON and a friendly ASCII table so you can choose the representation that works best for demos, debugging, or documentation snippets. Input is validated before adapters run to save round trips.
+   The `--format` flag toggles between JSON and a friendly ASCII table so you can choose the representation that works best for demos, debugging, or documentation snippets. Input is validated before adapters run to save round trips. Pass `--include-diagnostics` to append health metadata such as missing sections, quote staleness, and active tax rules.
 3. Use the operational CLI to build snapshots with real providers (it auto-selects the first configured providers unless you pass explicit overrides such as `--fx-provider`):
    ```bash
    python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table
@@ -33,22 +33,29 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
 4. Implement custom adapters by satisfying the runtime-checkable ports in [`apps/modular_accounting/domain/ports.py`](apps/modular_accounting/domain/ports.py) and wiring them into your own CLI, service, or background job. Compose `SnapshotRequest` instances (or call `DataSnapshotService.build_snapshot`) to pass around snapshot intent. The service ships with thread-safe, TTL-aware caches that prevent duplicate adapter calls, expose hit/miss metrics, and can be disabled when a workload demands fresh data every time.
 5. Validate platform health and extension wiring:
    ```bash
-   make health          # runs macli health under the hood
+   make health             # runs macli health under the hood
+   python -m cli.macli inspect-extensions
    curl http://localhost:8000/health/ready
+   curl http://localhost:8000/health/telemetry
    ```
 6. Scaffold a new extension package with tracing and health hooks:
    ```bash
    python -m cli.macli scaffold-extension reporting:example --directory plugins
    ```
    The command generates a manifest, health probe, and tracing-aware register
-   function so you can focus on business logic.
+   function so you can focus on business logic. Inspect the
+   `plugins/ops_heartbeat` reference extension to see how telemetry gauges and
+   health probes combine with the new loader metrics.
 7. Generate an audit snapshot with coverage, complexity, and dependency metrics:
    ```bash
    make audit
    cat REPORTS/audit-latest.md
    ```
    The audit uses `python -m trace` under the hood, making it safe to run in
-   restricted environments where `pytest-cov` cannot be installed.
+   restricted environments where `pytest-cov` cannot be installed. When a trace
+   snapshot already exists, rerun
+   `python -m tools.audit_metrics --skip-trace --format json` to reuse the
+   cached coverage data and refresh only the complexity/dependency metrics.
 
 ## Documentation
 Extended guides live under the [`docs/`](docs/index.md) folder:

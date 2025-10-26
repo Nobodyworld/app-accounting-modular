@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
+from apps.modular_accounting.application import SnapshotDiagnostics
 from apps.modular_accounting.application.cache import CacheStats
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -43,6 +44,7 @@ __all__ = [
     "MoneySchema",
     "SnapshotRequestSchema",
     "SnapshotResponse",
+    "SnapshotDiagnosticsSchema",
     "TaxRuleSchema",
 ]
 
@@ -431,6 +433,40 @@ class SnapshotRequestSchema(BaseModel):
     jurisdictions: list[str] | None = None
 
 
+class SnapshotDiagnosticsSchema(BaseModel):
+    """Diagnostic summary for a snapshot payload."""
+
+    base_currency: str | None = None
+    fx_rate_count: int
+    fx_pairs: list[str]
+    fx_max_age_seconds: float | None = None
+    commodity_quote_count: int
+    commodity_symbols: list[str]
+    commodity_max_age_seconds: float | None = None
+    tax_rule_count: int
+    active_tax_rule_count: int
+    tax_jurisdictions: list[str]
+    missing_sections: list[str]
+
+    @classmethod
+    def from_diagnostics(
+        cls, diagnostics: SnapshotDiagnostics
+    ) -> "SnapshotDiagnosticsSchema":
+        return cls(
+            base_currency=diagnostics.base_currency,
+            fx_rate_count=diagnostics.fx_rate_count,
+            fx_pairs=list(diagnostics.fx_pairs),
+            fx_max_age_seconds=diagnostics.fx_max_age_seconds,
+            commodity_quote_count=diagnostics.commodity_quote_count,
+            commodity_symbols=list(diagnostics.commodity_symbols),
+            commodity_max_age_seconds=diagnostics.commodity_max_age_seconds,
+            tax_rule_count=diagnostics.tax_rule_count,
+            active_tax_rule_count=diagnostics.active_tax_rule_count,
+            tax_jurisdictions=list(diagnostics.tax_jurisdictions),
+            missing_sections=list(diagnostics.missing_sections),
+        )
+
+
 class SnapshotResponse(BaseModel):
     """API payload describing a modular accounting snapshot."""
 
@@ -440,6 +476,7 @@ class SnapshotResponse(BaseModel):
     commodity_quotes: list[CommodityQuoteSchema]
     tax_rules: list[TaxRuleSchema]
     cache_stats: dict[str, CacheStatsSchema]
+    diagnostics: SnapshotDiagnosticsSchema
 
     @classmethod
     def from_result(cls, result: SnapshotResult) -> "SnapshotResponse":
@@ -485,6 +522,9 @@ class SnapshotResponse(BaseModel):
             name: CacheStatsSchema.from_cache_stats(stats)
             for name, stats in result.cache_stats.items()
         }
+        diagnostics = SnapshotDiagnosticsSchema.from_diagnostics(
+            result.diagnostics
+        )
         return cls(
             request=request_schema,
             providers=dict(result.providers),
@@ -492,4 +532,5 @@ class SnapshotResponse(BaseModel):
             commodity_quotes=commodity_quotes,
             tax_rules=tax_rules,
             cache_stats=cache_stats,
+            diagnostics=diagnostics,
         )

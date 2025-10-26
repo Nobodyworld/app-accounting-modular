@@ -247,7 +247,13 @@ def main(argv: list[str] | None = None) -> int:
             {"apps": "apps/", "cli": "cli/", "plugins": "plugins/"},
         )
     else:
-        metrics["coverage"] = {}
+        if args.trace_dir.exists():
+            metrics["coverage"] = _aggregate_coverage(
+                args.trace_dir,
+                {"apps": "apps/", "cli": "cli/", "plugins": "plugins/"},
+            )
+        else:
+            metrics["coverage"] = {}
 
     target_modules = [
         Path("cli/macli.py"),
@@ -268,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(rendered)
+        args.output.write_text(rendered + "\n")
     print(rendered)
     return 0
 

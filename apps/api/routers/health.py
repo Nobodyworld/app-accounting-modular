@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from apps.observability.health import health_registry
 from apps.observability.metrics import metrics_registry, metrics_response
+from apps.api.services.extension_loader import active_extensions
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -47,3 +48,34 @@ def metrics():
     """Expose metrics in Prometheus text format."""
 
     return metrics_response(metrics_registry)
+
+
+@router.get("/telemetry", summary="Aggregated telemetry summary")
+async def telemetry() -> dict[str, object]:
+    """Return a consolidated snapshot of metrics, health probes, and extensions."""
+
+    reports = await health_registry.evaluate()
+    metrics_payload = metrics_registry.render_latest().decode()
+    extensions = [
+        {
+            "key": status.key,
+            "module": status.module,
+            "enabled": status.enabled,
+            "loaded": status.manifest is not None,
+        }
+        for status in active_extensions()
+    ]
+    return {
+        "metrics": {
+            "lines": len([line for line in metrics_payload.splitlines() if line.strip()]),
+        },
+        "health": [
+            {
+                "name": report.name,
+                "healthy": report.healthy,
+                "severity": report.severity,
+            }
+            for report in reports
+        ],
+        "extensions": extensions,
+    }
