@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import re
 import math
+import re
 from collections.abc import Mapping, MutableMapping, Sequence
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
-
 
 _SNAKE_CASE_PATTERN = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -40,7 +39,7 @@ def _normalise_scalar(value: Any) -> Any:
         except ValueError:
             return candidate
         if candidate[-1:] in {"Z", "z"} and parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
+            return parsed.replace(tzinfo=UTC)
         return parsed
     return value
 
@@ -61,7 +60,9 @@ def normalise_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
                 key = _normalise_key(str(raw_key))
                 normalised[key] = transform(value)
             return dict(normalised)
-        if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
+        if isinstance(obj, Sequence) and not isinstance(
+            obj, str | bytes | bytearray
+        ):
             return [transform(item) for item in obj]
         return _normalise_scalar(obj)
 
@@ -97,7 +98,7 @@ def _ensure_serialised_mapping(values: Mapping[str, Any]) -> dict[str, JSONScala
     for key, value in values.items():
         if value is None:
             continue
-        if isinstance(value, (bool, int)):
+        if isinstance(value, bool | int):
             serialised[str(key)] = value
             continue
         if isinstance(value, float):
@@ -166,7 +167,7 @@ def prepare_metadata_for_response(
             generated_at = normalised["generated_at"]
 
     if isinstance(generated_at, datetime) and generated_at.tzinfo is None:
-        normalised["generated_at"] = generated_at.replace(tzinfo=timezone.utc)
+        normalised["generated_at"] = generated_at.replace(tzinfo=UTC)
 
     diagnostics = normalised.get("forecast_diagnostics")
     if isinstance(diagnostics, Mapping):

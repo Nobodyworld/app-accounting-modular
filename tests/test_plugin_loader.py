@@ -171,7 +171,7 @@ def test_load_provider_validates_required_methods(monkeypatch) -> None:
     assert "sync_daily_rates" in str(excinfo.value)
 
 
-# TODO - (plugins) Validate async provider initialisation when supported.
+# TODO[P3][2d]: (plugins) Validate async provider initialisation when supported.
 
 
 def test_load_provider_requires_name_attribute(monkeypatch) -> None:
@@ -179,7 +179,8 @@ def test_load_provider_requires_name_attribute(monkeypatch) -> None:
     module = types.ModuleType("plugins.nameless")
 
     class NamelessProvider:
-        sync_daily_rates = lambda self, *args, **kwargs: None  # type: ignore[assignment]
+        def sync_daily_rates(self, *args: object, **kwargs: object) -> None:  # type: ignore[unused-argument]
+            return None
 
     def factory() -> NamelessProvider:
         return NamelessProvider()

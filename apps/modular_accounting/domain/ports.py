@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Protocol, Sequence, runtime_checkable
+from collections.abc import Iterable, Sequence
+from typing import Protocol, runtime_checkable
 
 from .models import CommodityQuote, FXRate, TaxRule
 

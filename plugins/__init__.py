@@ -12,6 +12,7 @@ __all__ = [
     "fx_ecb",
     "market_yfinance",
     "ops_heartbeat",
+    "scenario_variance",
     "tax_oecd_stub",
 ]
 

@@ -7,6 +7,7 @@ __all__ = [
     "forecast",
     "fx",
     "health",
+    "extensions",
     "ledger",
     "market",
     "snapshot",

@@ -14,12 +14,15 @@ if TYPE_CHECKING:  # pragma: no cover - import for type checking only
 from apps.observability.metrics import extension_telemetry
 from apps.observability.tracing import traced
 
+from .contracts import ExtensionContract
+
 __all__ = [
     "ExtensionManifest",
     "ExtensionRegistry",
     "extension_registry",
     "load_extension_module",
     "load_extensions",
+    "ExtensionContract",
 ]
 
 
@@ -45,11 +48,18 @@ class ExtensionRegistry:
     def __init__(self) -> None:
         self._manifests: dict[str, ExtensionManifest] = {}
         self._health_hooks: dict[str, HealthHook] = {}
+        self._contracts: dict[str, list[ExtensionContract]] = {}
 
     def register(self, manifest: ExtensionManifest) -> None:
         """Record extension metadata."""
 
         self._manifests[manifest.key] = manifest
+
+    def register_contract(self, key: str, contract: ExtensionContract) -> None:
+        """Associate a contract with an extension for discovery tooling."""
+
+        bucket = self._contracts.setdefault(key, [])
+        bucket.append(contract)
 
     def register_health_check(
         self, key: str, hook: HealthHook, *, severity: str = "info"
@@ -85,6 +95,20 @@ class ExtensionRegistry:
 
         self._manifests.clear()
         self._health_hooks.clear()
+        self._contracts.clear()
+
+    def contracts(self) -> dict[str, tuple[ExtensionContract, ...]]:
+        """Return registered contracts keyed by extension."""
+
+        return {
+            key: tuple(sorted(contracts, key=lambda contract: contract.kind))
+            for key, contracts in self._contracts.items()
+        }
+
+    def contracts_for(self, key: str) -> tuple[ExtensionContract, ...]:
+        """Return contracts registered for ``key``."""
+
+        return tuple(self._contracts.get(key, ()))
 
 
 extension_registry = ExtensionRegistry()

@@ -109,6 +109,12 @@ DEFAULT_ALLOWED_EXTENSIONS: dict[str, ExtensionInfo] = {
         capabilities=("reporting", "cashflow", "analytics"),
         enabled=False,
     ),
+    "scenarios:variance": ExtensionInfo(
+        module="plugins.scenario_variance.extension",
+        description="Scenario variance stress testing contracts",
+        capabilities=("scenarios", "analysis"),
+        enabled=True,
+    ),
 }
 
 # TODO - Load provider catalog from persistence so admin edits survive restarts.

@@ -8,15 +8,14 @@ formatting concerns.
 
 from __future__ import annotations
 
+import csv
 import logging
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from io import StringIO
-from typing import Iterable
-
-import csv
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -32,9 +31,8 @@ from ..models.models import (
     Organization,
     Transaction,
 )
-from .forecast_service import ForecastResult, ForecastService
 from ..utils.metadata import merge_forecast_diagnostics
-
+from .forecast_service import ForecastResult, ForecastService
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +249,7 @@ class BudgetService:
         ]
 
         metadata: dict[str, object] = {
-            "generated_at": datetime.now(timezone.utc),
+            "generated_at": datetime.now(UTC),
             "horizon": plan.horizon,
             "plan_id": plan.id,
             "plan_revision": self._as_utc(plan.updated_at),
@@ -332,7 +330,7 @@ class BudgetService:
         csv_export = self._render_cashflow_csv(historical, forecast_result)
 
         metadata = {
-            "generated_at": datetime.now(timezone.utc),
+            "generated_at": datetime.now(UTC),
             "horizon": plan.horizon,
             "plan_id": plan.id,
             "plan_revision": self._as_utc(plan.updated_at),
@@ -384,7 +382,7 @@ class BudgetService:
         updated_horizon = horizon or plan.horizon
         if plan.horizon != updated_horizon:
             plan.horizon = updated_horizon
-            plan.updated_at = datetime.now(timezone.utc)
+            plan.updated_at = datetime.now(UTC)
             self.session.add(plan)
             self.session.commit()
             self.session.refresh(plan)
@@ -617,7 +615,8 @@ class BudgetService:
         writer = csv.writer(buffer)
         writer.writerow(["period", "amount", "type"])
         for period, amount in historical:
-            writer.writerow([period.isoformat() if hasattr(period, "isoformat") else period, f"{amount:.2f}", "historical"])
+            label = period.isoformat() if hasattr(period, "isoformat") else period
+            writer.writerow([label, f"{amount:.2f}", "historical"])
         if forecast:
             for period, amount in forecast.points:
                 writer.writerow([period, f"{amount:.2f}", "forecast"])
@@ -626,8 +625,8 @@ class BudgetService:
     @staticmethod
     def _as_utc(value: datetime) -> datetime:
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
     @staticmethod
     def _serialise_metadata(metadata: dict[str, object]) -> dict[str, object]:

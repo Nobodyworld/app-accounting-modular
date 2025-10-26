@@ -84,6 +84,35 @@ installation via:
 * Health checks should be deterministic and fast. Prefer pure functions or
   guarded network calls with tight timeouts.
 
+## Advertising automation contracts
+
+Extensions can publish structured contracts so downstream agents know which
+automation hooks exist. Register contracts with the new
+`ExtensionContract` dataclass:
+
+```python
+from apps.extensions import ExtensionContract
+
+VARIANCE_CONTRACT = ExtensionContract(
+    kind="scenario-augmentation",
+    name="Base currency variance",
+    version="1.0.0",
+    entrypoint="plugins.my_extension.variance:generate_variants",
+    description="Generates +/-5% stress variants for snapshot scenarios.",
+    tags=("stress", "fx"),
+)
+
+
+def register(registry: ExtensionRegistry) -> None:
+    registry.register(MANIFEST)
+    registry.register_contract(MANIFEST.key, VARIANCE_CONTRACT)
+```
+
+The CLI exposes registered contracts via `python -m cli.macli inspect-contracts`
+while the API serves them at `GET /extensions/contracts`. Both surfaces include
+extension metadata, enabling orchestration pipelines to auto-discover new
+capabilities without bespoke glue code.
+
 ## Publishing best practices
 
 * Keep extension keys namespaced (`vendor:feature`) to avoid collisions.

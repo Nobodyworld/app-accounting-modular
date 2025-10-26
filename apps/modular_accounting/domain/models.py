@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Iterable, List
 
 
 @dataclass(slots=True)
@@ -128,7 +128,7 @@ class Transaction:
     transaction_id: str
     occurred_on: date
     description: str
-    entries: List[LedgerEntry] = field(default_factory=list)
+    entries: list[LedgerEntry] = field(default_factory=list)
 
     def is_balanced(self) -> bool:
         """Determine whether the transaction entries balance.

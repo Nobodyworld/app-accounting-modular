@@ -18,13 +18,14 @@ from .routers import (
     audit,
     auth,
     core,
+    extensions,
     forecast,
     fx,
     health,
     ledger,
     market,
-    snapshot,
     reports,
+    snapshot,
     tax,
     workflow,
 )
@@ -32,6 +33,7 @@ from .scheduler import shutdown_scheduler, start_scheduler
 from .security import get_current_user
 from .services.extension_loader import load_configured_extensions
 from .services.health import register_default_health_checks
+from .version import API_VERSION
 
 __all__ = ["create_app", "app"]
 
@@ -75,7 +77,7 @@ def create_app() -> FastAPI:
         finally:
             shutdown_scheduler()
 
-    app = FastAPI(title="Modular Accounting API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Modular Accounting API", version=API_VERSION, lifespan=lifespan)
     app.add_middleware(RequestTraceMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(RequestMetricsMiddleware, registry=metrics_registry)
@@ -85,6 +87,7 @@ def create_app() -> FastAPI:
         (auth.router, False),
         (audit.router, True),
         (health.router, False),
+        (extensions.router, False),
         (ledger.router, True),
         (fx.router, True),
         (market.router, True),

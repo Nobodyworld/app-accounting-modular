@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- 2025-10-30: Instrumented scenario orchestration with dedicated Prometheus
+  metrics and tracing, introduced extension contract discovery via
+  `macli inspect-contracts` and `/extensions/contracts`, shipped the
+  `scenarios:variance` reference extension, and added `make release` plus a
+  release manager utility to bump versions and seed changelog/release notes.
+- 2025-10-29: Normalised timezone handling and collections imports across the
+  observability and domain layers, simplified deprecated snapshot/telemetry
+  shims, tightened scenario batch orchestration utilities, refreshed CLI/test
+  helpers, and raised the tooling line length budget so linting aligns with the
+  modernised codebase.
 - 2025-10-28: Simplified the ledger CSV ingestion helpers, taught the audit
   metrics CLI to reuse cached trace coverage, refreshed stewardship docs with
   updated quality metrics, and documented telemetry monitoring roles for agents.

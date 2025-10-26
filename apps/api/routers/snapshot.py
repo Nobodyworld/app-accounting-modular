@@ -6,7 +6,11 @@ from typing import Sequence
 
 from fastapi import APIRouter, Depends, Query
 
-from ..schemas import SnapshotResponse
+from ..schemas import (
+    ScenarioBatchRequest,
+    ScenarioBatchResponse,
+    SnapshotResponse,
+)
 from ..services.snapshot_service import SnapshotOrchestrator
 
 router = APIRouter(prefix="/snapshot", tags=["snapshot"])
@@ -51,3 +55,17 @@ def fetch_snapshot(
         jurisdictions=jurisdiction,
     )
     return SnapshotResponse.from_result(result)
+
+
+@router.post("/scenarios", response_model=ScenarioBatchResponse)
+def fetch_snapshot_scenarios(
+    payload: ScenarioBatchRequest,
+    orchestrator: SnapshotOrchestrator = Depends(get_snapshot_orchestrator),
+) -> ScenarioBatchResponse:
+    """Execute multiple snapshot scenarios and return aggregate diagnostics."""
+
+    batch = orchestrator.run_scenarios(
+        payload.to_scenarios(),
+        reset_cache_between_runs=payload.reset_cache_between_runs,
+    )
+    return ScenarioBatchResponse.from_batch(batch)

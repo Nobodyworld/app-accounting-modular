@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlmodel import Session, SQLModel, create_engine
@@ -18,9 +17,9 @@ from apps.api.routers.reports import (
     budget_vs_actual,
     cashflow_forecast,
 )
-from apps.api.services.ledger_service import LedgerService
 from apps.api.services.budget_service import CashflowReport
 from apps.api.services.forecast_service import ForecastResult
+from apps.api.services.ledger_service import LedgerService
 from apps.api.utils.metadata import prepare_metadata_for_response
 
 
@@ -41,7 +40,12 @@ def seed_data(session: Session) -> tuple[int, int]:
 
     ledger = LedgerService(session)
     cash = ledger.create_account("Cash", "ASSET", code="1000", organization_id=org.id)
-    expense = ledger.create_account("Ops", "EXPENSE", code="5000", organization_id=org.id)
+    expense = ledger.create_account(
+        "Ops",
+        "EXPENSE",
+        code="5000",
+        organization_id=org.id,
+    )
     shadow_expense = ledger.create_account(
         "Backoffice", "EXPENSE", code="5100", organization_id=org.id
     )
@@ -99,7 +103,8 @@ def seed_data(session: Session) -> tuple[int, int]:
     return org.id, budget.id
 
 
-# TODO - (reports) Add scenarios with multi-currency budgets to validate conversions.
+# TODO[P3][1d]: (reports) Add scenarios with multi-currency budgets to
+# validate conversions.
 
 
 def test_budget_vs_actual_endpoint() -> None:
@@ -118,12 +123,16 @@ def test_budget_vs_actual_endpoint() -> None:
     assert response.metadata.organization_id == org_id
     assert response.metadata.reporting_currency == "USD"
     assert response.metadata.plan_revision is not None
-    assert response.metadata.generated_at.tzinfo == timezone.utc
+    assert response.metadata.generated_at.tzinfo == UTC
     assert response.metadata.accounts_without_actuals is not None
     missing = response.metadata.accounts_without_actuals
     assert missing and missing[0].account_name == "Backoffice"
 
-    stored_row = session.exec(select(ForecastOutput).where(ForecastOutput.report_type == "budget_vs_actual")).first()
+    stored_row = session.exec(
+        select(ForecastOutput).where(
+            ForecastOutput.report_type == "budget_vs_actual"
+        )
+    ).first()
     assert stored_row is not None
     stored = stored_row if isinstance(stored_row, ForecastOutput) else stored_row[0]
     assert stored.plan_id is not None
@@ -182,7 +191,7 @@ def test_response_from_cashflow_serialises_forecast_diagnostics() -> None:
         diagnostics={
             "observations": 4,
             "baseline": Decimal("2.50"),
-            "generated_at": datetime(2024, 3, 1, tzinfo=timezone.utc),
+            "generated_at": datetime(2024, 3, 1, tzinfo=UTC),
             "notes": None,
         },
         timezone="UTC",
@@ -193,7 +202,7 @@ def test_response_from_cashflow_serialises_forecast_diagnostics() -> None:
         current_cash=0.0,
         average_monthly_flow=None,
         metadata={
-            "generated_at": datetime(2024, 3, 1, tzinfo=timezone.utc),
+            "generated_at": datetime(2024, 3, 1, tzinfo=UTC),
             "forecast_status": "success",
             "forecast_diagnostics": {"existing": "cached", "baseline": 1.0},
         },

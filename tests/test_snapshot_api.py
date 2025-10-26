@@ -10,7 +10,11 @@ from apps.api.security import get_current_user
 from apps.api.services.snapshot_service import SnapshotResult
 from apps.modular_accounting.application import (
     DataSnapshot,
+    ScenarioBatchResult,
+    ScenarioResult,
+    ScenarioSummary,
     SnapshotRequest,
+    SnapshotScenario,
     compute_snapshot_diagnostics,
 )
 from apps.modular_accounting.application.cache import CacheStats
@@ -73,6 +77,32 @@ def _result() -> SnapshotResult:
     )
 
 
+def _batch() -> ScenarioBatchResult:
+    result = _result()
+    scenario = SnapshotScenario(name="demo", request=result.request, tags=("api",))
+    scenario_result = ScenarioResult(
+        scenario=scenario,
+        snapshot=result.snapshot,
+        diagnostics=result.diagnostics,
+        cache_stats=result.cache_stats,
+        providers=result.providers,
+    )
+    summary = ScenarioSummary(
+        scenario_count=1,
+        base_currencies=(scenario.base_currency,),
+        commodity_symbols=scenario.commodity_symbols,
+        jurisdictions=scenario.jurisdictions or (),
+        missing_sections={},
+        total_fx_rates=result.diagnostics.fx_rate_count,
+        total_commodity_quotes=result.diagnostics.commodity_quote_count,
+        total_tax_rules=result.diagnostics.tax_rule_count,
+        max_fx_age_seconds=result.diagnostics.fx_max_age_seconds,
+        max_commodity_age_seconds=result.diagnostics.commodity_max_age_seconds,
+        max_active_tax_rules=result.diagnostics.active_tax_rule_count,
+    )
+    return ScenarioBatchResult(results=(scenario_result,), summary=summary)
+
+
 def test_snapshot_endpoint_returns_payload(monkeypatch) -> None:
     app = create_app()
 
@@ -114,3 +144,57 @@ def test_snapshot_endpoint_returns_payload(monkeypatch) -> None:
     assert response.status_code == 200
     assert orchestrator.calls[-1]["commodity_symbols"] == ["XAG"]
     assert orchestrator.calls[-1]["jurisdictions"] == ["EU"]
+
+
+def test_snapshot_scenarios_endpoint(monkeypatch) -> None:
+    app = create_app()
+
+    def _stub_user() -> User:
+        return User(
+            id=1,
+            email="scenario@example.com",
+            password_hash="stub",
+            is_active=True,
+        )
+
+    class DummyOrchestrator:
+        def __init__(self) -> None:
+            self.calls: list[SnapshotScenario] = []
+            self.reset_cache = False
+
+        def run_scenarios(
+            self, scenarios, reset_cache_between_runs: bool = False
+        ) -> ScenarioBatchResult:
+            self.calls = list(scenarios)
+            self.reset_cache = reset_cache_between_runs
+            return _batch()
+
+    orchestrator = DummyOrchestrator()
+    app.dependency_overrides[
+        snapshot_router.get_snapshot_orchestrator
+    ] = lambda: orchestrator
+    app.dependency_overrides[get_current_user] = _stub_user
+
+    client = TestClient(app)
+    response = client.post(
+        "/snapshot/scenarios",
+        json={
+            "reset_cache_between_runs": True,
+            "scenarios": [
+                {
+                    "name": "demo",
+                    "base_currency": "USD",
+                    "commodity_symbols": ["XAU"],
+                    "jurisdictions": ["US"],
+                    "tags": ["api"],
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["scenario_count"] == 1
+    assert payload["results"][0]["providers"]["fx"] == "fx:stub"
+    assert orchestrator.reset_cache is True
+    assert orchestrator.calls[0].name == "demo"

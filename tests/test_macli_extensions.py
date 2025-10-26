@@ -81,3 +81,42 @@ def test_inspect_extensions_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 0
     lines = [line for line in result.output.splitlines() if line.strip()]
     assert lines[-1] == "No extensions configured."
+
+
+def test_inspect_contracts_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_extensions = {
+        "scenarios:variance": ExtensionInfo(
+            module="plugins.scenario_variance.extension",
+            description="Variance",
+            enabled=True,
+        )
+    }
+    monkeypatch.setattr(extension_loader, "settings", _fake_settings(**fake_extensions))
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["inspect-contracts"])
+
+    assert result.exit_code == 0
+    assert "scenarios:variance" in result.output
+    assert "Base currency variance" in result.output
+
+
+def test_inspect_contracts_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_extensions = {
+        "scenarios:variance": ExtensionInfo(
+            module="plugins.scenario_variance.extension",
+            description="Variance",
+            enabled=True,
+        )
+    }
+    monkeypatch.setattr(extension_loader, "settings", _fake_settings(**fake_extensions))
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["inspect-contracts", "--format", "json"])
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    start = next(idx for idx, line in enumerate(lines) if line.startswith("["))
+    payload = json.loads("\n".join(lines[start:]))
+    assert payload[0]["key"] == "scenarios:variance"
+    assert payload[0]["contracts"][0]["kind"] == "scenario-augmentation"

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import importlib
-
+from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Iterable
+from typing import Any
 
 from ..config import ProviderInfo, settings
 
@@ -82,7 +82,7 @@ def _cached_provider_metadata(
     """Build provider metadata lists keyed by capability filters."""
 
     metadata: list[ProviderMetadata] = []
-    for key, _, _, capabilities in signature:
+    for key, _, _, _capabilities in signature:
         info = settings.allowed_providers.get(key)
         if info is None:
             # Configuration changed after cache key generation; ignore entry.

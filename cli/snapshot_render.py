@@ -7,11 +7,13 @@ from typing import Sequence
 
 from apps.modular_accounting.application import (
     DataSnapshot,
+    ScenarioBatchResult,
     SnapshotDiagnostics,
 )
 
 __all__ = [
     "format_snapshot_table",
+    "format_scenario_batch_table",
     "snapshot_to_payload",
 ]
 
@@ -140,6 +142,72 @@ def format_snapshot_table(
             ),
         ]
         sections.extend(_render_table(("Metric", "Value"), diag_rows))
+
+    return "\n".join(sections)
+
+
+def format_scenario_batch_table(batch: ScenarioBatchResult) -> str:
+    """Render a scenario batch result as a human-readable report."""
+
+    sections: list[str] = []
+    summary = batch.summary
+    summary_rows = [
+        ("Scenarios", str(summary.scenario_count)),
+        ("Base currencies", ", ".join(summary.base_currencies) or "-"),
+        ("Commodity symbols", ", ".join(summary.commodity_symbols) or "-"),
+        ("Jurisdictions", ", ".join(summary.jurisdictions) or "-"),
+        ("Total FX rates", str(summary.total_fx_rates)),
+        ("Total commodity quotes", str(summary.total_commodity_quotes)),
+        ("Total tax rules", str(summary.total_tax_rules)),
+        (
+            "Max FX age (s)",
+            "-" if summary.max_fx_age_seconds is None else f"{summary.max_fx_age_seconds:.0f}",
+        ),
+        (
+            "Max commodity age (s)",
+            "-"
+            if summary.max_commodity_age_seconds is None
+            else f"{summary.max_commodity_age_seconds:.0f}",
+        ),
+        ("Max active tax rules", str(summary.max_active_tax_rules)),
+    ]
+    sections.append("Scenario Summary")
+    sections.append("----------------")
+    sections.extend(_render_table(("Metric", "Value"), summary_rows))
+
+    sections.append("")
+    sections.append("Scenario Diagnostics")
+    sections.append("--------------------")
+    if batch.results:
+        diag_rows = [
+            (
+                result.scenario.name,
+                result.diagnostics.base_currency or result.scenario.base_currency,
+                str(result.diagnostics.fx_rate_count),
+                str(result.diagnostics.commodity_quote_count),
+                str(result.diagnostics.tax_rule_count),
+                ", ".join(result.diagnostics.missing_sections) or "None",
+            )
+            for result in batch.results
+        ]
+        sections.extend(
+            _render_table(
+                ("Scenario", "Base", "FX", "Commodities", "Tax", "Missing"),
+                diag_rows,
+            )
+        )
+    else:
+        sections.append("(no scenarios)")
+
+    if summary.missing_sections:
+        sections.append("")
+        sections.append("Missing Sections")
+        sections.append("----------------")
+        missing_rows = [
+            (name, ", ".join(sections_) if sections_ else "-")
+            for name, sections_ in summary.missing_sections.items()
+        ]
+        sections.extend(_render_table(("Scenario", "Sections"), missing_rows))
 
     return "\n".join(sections)
 
