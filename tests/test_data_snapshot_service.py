@@ -13,11 +13,11 @@ from apps.modular_accounting.adapters import (
     InMemoryFXAdapter,
     InMemoryTaxAdapter,
 )
-from apps.modular_accounting.domain import TaxRule
-from apps.modular_accounting.services import (
+from apps.modular_accounting.application import (
     DataSnapshotService,
     SnapshotRequest,
 )
+from apps.modular_accounting.domain import TaxRule
 
 
 class RecordingCommodityAdapter(InMemoryCommodityAdapter):

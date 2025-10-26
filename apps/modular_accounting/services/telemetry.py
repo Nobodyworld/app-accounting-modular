@@ -1,34 +1,27 @@
-"""Telemetry adapters bridging the application layer and observability stack."""
+"""Deprecated telemetry facade preserved for backwards compatibility."""
 
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import Protocol
+import warnings
+from typing import Any
 
-from ..application.cache import CacheObserver
+warnings.warn(
+    "apps.modular_accounting.services.telemetry is deprecated; "
+    "import from apps.modular_accounting.application.telemetry instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 __all__ = ["SnapshotTelemetry", "telemetry_provider"]
 
 
-class SnapshotTelemetry(Protocol):
-    """Interface consumed by :class:`DataSnapshotService` for instrumentation."""
+def __getattr__(name: str) -> Any:
+    if name not in __all__:
+        raise AttributeError(name)
+    from ..application.telemetry import SnapshotTelemetry, telemetry_provider
 
-    def cache_observer(self, cache_name: str) -> CacheObserver:
-        """Return a cache observer that will record metrics for ``cache_name``."""
-
-    def record_latency(self, *, status: str, duration: float) -> None:
-        """Record the time spent building a snapshot with ``status`` outcome."""
-
-    def record_failure(self, *, stage: str) -> None:
-        """Increment failure counters for the orchestration ``stage``."""
-
-
-@lru_cache(maxsize=1)
-def telemetry_provider() -> SnapshotTelemetry | None:
-    """Return the default snapshot telemetry adapter when available."""
-
-    try:
-        from apps.observability.metrics import snapshot_telemetry
-    except Exception:  # pragma: no cover - defensive fallback
-        return None
-    return snapshot_telemetry
+    mapping = {
+        "SnapshotTelemetry": SnapshotTelemetry,
+        "telemetry_provider": telemetry_provider,
+    }
+    return mapping[name]

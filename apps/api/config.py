@@ -37,6 +37,8 @@ DEFAULT_LOG_LEVEL = "INFO"
 
 VALID_LOG_FORMATS = frozenset({"JSON", "TEXT"})
 DEFAULT_LOG_FORMAT: LogFormat = "JSON"
+VALID_TRACING_EXPORTERS = frozenset({"disabled", "console", "otlp"})
+DEFAULT_TRACING_EXPORTER = "console"
 
 ALLOWED_JWT_ALGORITHMS = frozenset(
     {
@@ -100,7 +102,13 @@ DEFAULT_ALLOWED_EXTENSIONS: dict[str, ExtensionInfo] = {
         module="plugins.analytics_baseline.extension",
         description="Baseline analytics instrumentation extension",
         capabilities=("analytics", "observability"),
-    )
+    ),
+    "reporting:cashflow": ExtensionInfo(
+        module="plugins.reference_cashflow.extension",
+        description="Reference cashflow analytics extension",
+        capabilities=("reporting", "cashflow", "analytics"),
+        enabled=False,
+    ),
 }
 
 # TODO - Load provider catalog from persistence so admin edits survive restarts.
@@ -156,6 +164,17 @@ class Settings(BaseModel):
     newsapi_key: str | None = Field(default_factory=lambda: os.getenv("NEWSAPI_KEY"))
     gdelt_user_agent: str | None = Field(
         default_factory=lambda: os.getenv("GDELT_USER_AGENT")
+    )
+    tracing_exporter: str = Field(
+        default_factory=lambda: (
+            os.getenv("MODACCT_TRACING_EXPORTER")
+            or os.getenv("TRACING_EXPORTER")
+            or DEFAULT_TRACING_EXPORTER
+        )
+    )
+    tracing_otlp_endpoint: str | None = Field(
+        default_factory=lambda: os.getenv("MODACCT_TRACING_OTLP_ENDPOINT")
+        or os.getenv("TRACING_OTLP_ENDPOINT")
     )
     allowed_providers: dict[str, ProviderInfo] = Field(
         default_factory=lambda: {
@@ -223,6 +242,28 @@ class Settings(BaseModel):
             )
             raise ValueError(msg)
         return cast(LogFormat, format_normalized)
+
+    @field_validator("tracing_exporter")
+    @classmethod
+    def _validate_tracing_exporter(cls, value: str) -> str:
+        exporter = (value or DEFAULT_TRACING_EXPORTER).strip().lower()
+        if exporter not in VALID_TRACING_EXPORTERS:
+            msg = (
+                "Unsupported tracing exporter '{value}'. "
+                "Valid options: {choices}".format(
+                    value=value, choices=sorted(VALID_TRACING_EXPORTERS)
+                )
+            )
+            raise ValueError(msg)
+        return exporter
+
+    @field_validator("tracing_otlp_endpoint")
+    @classmethod
+    def _validate_tracing_endpoint(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
 
     @field_validator(
         "openex_app_id",
@@ -325,12 +366,17 @@ class Settings(BaseModel):
             "alphavantage_key": ("ALPHAVANTAGE_API_KEY",),
             "newsapi_key": ("NEWSAPI_KEY",),
             "gdelt_user_agent": ("GDELT_USER_AGENT",),
+            "tracing_otlp_endpoint": ("TRACING_OTLP_ENDPOINT",),
         }
 
         for field_name, aliases in optional_keys.items():
             value = lookup(field_name, *aliases)
             if value is not None:
                 settings_data[field_name] = value
+
+        tracing_exporter = lookup("tracing_exporter", "TRACING_EXPORTER")
+        if tracing_exporter is not None:
+            settings_data["tracing_exporter"] = tracing_exporter.lower()
 
         jwt_secret = lookup("jwt_secret_key", "JWT_SECRET_KEY")
         if jwt_secret is not None:

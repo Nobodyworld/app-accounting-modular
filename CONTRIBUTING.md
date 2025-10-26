@@ -31,8 +31,10 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
 - Linting: **Ruff** (including import sorting) with project-level configuration in `pyproject.toml`.
 - Static typing: **mypy** gradually enforced—consult [PLAN.md](PLAN.md) for the current strict coverage map.
 - Front-end assets: **Prettier** for Markdown/YAML/JSON.
-- Run `pre-commit run --all-files` or `make quality` before pushing to catch style issues locally.
+- Run `pre-commit run --all-files` or `make quality` before pushing to catch style issues locally. Use `make ci` for the full lint/type/test/security pipeline.
 - Health checks: `make health` exercises the CLI-based readiness probes.
+- Steward metrics: `make audit` generates a Markdown snapshot under `REPORTS/` with
+  coverage, complexity, and dependency ratios when preparing quarterly reviews.
 
 ## Testing Strategy
 - Add unit tests under `tests/` mirroring the module path (`tests/services/test_*.py`, etc.).
@@ -44,7 +46,7 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
 - Every code change affecting behaviour must update relevant docs (`README.md`, `docs/`, router/service docstrings).
 - Include usage examples or migration notes when introducing new endpoints, CLI commands, or environment variables.
 - Ensure Markdown follows the conventions described in `docs/README.md` (tables for configuration, fenced code blocks for commands).
-- Changelog entries go under the **Unreleased** section of `CHANGELOG.md`.
+- Changelog entries go under the **Unreleased** section of `CHANGELOG.md`. When shipping a release, run `python -m tools.release <version>` to roll the notes forward automatically.
 
 ## Pull Request Checklist
 - [ ] Quality gates passing locally (`make quality`).

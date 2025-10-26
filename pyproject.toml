@@ -69,7 +69,7 @@ files = [
   "apps/observability/metrics.py",
   "apps/modular_accounting/application/cache.py",
   "apps/modular_accounting/application/snapshots.py",
-  "apps/modular_accounting/services/telemetry.py",
+  "apps/modular_accounting/application/telemetry.py",
   "cli/macli.py",
 ]
 

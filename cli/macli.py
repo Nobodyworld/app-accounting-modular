@@ -37,8 +37,10 @@ from apps.api.services.plugin_loader import (
 )
 from apps.api.services.snapshot_service import SnapshotOrchestrator
 from apps.api.services.workflow_service import WorkflowService
+from apps.extensions import scaffold_extension as generate_extension
 from apps.observability.health import health_registry
 from apps.observability.logging import configure_logging, logging_context
+from apps.observability.tracing import configure_tracing, traced
 from cli.snapshot_render import format_snapshot_table
 
 logger = logging.getLogger(__name__)
@@ -92,19 +94,20 @@ def _execute_provider_command(
 def _command_scope(command: str, **context: object) -> Iterator[None]:
     correlation = f"{command}-{uuid4()}"
     merged_context = {"command": command, **context}
-    with logging_context(
-        correlation_id=correlation,
-        request_id=correlation,
-        **merged_context,
-    ):
-        logger.info("Starting CLI command")
-        try:
-            yield
-        except Exception:
-            logger.exception("CLI command failed")
-            raise
-        else:
-            logger.info("Completed CLI command")
+    with traced(f"cli.{command}", **merged_context):
+        with logging_context(
+            correlation_id=correlation,
+            request_id=correlation,
+            **merged_context,
+        ):
+            logger.info("Starting CLI command")
+            try:
+                yield
+            except Exception:
+                logger.exception("CLI command failed")
+                raise
+            else:
+                logger.info("Completed CLI command")
 
 
 @click.group()
@@ -125,6 +128,11 @@ def cli(ctx: click.Context, log_format: str | None) -> None:
         cast(LogFormat, selected_format),
         service_name="modular-accounting-cli",
         force=True,
+    )
+    configure_tracing(
+        service_name="modular-accounting-cli",
+        exporter=settings.tracing_exporter,
+        endpoint=settings.tracing_otlp_endpoint,
     )
     ctx.ensure_object(dict)
     ctx.obj["log_format"] = selected_format
@@ -425,6 +433,70 @@ def list_extensions() -> None:
             manifest = status.manifest
             description = manifest.description if manifest else "<not loaded>"
             click.echo(f"{status.key}: {state} - {description}")
+
+
+@cli.command(name="scaffold-extension")
+@click.argument("key")
+@click.option(
+    "--directory",
+    type=click.Path(path_type=Path),
+    default=Path("plugins"),
+    help="Directory to create the extension package in.",
+)
+@click.option("--name", default=None, help="Human readable extension name.")
+@click.option(
+    "--capability",
+    "capabilities",
+    multiple=True,
+    help="Capability label to advertise (repeat for multiple).",
+)
+@click.option(
+    "--version",
+    default="0.1.0",
+    show_default=True,
+    help="Initial manifest version.",
+)
+@click.option("--description", default=None, help="Short extension summary.")
+@click.option("--author", default=None, help="Manifest author metadata.")
+@click.option("--force", is_flag=True, help="Overwrite existing files if present.")
+def scaffold_extension_command(
+    key: str,
+    directory: Path,
+    name: str | None,
+    capabilities: tuple[str, ...],
+    version: str,
+    description: str | None,
+    author: str | None,
+    force: bool,
+) -> None:
+    """Generate an extension package skeleton."""
+
+    target_dir = directory.resolve()
+    with _command_scope(
+        "scaffold-extension", key=key, directory=str(target_dir)
+    ):
+        try:
+            result = generate_extension(
+                target_dir,
+                key=key,
+                name=name,
+                version=version,
+                description=description,
+                capabilities=capabilities,
+                author=author,
+                force=force,
+            )
+        except (ValueError, FileExistsError) as exc:
+            raise click.ClickException(str(exc)) from exc
+
+        for created in result.created_files:
+            click.echo(f"created {created.relative_to(Path.cwd())}")
+        click.echo(
+            "Extension package '{key}' scaffolded at {root}".format(
+                key=result.key,
+                root=result.root.relative_to(Path.cwd()),
+            )
+        )
 
 
 def _load_transactions_from_csv(

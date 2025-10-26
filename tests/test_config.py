@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from apps.api.config import DEFAULT_LOG_FORMAT, MAX_ACCESS_TOKEN_MINUTES, Settings
+from apps.api.config import (
+    DEFAULT_LOG_FORMAT,
+    DEFAULT_TRACING_EXPORTER,
+    MAX_ACCESS_TOKEN_MINUTES,
+    Settings,
+)
 
 
 def test_settings_reads_prefixed_environment(monkeypatch) -> None:
@@ -131,3 +138,29 @@ def test_settings_rejects_invalid_log_format(monkeypatch) -> None:
         Settings.load()
 
     assert "JSON" in str(exc.value)
+
+
+def test_settings_defaults_tracing(monkeypatch) -> None:
+    monkeypatch.delenv("MODACCT_TRACING_EXPORTER", raising=False)
+
+    cfg = Settings.load()
+
+    assert cfg.tracing_exporter == DEFAULT_TRACING_EXPORTER
+    assert cfg.tracing_otlp_endpoint is None
+
+
+def test_settings_validates_tracing_exporter(monkeypatch) -> None:
+    monkeypatch.setenv("MODACCT_TRACING_EXPORTER", "invalid")
+
+    with pytest.raises(ValueError) as exc:
+        Settings.load()
+
+    assert "Unsupported tracing exporter" in str(exc.value)
+
+
+def test_settings_trims_tracing_endpoint(monkeypatch) -> None:
+    monkeypatch.setenv("TRACING_OTLP_ENDPOINT", "  http://collector.example  ")
+
+    cfg = Settings.load()
+
+    assert cfg.tracing_otlp_endpoint == "http://collector.example"
