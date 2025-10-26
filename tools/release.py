@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Sequence
 
 CHANGELOG_PATH = Path("CHANGELOG.md")
 RELEASE_NOTES_PATH = Path("RELEASE_NOTES.md")
@@ -40,7 +40,11 @@ def plan_release(version: str, *, today: str | None = None) -> ReleasePlan:
     trimmed = [entry for entry in entries if entry.strip()]
     if not trimmed:
         raise RuntimeError("No unreleased entries to release")
-    return ReleasePlan(version=version, date=today or date.today().isoformat(), changelog_entries=entries)
+    return ReleasePlan(
+        version=version,
+        date=today or date.today().isoformat(),
+        changelog_entries=entries,
+    )
 
 
 def update_changelog(plan: ReleasePlan) -> None:
@@ -75,7 +79,9 @@ def prepare_release(version: str, *, today: str | None = None) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Prepare release collateral")
     parser.add_argument("version", help="Semantic version to release")
-    parser.add_argument("--date", dest="date", help="Override release date (YYYY-MM-DD)")
+    parser.add_argument(
+        "--date", dest="date", help="Override release date (YYYY-MM-DD)"
+    )
     args = parser.parse_args(argv)
     prepare_release(args.version, today=args.date)
     return 0

@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, Session, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from apps.api.db import get_session
 from apps.api.main import create_app
 from apps.api.models.models import AuditLog, Membership, Organization, User
+from apps.api.routers import auth as auth_router
 from apps.api.security import create_access_token, get_password_hash
 from apps.api.services.ledger_service import LedgerService
-from apps.api.routers import auth as auth_router
 
 
 @pytest.fixture()
@@ -48,8 +48,14 @@ def api_context():
         session.refresh(org1)
         session.refresh(org2)
 
-        admin = User(email="admin@example.com", password_hash=get_password_hash("secret"))
-        member = User(email="member@example.com", password_hash=get_password_hash("secret"))
+        admin = User(
+            email="admin@example.com",
+            password_hash=get_password_hash("secret"),
+        )
+        member = User(
+            email="member@example.com",
+            password_hash=get_password_hash("secret"),
+        )
         session.add_all([admin, member])
         session.commit()
         session.refresh(admin)
@@ -115,7 +121,9 @@ def api_context():
 
 def test_requires_authentication(api_context):
     client, ctx, _ = api_context
-    response = client.get("/ledger/trial-balance", params={"organization_id": ctx["org1_id"]})
+    response = client.get(
+        "/ledger/trial-balance", params={"organization_id": ctx["org1_id"]}
+    )
     assert response.status_code == 401
 
 
@@ -170,7 +178,7 @@ def test_login_throttling_and_audit_logging(api_context):
     assert locked.status_code == 429
 
     # Expire lockout and login successfully
-    auth_router._lockouts["admin@example.com"] = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    auth_router._lockouts["admin@example.com"] = datetime(2000, 1, 1, tzinfo=UTC)
     success = client.post(
         "/auth/token",
         data={"username": "admin@example.com", "password": "secret"},

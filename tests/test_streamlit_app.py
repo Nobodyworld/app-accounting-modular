@@ -89,10 +89,19 @@ def fake_requests(monkeypatch):
             return DummyResponse(cashflow_payload)
         return DummyResponse({"ok": True})
 
-    def fake_post(url: str, params: dict | None = None, json: dict | None = None, timeout: int = 5):
+    def fake_post(
+        url: str,
+        params: dict | None = None,
+        json: dict | None = None,
+        timeout: int = 5,
+    ):
         return DummyResponse({"ok": True})
 
-    monkeypatch.setattr(streamlit_app, "requests", SimpleNamespace(get=fake_get, post=fake_post))
+    monkeypatch.setattr(
+        streamlit_app,
+        "requests",
+        SimpleNamespace(get=fake_get, post=fake_post),
+    )
     monkeypatch.setattr("requests.get", fake_get)
     monkeypatch.setattr("requests.post", fake_post)
     monkeypatch.setenv("API_BASE", "http://fake")

@@ -58,5 +58,40 @@ def test_active_extensions_reports_disabled(monkeypatch: pytest.MonkeyPatch) -> 
     assert len(statuses) == 1
     status = statuses[0]
     assert status.key == "observability:demo"
+    assert status.module == "plugins.analytics_baseline.extension"
     assert status.enabled is False
     assert status.manifest is None
+
+
+def test_extension_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_extensions = {
+        "observability:demo": ExtensionInfo(
+            module="plugins.analytics_baseline.extension",
+            enabled=True,
+        )
+    }
+    monkeypatch.setattr(extension_loader, "settings", _fake_settings(**fake_extensions))
+
+    class StubTelemetry:
+        def __init__(self) -> None:
+            self.load_events: list[tuple[str, str]] = []
+            self.enabled: dict[str, bool] = {}
+
+        def record_load(self, *, module: str, status: str, duration: float) -> None:
+            self.load_events.append((module, status))
+
+        def set_enabled(self, *, module: str, enabled: bool) -> None:
+            self.enabled[module] = enabled
+
+    stub = StubTelemetry()
+    from apps.extensions import registry as registry_module
+
+    monkeypatch.setattr(extension_loader, "extension_telemetry", stub)
+    monkeypatch.setattr(registry_module, "extension_telemetry", stub)
+
+    manifests = load_configured_extensions()
+
+    assert manifests
+    module_path = "plugins.analytics_baseline.extension"
+    assert stub.enabled[module_path] is True
+    assert (module_path, "success") in stub.load_events

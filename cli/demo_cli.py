@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from decimal import Decimal
-from typing import Iterable
+from collections.abc import Iterable
 
 import click
 
@@ -14,7 +14,11 @@ from apps.modular_accounting.adapters import (
     InMemoryFXAdapter,
     InMemoryTaxAdapter,
 )
-from apps.modular_accounting.application import DataSnapshot, DataSnapshotService
+from apps.modular_accounting.application import (
+    DataSnapshotService,
+    SnapshotRequest,
+    compute_snapshot_diagnostics,
+)
 from apps.modular_accounting.domain import TaxRule
 from cli.snapshot_render import format_snapshot_table, snapshot_to_payload
 
@@ -71,11 +75,19 @@ def demo() -> None:
     show_default=True,
     help="Choose between structured JSON or human-readable table output.",
 )
+@click.option(
+    "--include-diagnostics/--no-include-diagnostics",
+    "include_diagnostics",
+    default=False,
+    show_default=True,
+    help="Append snapshot diagnostics to the output payload.",
+)
 def snapshot(
     base_currency: str,
     commodity_symbols: tuple[str, ...],
     jurisdictions: tuple[str, ...],
     output_format: str,
+    include_diagnostics: bool,
 ) -> None:
     """Generate a JSON snapshot from the in-memory adapters.
 
@@ -95,7 +107,7 @@ def snapshot(
     service = DataSnapshotService(fx_adapter, commodity_adapter, tax_adapter)
 
     try:
-        snapshot = service.build_snapshot(
+        request = SnapshotRequest.from_primitives(
             base_currency=base_currency,
             commodity_symbols=commodity_symbols,
             jurisdictions=jurisdictions or None,
@@ -103,9 +115,16 @@ def snapshot(
     except ValueError as exc:
         raise click.BadParameter(str(exc), param_hint="--base") from exc
 
+    snapshot = service.create_snapshot(request)
+    diagnostics = (
+        compute_snapshot_diagnostics(snapshot, request=request)
+        if include_diagnostics
+        else None
+    )
+
     if output_format.lower() == "json":
-        payload = snapshot_to_payload(snapshot)
+        payload = snapshot_to_payload(snapshot, diagnostics=diagnostics)
         click.echo(json.dumps(payload, indent=2, default=str))
         return
 
-    click.echo(format_snapshot_table(snapshot))
+    click.echo(format_snapshot_table(snapshot, diagnostics=diagnostics))

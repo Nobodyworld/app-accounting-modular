@@ -1,8 +1,9 @@
 from datetime import date
 
-from apps.api.models.models import Price, Rate, TaxRule as DBTaxRule
-from apps.api.services.snapshot_service import SnapshotOrchestrator
+from apps.api.models.models import Price, Rate
+from apps.api.models.models import TaxRule as DBTaxRule
 from apps.api.services.plugin_loader import ProviderHandle, ProviderMetadata
+from apps.api.services.snapshot_service import SnapshotOrchestrator
 
 
 class StubFXProvider:
@@ -10,8 +11,20 @@ class StubFXProvider:
 
     def sync_daily_rates(self, base: str = "USD", date_=None):
         return [
-            Rate(base=base, quote="EUR", date=date(2024, 1, 1), value=0.92, provider=self.name),
-            Rate(base=base, quote="GBP", date=date(2024, 1, 1), value=0.78, provider=self.name),
+            Rate(
+                base=base,
+                quote="EUR",
+                date=date(2024, 1, 1),
+                value=0.92,
+                provider=self.name,
+            ),
+            Rate(
+                base=base,
+                quote="GBP",
+                date=date(2024, 1, 1),
+                value=0.78,
+                provider=self.name,
+            ),
         ]
 
 
@@ -94,6 +107,9 @@ def test_snapshot_orchestrator_builds_snapshot() -> None:
     assert result.snapshot.fx_rates[0].quote_currency == "EUR"
     assert result.snapshot.commodity_quotes[0].symbol == "XAU"
     assert {rule.jurisdiction for rule in result.snapshot.tax_rules} == {"US"}
+    assert result.diagnostics.fx_rate_count == 2
+    assert "fx" not in result.diagnostics.missing_sections
     payload = result.as_payload()
     assert payload["providers"]["fx"] == "fx:stub"
     assert payload["request"]["commodity_symbols"] == ["XAU"]
+    assert payload["diagnostics"]["commodity_quote_count"] == 1

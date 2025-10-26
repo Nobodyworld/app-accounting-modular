@@ -34,4 +34,13 @@
   1. Ensure dependencies are installed (`make install`) and run `make audit`.
   2. Review the generated Markdown to confirm coverage, complexity, and dependency ratios meet expectations.
   3. Update `STEWARDS_REPORT.md` with new metrics, citing the rendered report for traceability.
-- **Fallback**: When trace instrumentation is too slow, rerun `tools.audit_metrics` with `--skip-trace` to capture complexity and dependency metrics without coverage numbers.
+- **Fallback**: When trace instrumentation is too slow, rerun `tools.audit_metrics` with `--skip-trace`; the command now reuses the previous trace directory to preserve coverage figures while refreshing the remaining metrics.
+
+## Telemetry Sentinel Agent
+- **Trigger**: Continuous health monitoring or incident triage.
+- **Entry points**: `python -m cli.macli inspect-extensions` (`# agent-entrypoint`) and `curl http://localhost:8000/health/telemetry`.
+- **Checklist**:
+  1. Capture the CLI inspector output (JSON mode recommended) to record extension load status and latency histograms.
+  2. Fetch `/health/telemetry` and store the payload alongside the CLI output to cross-validate metrics vs. health probes.
+  3. Flag degraded subsystems—particularly the scheduler—by opening or updating incidents in the steward log.
+- **Fallback**: When the API is offline, fall back to `make health` for CLI-side probes and log the failure reason so the API outage is recorded alongside CLI telemetry.

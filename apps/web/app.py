@@ -12,7 +12,11 @@ import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 API = os.getenv("API_BASE", "http://localhost:8000")
-BUDGET_TEMPLATE = """account_id,period_start,amount\n101,2024-01-01,2500\n101,2024-02-01,2600\n"""
+BUDGET_TEMPLATE = (
+    "account_id,period_start,amount\n"
+    "101,2024-01-01,2500\n"
+    "101,2024-02-01,2600\n"
+)
 
 
 def _can_render_downloads() -> bool:
@@ -46,7 +50,9 @@ def _load_providers() -> tuple[list[dict[str, Any]], str | None]:
         return [], str(exc)
 
 
-def _provider_options(capability: str, providers: dict[str, dict[str, Any]]) -> list[str]:
+def _provider_options(
+    capability: str, providers: dict[str, dict[str, Any]]
+) -> list[str]:
     return [
         key
         for key, meta in providers.items()
@@ -90,7 +96,10 @@ with health_tab:
 
 with budget_tab:
     st.subheader("Upload budget lines")
-    st.caption("Drag & drop CSV with columns: account_id, period_start (YYYY-MM-DD), amount")
+    st.caption(
+        "Drag & drop CSV with columns: "
+        "account_id, period_start (YYYY-MM-DD), amount"
+    )
     uploaded_file = st.file_uploader(
         "Budget CSV",
         type=["csv"],
@@ -111,14 +120,18 @@ with budget_tab:
         file_bytes = uploaded_file.getvalue()
         st.session_state["uploaded_budget_bytes"] = file_bytes
         try:
-            st.session_state["uploaded_budget_preview"] = pd.read_csv(BytesIO(file_bytes)).head(100)
+            st.session_state["uploaded_budget_preview"] = (
+                pd.read_csv(BytesIO(file_bytes)).head(100)
+            )
         except Exception as exc:
             st.error(f"Failed to parse CSV: {exc}")
 
     stored_bytes = st.session_state.get("uploaded_budget_bytes")
     if stored_bytes and "uploaded_budget_preview" not in st.session_state:
         try:
-            st.session_state["uploaded_budget_preview"] = pd.read_csv(BytesIO(stored_bytes)).head(100)
+            st.session_state["uploaded_budget_preview"] = (
+                pd.read_csv(BytesIO(stored_bytes)).head(100)
+            )
         except Exception as exc:
             st.error(f"Failed to parse stored CSV: {exc}")
 
@@ -233,7 +246,9 @@ with fx_tab:
     else:
         st.info("No FX providers configured on the API")
 
-    if st.button("Sync FX Now", disabled=provider_key is None, key="fx_sync_button"):
+    if st.button(
+        "Sync FX Now", disabled=provider_key is None, key="fx_sync_button"
+    ):
         try:
             params = {"base": base, "provider_key": provider_key}
             response = requests.post(f"{API}/fx/sync", params=params, timeout=30)
@@ -259,7 +274,11 @@ with market_tab:
     else:
         st.info("No market providers configured on the API")
 
-    if st.button("Sync Prices", disabled=market_provider is None, key="market_sync_button"):
+    if st.button(
+        "Sync Prices",
+        disabled=market_provider is None,
+        key="market_sync_button",
+    ):
         try:
             params = {
                 "symbol": symbol,

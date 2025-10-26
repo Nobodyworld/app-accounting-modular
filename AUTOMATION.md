@@ -9,7 +9,11 @@ repository to remain safe, observable, and reversible.
    tests with coverage gates, and security scanning. `make ci` mirrors the full
    pipeline for local smoke checks. `make health` runs a full suite of health
    probes using the CLI, and `make audit` snapshots coverage/complexity metrics
-   via the trace-based fallback for air-gapped environments.
+   via the trace-based fallback for air-gapped environments. When coverage data
+   already exists, rerun `tools.audit_metrics` with `--skip-trace` to reuse the
+   stored `.cover` files and refresh only the lightweight metrics.
+   Pair `make health` with `python -m cli.macli inspect-extensions` to verify
+   extension manifests loaded and expose version metadata for release notes.
 2. **Record decisions in docs**. Significant architectural or operational
    changes should be summarised in `ARCHITECTURE_OVERVIEW.md` and the relevant
    README section.
@@ -33,10 +37,14 @@ repository to remain safe, observable, and reversible.
      scheduler state, metrics export, and extension probes.
    * `curl http://localhost:8000/health/ready` – verifies HTTP readiness when
      the API is running.
+   * `curl http://localhost:8000/health/telemetry` – aggregates metrics,
+      extension status, and health probes for dashboards or runbooks.
 4. Generate release collateral:
    * Update `CHANGELOG.md` and `RELEASE_NOTES.md`.
    * Run `make audit` to refresh `REPORTS/audit-latest.md` with up-to-date
-     metrics whenever steward reports are compiled.
+     metrics whenever steward reports are compiled. If trace collection is too
+     slow, rerun `tools.audit_metrics --skip-trace` to reuse the prior coverage
+     snapshot while still emitting complexity and dependency profiles.
 
 ## Safety valves
 
@@ -52,11 +60,13 @@ repository to remain safe, observable, and reversible.
 ## Incident response
 
 1. Use `macli health` to capture an immediate snapshot of subsystem status.
-2. Inspect logs with correlation IDs (CLI and HTTP both emit `correlation_id`
+2. Inspect extension load telemetry via `macli inspect-extensions` (table or
+   JSON) to confirm the modules your automation depends on are available.
+3. Inspect logs with correlation IDs (CLI and HTTP both emit `correlation_id`
    fields) to trace requests end-to-end.
-3. Roll back recent deployments by reverting the Git commit or disabling the
+4. Roll back recent deployments by reverting the Git commit or disabling the
    affected extension in configuration (`MODACCT_ALLOWED_EXTENSIONS__key__enabled=false`).
-4. Regenerate extension packages with `macli scaffold-extension` when
+5. Regenerate extension packages with `macli scaffold-extension` when
    backfilling automation or agent-specific hooks to ensure the latest tracing
    primitives are included.
 

@@ -142,6 +142,69 @@ def cli(ctx: click.Context, log_format: str | None) -> None:
     )
 
 
+def _format_extension_rows() -> list[dict[str, str]]:
+    load_configured_extensions()
+    rows: list[dict[str, str]] = []
+    for status in active_extensions():
+        manifest = status.manifest
+        rows.append(
+            {
+                "Key": status.key,
+                "Name": manifest.name if manifest else "-",
+                "Module": status.module,
+                "Enabled": "yes" if status.enabled else "no",
+                "Loaded": "yes" if manifest else "no",
+                "Version": manifest.version if manifest else "-",
+                "Capabilities": ", ".join(manifest.capabilities) if manifest else "-",
+            }
+        )
+    return rows
+
+
+def _render_table(rows: list[dict[str, str]]) -> str:
+    headers = [
+        "Key",
+        "Name",
+        "Module",
+        "Enabled",
+        "Loaded",
+        "Version",
+        "Capabilities",
+    ]
+    if not rows:
+        return "No extensions configured."
+    widths = {header: len(header) for header in headers}
+    for row in rows:
+        for header in headers:
+            widths[header] = max(widths[header], len(row[header]))
+    lines = [
+        "  ".join(header.ljust(widths[header]) for header in headers),
+        "  ".join("-" * widths[header] for header in headers),
+    ]
+    for row in rows:
+        lines.append("  ".join(row[header].ljust(widths[header]) for header in headers))
+    return "\n".join(lines)
+
+
+@cli.command(name="inspect-extensions")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    default="table",
+    show_default=True,
+    help="Output format for the extension registry snapshot.",
+)
+def inspect_extensions(output_format: str) -> None:
+    """Display configured extension manifests and load status."""
+
+    rows = _format_extension_rows()
+    if output_format.lower() == "json":
+        click.echo(json.dumps(rows, indent=2, sort_keys=True))
+        return
+    click.echo(_render_table(rows))
+
+
 @cli.command()
 @click.option(
     "--base",
@@ -318,7 +381,7 @@ def snapshot(
         )
         click.echo(f"Providers: {provider_line}")
         click.echo("")
-        click.echo(format_snapshot_table(result.snapshot))
+        click.echo(format_snapshot_table(result.snapshot, result.diagnostics))
         if result.cache_stats:
             stats_line = ", ".join(
                 f"{name}: hits={stats.hits}, misses={stats.misses}, size={stats.size}"
@@ -509,75 +572,115 @@ def _load_transactions_from_csv(
 
     with file_path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise click.ClickException("CSV file is missing a header row")
-
-        header = {name.strip() for name in reader.fieldnames if name}
-        missing = required_fields - header
-        if missing:
-            missing_list = ", ".join(sorted(missing))
-            raise click.ClickException(f"CSV missing required columns: {missing_list}")
-
-        account_key = next(
-            (field for field in optional_account_fields if field in header),
-            None,
+        account_key = _validate_csv_structure(
+            reader, required_fields, optional_account_fields
         )
-        if account_key is None:
-            raise click.ClickException(
-                "CSV must include either 'account_code' or 'account_name' column"
-            )
+        grouped = _collect_postings(reader, ledger, account_key)
 
-        grouped: dict[tuple[str, str], list[dict[str, object]]] = defaultdict(list)
-        account_cache: dict[str, int] = {}
+    return _assemble_transactions(grouped)
 
-        for idx, row in enumerate(reader, start=2):  # 1-index header
-            if not any(row.values()):
-                continue
 
-            try:
-                raw_date = (row.get("date") or "").strip()
-                txn_date = date.fromisoformat(raw_date)
-            except (ValueError, AttributeError) as exc:
-                raise click.ClickException(
-                    f"Row {idx}: invalid or missing date"
-                ) from exc
+def _validate_csv_structure(
+    reader: csv.DictReader,
+    required_fields: set[str],
+    optional_account_fields: tuple[str, ...],
+) -> str:
+    """Validate header constraints and return the selected account identifier column."""
 
-            description = (row.get("description") or "").strip()
-            if not description:
-                raise click.ClickException(f"Row {idx}: description is required")
+    if reader.fieldnames is None:
+        raise click.ClickException("CSV file is missing a header row")
 
-            identifier = (row.get(account_key) or "").strip()
-            if not identifier:
-                raise click.ClickException(f"Row {idx}: {account_key} is required")
+    header = {name.strip() for name in reader.fieldnames if name}
+    missing = required_fields - header
+    if missing:
+        missing_list = ", ".join(sorted(missing))
+        raise click.ClickException(f"CSV missing required columns: {missing_list}")
 
-            account_id = _resolve_account(ledger, account_cache, identifier, row)
+    account_key = next((field for field in optional_account_fields if field in header), None)
+    if account_key is None:
+        raise click.ClickException(
+            "CSV must include either 'account_code' or 'account_name' column"
+        )
+    return account_key
 
-            debit = _to_decimal(row.get("debit"), idx, "debit")
-            credit = _to_decimal(row.get("credit"), idx, "credit")
 
-            if debit < 0 or credit < 0:
-                raise click.ClickException(
-                    f"Row {idx}: debit and credit must be non-negative"
-                )
-            if debit == 0 and credit == 0:
-                raise click.ClickException(
-                    f"Row {idx}: either debit or credit must be provided"
-                )
-            if debit != 0 and credit != 0:
-                raise click.ClickException(
-                    f"Row {idx}: provide only one of debit or credit for a posting"
-                )
+def _collect_postings(
+    reader: csv.DictReader,
+    ledger: LedgerService,
+    account_key: str,
+) -> dict[tuple[str, str], list[dict[str, object]]]:
+    """Return postings grouped by transaction identity."""
 
-            currency = (row.get("currency") or "").strip() or None
+    grouped: dict[tuple[str, str], list[dict[str, object]]] = defaultdict(list)
+    account_cache: dict[str, int] = {}
 
-            grouped[(txn_date.isoformat(), description)].append(
-                {
-                    "account_id": account_id,
-                    "debit": float(debit),
-                    "credit": float(credit),
-                    "currency": currency,
-                }
-            )
+    for idx, row in enumerate(reader, start=2):  # 1-index header
+        if not any(row.values()):
+            continue
+
+        txn_date = _parse_row_date(row, idx)
+        description = _require_field(row, "description", idx)
+        identifier = _require_field(row, account_key, idx)
+
+        account_id = _resolve_account(ledger, account_cache, identifier, row)
+        debit, credit = _parse_posting_amounts(row, idx)
+        currency = _normalise_optional_str(row.get("currency"))
+
+        grouped[(txn_date.isoformat(), description)].append(
+            {
+                "account_id": account_id,
+                "debit": float(debit),
+                "credit": float(credit),
+                "currency": currency,
+            }
+        )
+
+    return grouped
+
+
+def _parse_row_date(row: dict[str, str | None], idx: int) -> date:
+    try:
+        raw_date = (row.get("date") or "").strip()
+        return date.fromisoformat(raw_date)
+    except (ValueError, AttributeError) as exc:  # pragma: no cover - defensive
+        raise click.ClickException(f"Row {idx}: invalid or missing date") from exc
+
+
+def _require_field(row: dict[str, str | None], key: str, idx: int) -> str:
+    value = (row.get(key) or "").strip()
+    if not value:
+        raise click.ClickException(f"Row {idx}: {key} is required")
+    return value
+
+
+def _parse_posting_amounts(
+    row: dict[str, str | None], idx: int
+) -> tuple[Decimal, Decimal]:
+    debit = _to_decimal(row.get("debit"), idx, "debit")
+    credit = _to_decimal(row.get("credit"), idx, "credit")
+
+    if debit < 0 or credit < 0:
+        raise click.ClickException(f"Row {idx}: debit and credit must be non-negative")
+    if debit == 0 and credit == 0:
+        raise click.ClickException(
+            f"Row {idx}: either debit or credit must be provided"
+        )
+    if debit != 0 and credit != 0:
+        raise click.ClickException(
+            f"Row {idx}: provide only one of debit or credit for a posting"
+        )
+    return debit, credit
+
+
+def _normalise_optional_str(value: str | None) -> str | None:
+    result = (value or "").strip()
+    return result or None
+
+
+def _assemble_transactions(
+    grouped: dict[tuple[str, str], list[dict[str, object]]]
+) -> list[dict[str, object]]:
+    """Collapse posting groups into balanced transaction payloads."""
 
     transactions: list[dict[str, object]] = []
     for (date_key, description), postings in grouped.items():
@@ -595,7 +698,6 @@ def _load_transactions_from_csv(
                 "postings": postings,
             }
         )
-
     return transactions
 
 

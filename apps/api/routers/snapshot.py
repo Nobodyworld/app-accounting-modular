@@ -38,7 +38,12 @@ def fetch_snapshot(
     ),
     orchestrator: SnapshotOrchestrator = Depends(get_snapshot_orchestrator),
 ) -> SnapshotResponse:
-    """Return a consolidated snapshot across FX, commodities, and tax data."""
+    """Return a consolidated snapshot across FX, commodities, and tax data.
+
+    The response now includes diagnostics describing the breadth and recency of
+    the underlying adapter data so clients can make freshness decisions without
+    recomputing aggregates locally.
+    """
 
     result = orchestrator.build_snapshot(
         base_currency=base,

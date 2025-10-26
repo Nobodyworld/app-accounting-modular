@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import ExitStack, asynccontextmanager, contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable, Iterator
+from typing import Any
 from uuid import uuid4
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -63,7 +64,15 @@ _CURRENT_SPAN: ContextVar[SpanContext | None] = ContextVar(
     "modacct_current_span", default=None
 )
 _OTEL_TRACER: Any | None = None
-_EXPORTER: Callable[[SpanContext], None] = lambda span: None
+
+
+def _noop_exporter(_: SpanContext) -> None:
+    """Default exporter used when tracing backends are unavailable."""
+
+    return None
+
+
+_EXPORTER: Callable[[SpanContext], None] = _noop_exporter
 
 
 def _generate_trace_id() -> str:
@@ -118,9 +127,11 @@ def configure_tracing(
 
     exporter = exporter.lower()
     if exporter == "disabled":
-        _CONFIG = TracingConfig(service_name=service_name, exporter=exporter, enabled=False)
+        _CONFIG = TracingConfig(
+            service_name=service_name, exporter=exporter, enabled=False
+        )
         _OTEL_TRACER = None
-        _EXPORTER = lambda span: None
+        _EXPORTER = _noop_exporter
         logger.info("Tracing disabled via configuration.")
         return _CONFIG
 
@@ -128,7 +139,7 @@ def configure_tracing(
     otel_endpoint: str | None = endpoint
 
     try:  # pragma: no cover - exercised when OpenTelemetry is installed
-        from opentelemetry import propagate, trace  # type: ignore[import]
+        from opentelemetry import trace  # type: ignore[import]
         from opentelemetry.sdk.resources import Resource  # type: ignore[import]
         from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import]
         from opentelemetry.sdk.trace.export import (  # type: ignore[import]
@@ -161,7 +172,7 @@ def configure_tracing(
         trace.set_tracer_provider(provider)
         _OTEL_TRACER = trace.get_tracer(service_name)
         otel_enabled = True
-        _EXPORTER = lambda span: None
+        _EXPORTER = _noop_exporter
         logger.info(
             "Configured OpenTelemetry tracer", extra={"exporter": exporter}
         )
@@ -170,7 +181,10 @@ def configure_tracing(
 
         if exporter == "otlp":
             logger.warning(
-                "OpenTelemetry not installed; OTLP exporter downgraded to console logging.",
+                (
+                    "OpenTelemetry not installed; OTLP exporter downgraded to "
+                    "console logging."
+                ),
             )
 
         def _log_export(span: SpanContext) -> None:
@@ -274,7 +288,9 @@ def traced(
         return
 
     parent = _CURRENT_SPAN.get()
-    resolved_trace_id = trace_id or (parent.trace_id if parent else _generate_trace_id())
+    resolved_trace_id = trace_id or (
+        parent.trace_id if parent else _generate_trace_id()
+    )
     resolved_parent = parent_span_id or (parent.span_id if parent else None)
     span_id = _generate_span_id()
     context = SpanContext(
@@ -323,11 +339,15 @@ class RequestTraceMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._operation_name = operation_name
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Any]) -> Response:  # type: ignore[override]
+    async def dispatch(  # type: ignore[override]
+        self, request: Request, call_next: Callable[[Request], Any]
+    ) -> Response:
         if not is_tracing_enabled():
             return await call_next(request)
 
-        parent_trace, parent_span = _parse_traceparent(request.headers.get("traceparent"))
+        parent_trace, parent_span = _parse_traceparent(
+            request.headers.get("traceparent")
+        )
         name = self._operation_name or f"HTTP {request.method}"
         async with atraced(
             name,

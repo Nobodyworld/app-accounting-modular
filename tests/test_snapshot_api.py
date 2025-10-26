@@ -4,11 +4,15 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from apps.api.main import create_app
-from apps.api.routers import snapshot as snapshot_router
-from apps.api.services.snapshot_service import SnapshotResult
 from apps.api.models.models import User
+from apps.api.routers import snapshot as snapshot_router
 from apps.api.security import get_current_user
-from apps.modular_accounting.application import DataSnapshot, SnapshotRequest
+from apps.api.services.snapshot_service import SnapshotResult
+from apps.modular_accounting.application import (
+    DataSnapshot,
+    SnapshotRequest,
+    compute_snapshot_diagnostics,
+)
 from apps.modular_accounting.application.cache import CacheStats
 from apps.modular_accounting.domain import CommodityQuote, FXRate, Money, TaxRule
 
@@ -44,6 +48,12 @@ def _result() -> SnapshotResult:
             ),
         ),
     )
+    diagnostics = compute_snapshot_diagnostics(
+        snapshot,
+        request=request,
+        now=lambda: datetime(2024, 1, 2, tzinfo=UTC),
+        today=lambda: datetime(2024, 1, 2, tzinfo=UTC).date(),
+    )
     cache_stats = {
         "fx": CacheStats(size=1, hits=1, misses=0),
         "commodities": CacheStats(size=1, hits=0, misses=0),
@@ -57,6 +67,7 @@ def _result() -> SnapshotResult:
     return SnapshotResult(
         request=request,
         snapshot=snapshot,
+        diagnostics=diagnostics,
         providers=providers,
         cache_stats=cache_stats,
     )
@@ -93,6 +104,8 @@ def test_snapshot_endpoint_returns_payload(monkeypatch) -> None:
     payload = response.json()
     assert payload["providers"]["fx"] == "fx:stub"
     assert payload["request"]["base_currency"] == "USD"
+    assert payload["diagnostics"]["fx_rate_count"] == 1
+    assert payload["diagnostics"]["missing_sections"] == []
 
     response = client.get(
         "/snapshot",

@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Sequence
 
-from apps.modular_accounting.application import DataSnapshot
+from apps.modular_accounting.application import (
+    DataSnapshot,
+    SnapshotDiagnostics,
+)
 
 __all__ = [
     "format_snapshot_table",
@@ -28,7 +31,9 @@ def _render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> list
     return lines
 
 
-def format_snapshot_table(snapshot: DataSnapshot) -> str:
+def format_snapshot_table(
+    snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None
+) -> str:
     """Format snapshot data as a multi-section text table."""
 
     sections: list[str] = []
@@ -91,13 +96,60 @@ def format_snapshot_table(snapshot: DataSnapshot) -> str:
     else:
         sections.append("(no tax rules)")
 
+    if diagnostics is not None:
+        sections.append("")
+        sections.append("Diagnostics")
+        sections.append("-----------")
+        diag_rows = [
+            ("Base currency", diagnostics.base_currency or "-"),
+            ("FX pairs", ", ".join(diagnostics.fx_pairs) or "-"),
+            (
+                "FX count",
+                str(diagnostics.fx_rate_count),
+            ),
+            (
+                "FX max age (s)",
+                "-" if diagnostics.fx_max_age_seconds is None else f"{diagnostics.fx_max_age_seconds:.0f}",
+            ),
+            (
+                "Commodity symbols",
+                ", ".join(diagnostics.commodity_symbols) or "-",
+            ),
+            (
+                "Commodity count",
+                str(diagnostics.commodity_quote_count),
+            ),
+            (
+                "Commodity max age (s)",
+                "-"
+                if diagnostics.commodity_max_age_seconds is None
+                else f"{diagnostics.commodity_max_age_seconds:.0f}",
+            ),
+            (
+                "Tax jurisdictions",
+                ", ".join(diagnostics.tax_jurisdictions) or "-",
+            ),
+            ("Tax rule count", str(diagnostics.tax_rule_count)),
+            (
+                "Active tax rules",
+                str(diagnostics.active_tax_rule_count),
+            ),
+            (
+                "Missing sections",
+                ", ".join(diagnostics.missing_sections) or "None",
+            ),
+        ]
+        sections.extend(_render_table(("Metric", "Value"), diag_rows))
+
     return "\n".join(sections)
 
 
-def snapshot_to_payload(snapshot: DataSnapshot) -> dict[str, object]:
+def snapshot_to_payload(
+    snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None
+) -> dict[str, object]:
     """Convert snapshot data into a JSON-serialisable payload."""
 
-    return {
+    payload = {
         "fx_rates": [
             {
                 "base_currency": rate.base_currency,
@@ -126,3 +178,6 @@ def snapshot_to_payload(snapshot: DataSnapshot) -> dict[str, object]:
             for rule in snapshot.tax_rules
         ],
     }
+    if diagnostics is not None:
+        payload["diagnostics"] = asdict(diagnostics)
+    return payload

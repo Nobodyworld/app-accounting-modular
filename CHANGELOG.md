@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- 2025-10-28: Simplified the ledger CSV ingestion helpers, taught the audit
+  metrics CLI to reuse cached trace coverage, refreshed stewardship docs with
+  updated quality metrics, and documented telemetry monitoring roles for agents.
+- 2025-10-27: Instrumented extension loading with Prometheus counters/gauges,
+  added a `/health/telemetry` endpoint plus `macli inspect-extensions`, shipped
+  the `ops:heartbeat` reference extension, and refreshed architecture and
+  automation guides for the new observability pipeline.
+- 2025-10-26: Hardened audit provenance helpers with UTC defaults, stabilised
+  tracing exporter fallbacks, polished the Streamlit console UX, and refreshed
+  release tooling scripts/tests for lint compliance.
 - 2025-10-25: Added a `tools.audit_metrics` CLI with a `make audit` wrapper for
   trace-based coverage snapshots, simplified trace header formatting, and
   refreshed automation docs to guide stewardship agents.

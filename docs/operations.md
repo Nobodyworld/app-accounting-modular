@@ -9,6 +9,8 @@ so incidents can be triaged rapidly.
 - `/health/ready` – readiness check returning per-subsystem status (database,
   scheduler, metrics, tracing, and extension contributions).
 - `/health/metrics` – Prometheus exposition including HTTP and cache metrics.
+- `/health/telemetry` – aggregated snapshot combining metrics, health probes,
+  and extension load status for dashboards or alert routing.
 
 Run `make health` or `macli health` for a CLI snapshot of the same probes.
 
@@ -29,11 +31,11 @@ spans via console or OTLP exporters. Without them, spans are logged locally.
 1. Capture health: `make health` and `/health/ready` for live snapshots.
 2. Gather traces: use the `trace_id` emitted in CLI/HTTP logs to follow the
    request path across services.
-3. Review metrics: scrape `/health/metrics` to inspect request rates, latencies,
-   cache utilisation, and extension counters.
+3. Review metrics: scrape `/health/metrics` for raw counters and
+   `/health/telemetry` for a JSON rollup that includes extension readiness.
 4. Decide on remediation: disable suspect extensions via configuration or roll
-   back to a known good commit. The `macli extensions` command lists active
-   modules.
+   back to a known good commit. The `macli inspect-extensions` command lists
+   active modules, their versions, and whether they loaded successfully.
 5. Document the outcome in `STEWARDS_REPORT.md` so future operators understand
    the action taken.
 
