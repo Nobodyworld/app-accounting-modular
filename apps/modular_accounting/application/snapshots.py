@@ -16,8 +16,8 @@ from typing import TypeVar
 
 from ..domain.models import CommodityQuote, FXRate, TaxRule
 from ..domain.ports import CommodityDataPort, FXDataPort, TaxDataPort
-from ..services.telemetry import SnapshotTelemetry, telemetry_provider
 from .cache import CacheStats, TTLCache
+from .telemetry import SnapshotTelemetry, telemetry_provider
 
 EMPTY_CACHE_STATS = CacheStats(size=0, hits=0, misses=0)
 

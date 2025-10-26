@@ -15,6 +15,8 @@ roadmap.
   tasks.
 - [Extension Guide](../EXTENSION_GUIDE.md) – build and register optional
   automation packs with health probes and metrics.
+- [Operations & Incident Response](operations.md) – observability, tracing, and
+  recovery playbooks for operators and agents.
 - [Roadmap](roadmap.md) – upcoming milestones and strategic investments.
 - [Dependencies](DEPENDENCIES.md) – pinned packages, license posture, and
   security review notes.

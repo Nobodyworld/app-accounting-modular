@@ -7,6 +7,7 @@ from .registry import (
     load_extension_module,
     load_extensions,
 )
+from .scaffold import ExtensionScaffold, normalise_package_name, scaffold_extension
 
 __all__ = [
     "ExtensionManifest",
@@ -14,4 +15,7 @@ __all__ = [
     "extension_registry",
     "load_extension_module",
     "load_extensions",
+    "ExtensionScaffold",
+    "normalise_package_name",
+    "scaffold_extension",
 ]

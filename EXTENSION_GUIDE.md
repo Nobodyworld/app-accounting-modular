@@ -7,7 +7,9 @@ into the new registry, publishes metadata, and contributes observability hooks.
 
 Extensions live in importable Python modules. Each module should expose a
 `register(registry: ExtensionRegistry)` function and optionally a module-level
-`MANIFEST` describing the extension.
+`MANIFEST` describing the extension. The quickest way to bootstrap a new
+package is the `macli scaffold-extension` command which generates the skeleton
+files described below, complete with tracing hooks and a health probe.
 
 ```python
 from apps.extensions import ExtensionManifest, ExtensionRegistry
@@ -60,6 +62,9 @@ installation via:
   Prometheus exposition.
 * `macli extensions` – the CLI lists configured extensions and whether they
   loaded successfully.
+* `macli scaffold-extension reporting:example` – generates a ready-to-edit
+  package in `plugins/` to accelerate development. The scaffolder mirrors the
+  reference `reporting:cashflow` extension that now ships disabled by default.
 
 ## Testing extensions
 

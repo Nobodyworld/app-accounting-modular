@@ -6,8 +6,10 @@ repository to remain safe, observable, and reversible.
 ## Golden rules
 
 1. **Use the Makefile targets**. `make quality` executes linting, type checks,
-   and tests with coverage gates. `make health` runs a full suite of health
-   probes using the CLI.
+   tests with coverage gates, and security scanning. `make ci` mirrors the full
+   pipeline for local smoke checks. `make health` runs a full suite of health
+   probes using the CLI, and `make audit` snapshots coverage/complexity metrics
+   via the trace-based fallback for air-gapped environments.
 2. **Record decisions in docs**. Significant architectural or operational
    changes should be summarised in `ARCHITECTURE_OVERVIEW.md` and the relevant
    README section.
@@ -33,15 +35,17 @@ repository to remain safe, observable, and reversible.
      the API is running.
 4. Generate release collateral:
    * Update `CHANGELOG.md` and `RELEASE_NOTES.md`.
-   * Attach coverage summaries to `REPORTS/` when appropriate.
+   * Run `make audit` to refresh `REPORTS/audit-latest.md` with up-to-date
+     metrics whenever steward reports are compiled.
 
 ## Safety valves
 
 * **Extension isolation** – register new capabilities through the extension
   registry (`apps/extensions/registry.py`) to avoid modifying core modules.
 * **Observability** – when building automation, emit metrics using
-  `apps.observability.metrics.snapshot_telemetry` or register custom gauges and
-  counters.
+  `apps.observability.metrics.snapshot_telemetry`, register custom gauges and
+  counters, and wrap long-running blocks with `apps.observability.tracing.traced`
+  so trace IDs propagate through structured logs.
 * **Health reporting** – any long-running automation should register a health
   probe via `register_health_check` so its status appears in `/health/ready`.
 
@@ -52,6 +56,9 @@ repository to remain safe, observable, and reversible.
    fields) to trace requests end-to-end.
 3. Roll back recent deployments by reverting the Git commit or disabling the
    affected extension in configuration (`MODACCT_ALLOWED_EXTENSIONS__key__enabled=false`).
+4. Regenerate extension packages with `macli scaffold-extension` when
+   backfilling automation or agent-specific hooks to ensure the latest tracing
+   primitives are included.
 
 Following this playbook ensures agents keep the platform observable, recoverable,
 and ready for future automation.

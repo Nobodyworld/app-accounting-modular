@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI
 
+from apps.observability import RequestTraceMiddleware, configure_tracing
 from apps.observability.logging import RequestContextMiddleware, configure_logging
 from apps.observability.metrics import RequestMetricsMiddleware, metrics_registry
 
@@ -46,6 +47,11 @@ def create_app() -> FastAPI:
         service_name="modular-accounting-api",
         force=True,
     )
+    configure_tracing(
+        service_name="modular-accounting-api",
+        exporter=settings.tracing_exporter,
+        endpoint=settings.tracing_otlp_endpoint,
+    )
     init_db()
     register_default_health_checks()
     manifests = load_configured_extensions()
@@ -70,6 +76,7 @@ def create_app() -> FastAPI:
             shutdown_scheduler()
 
     app = FastAPI(title="Modular Accounting API", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(RequestTraceMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(RequestMetricsMiddleware, registry=metrics_registry)
     protected = [Depends(get_current_user)]

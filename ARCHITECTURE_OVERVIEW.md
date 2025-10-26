@@ -19,7 +19,9 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 │    application/snapshots.py)   │   │ - Metrics + health registry         │
 │ - Telemetry adapter            │   │   (apps/observability/{metrics,     │
 │   (apps/modular_accounting/    │   │    health}.py)                      │
-│    services/telemetry.py)      │   └───────────┬────────────────────────┘
+│    application/telemetry.py)   │   │ - Tracing + trace middleware        │
+│ - Tracing context helpers      │   │   (apps/observability/tracing.py)   │
+│   (apps/observability/tracing.py)│ └───────────┬────────────────────────┘
 └───────────────┬───────────────┘               │
                 │                                │
 ┌───────────────▼───────────────┐   ┌───────────▼────────────────────────┐
@@ -35,9 +37,11 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 
 ## Runtime flow
 
-1. **Entry points** initialise logging, metrics middleware, and database state.
-   The FastAPI app adds `RequestMetricsMiddleware` so every request is counted
-   and timed, while the CLI uses `logging_context` to provide correlation IDs.
+1. **Entry points** initialise logging, tracing, metrics middleware, and
+   database state. The FastAPI app wires both `RequestTraceMiddleware` and
+   `RequestMetricsMiddleware` so every request gains a traceparent header and
+   latency metrics, while the CLI uses `logging_context` + `traced` to provide
+   correlation IDs and trace IDs for background work.
 2. **Extension loader** imports every enabled module declared in
    `Settings.allowed_extensions`. Extensions register an `ExtensionManifest`
    with `apps.extensions.registry.extension_registry` and can contribute health
@@ -49,9 +53,10 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 4. **Domain ports and providers** continue to act as the integration boundary
    for external data. Providers are loaded via the existing plugin loader and
    the new extension registry complements rather than replaces this system.
-5. **Observability** collects metrics and health reports. Metrics are exposed
-   through `/health/metrics` and health probes through `/health/live` and
-   `/health/ready`. Extensions can register additional probes without touching
+5. **Observability** collects metrics, traces, and health reports. Metrics are
+   exposed through `/health/metrics` and health probes through `/health/live`
+   and `/health/ready`. A new tracing health probe surfaces exporter
+   configuration. Extensions can register additional probes without touching
    API code.
 
 ## Operational safeguards
@@ -60,14 +65,15 @@ touching the core. The diagram below illustrates the major runtime surfaces.
   and registered extensions. CLI tooling mirrors these checks via
   `macli health`.
 * The `Makefile` standardises quality gates: linting, type checks, tests with
-  a coverage threshold, and optional safety scans.
+  a coverage threshold, optional safety scans, and the `audit` target for
+  trace-based coverage + complexity metrics.
 * Cache observers feed Prometheus-compatible counters and gauges so cache hit
   rates and entry counts can be monitored over time.
 
 ## Extension lifecycle
 
 1. Declare an extension module in configuration (defaults ship with
-   `observability:demo`).
+   `observability:demo` and the disabled `reporting:cashflow` reference).
 2. Implement a `register(registry)` function that publishes a manifest and
    registers optional hooks.
 3. The loader imports the module on application startup, populating manifests
@@ -75,4 +81,6 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 
 This design allows new feature packs—report exporters, automation bridges, or
 AI agents—to be bolted on by registering extensions instead of modifying core
-packages.
+packages. The `macli scaffold-extension` command now generates a fully wired
+package skeleton with tracing hooks so contributors can start from a proven
+baseline.

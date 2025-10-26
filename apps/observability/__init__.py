@@ -1,5 +1,23 @@
-"""Observability helpers shared across logging and metrics integrations."""
+"""Observability helpers shared across logging, metrics, and tracing."""
 
-# TODO[P3][8d]: Provide OTEL-exporting utilities to unify tracing with logging.
+from .tracing import (  # noqa: F401 - re-export for convenience
+    RequestTraceMiddleware,
+    TracingConfig,
+    atraced,
+    configure_tracing,
+    current_span_ids,
+    get_tracing_config,
+    is_tracing_enabled,
+    traced,
+)
 
-__all__ = []
+__all__ = [
+    "TracingConfig",
+    "configure_tracing",
+    "is_tracing_enabled",
+    "get_tracing_config",
+    "current_span_ids",
+    "traced",
+    "atraced",
+    "RequestTraceMiddleware",
+]

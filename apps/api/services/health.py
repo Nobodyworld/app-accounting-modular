@@ -80,6 +80,26 @@ def _scheduler_health() -> HealthReport:
     )
 
 
+def _tracing_health() -> HealthReport:
+    from apps.observability.tracing import get_tracing_config, is_tracing_enabled
+
+    config = get_tracing_config()
+    healthy = is_tracing_enabled()
+    severity = "info" if healthy else "warning"
+    details: dict[str, object] = {
+        "exporter": config.exporter if config else "disabled",
+        "otel_enabled": bool(config and config.otel_enabled),
+    }
+    if config and config.endpoint:
+        details["endpoint"] = config.endpoint
+    return _report(
+        name="tracing",
+        healthy=healthy,
+        severity=severity,
+        details=details,
+    )
+
+
 def register_default_health_checks() -> None:
     """Install the built-in health checks for API bootstrapping."""
     from apps.observability.health import register_health_check
@@ -87,3 +107,4 @@ def register_default_health_checks() -> None:
     register_health_check("database", _database_health)
     register_health_check("metrics", _metrics_health)
     register_health_check("scheduler", _scheduler_health)
+    register_health_check("tracing", _tracing_health)

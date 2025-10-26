@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- 2025-10-25: Added a `tools.audit_metrics` CLI with a `make audit` wrapper for
+  trace-based coverage snapshots, simplified trace header formatting, and
+  refreshed automation docs to guide stewardship agents.
+- 2024-11-07: Added an application-wide tracing subsystem with middleware,
+  CLI instrumentation, and a tracing health probe; introduced an extension
+  scaffolding command (`macli scaffold-extension`), shipped a cashflow reference
+  extension, and documented the new operations playbooks for agents.
+- 2024-11-06: Hardened telemetry provider error handling to log missing
+  observability modules, propagate unexpected import failures, and extend
+  regression coverage so instrumentation issues surface during testing.
 - 2024-11-05: Added provider-backed snapshot orchestration via the `SnapshotOrchestrator`,
   exposing a new `/snapshot` API route and `macli snapshot` command with shared
   rendering utilities, provider provenance, and cache metrics.

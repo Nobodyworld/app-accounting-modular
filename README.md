@@ -36,6 +36,19 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
    make health          # runs macli health under the hood
    curl http://localhost:8000/health/ready
    ```
+6. Scaffold a new extension package with tracing and health hooks:
+   ```bash
+   python -m cli.macli scaffold-extension reporting:example --directory plugins
+   ```
+   The command generates a manifest, health probe, and tracing-aware register
+   function so you can focus on business logic.
+7. Generate an audit snapshot with coverage, complexity, and dependency metrics:
+   ```bash
+   make audit
+   cat REPORTS/audit-latest.md
+   ```
+   The audit uses `python -m trace` under the hood, making it safe to run in
+   restricted environments where `pytest-cov` cannot be installed.
 
 ## Documentation
 Extended guides live under the [`docs/`](docs/index.md) folder:
@@ -48,6 +61,8 @@ Extended guides live under the [`docs/`](docs/index.md) folder:
 - [High-level architecture map](ARCHITECTURE_OVERVIEW.md)
 - [Extension development guide](EXTENSION_GUIDE.md)
 - [Automation & agent playbook](AUTOMATION.md)
+- [Operations & incident response](docs/operations.md)
+- [Agent operations quick reference](AGENTS.md)
 
 ## Contributing
 Contributions are welcome. Please review the existing governance files (`CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`) before opening a pull request.
