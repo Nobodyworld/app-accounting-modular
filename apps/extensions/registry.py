@@ -77,7 +77,9 @@ class ExtensionRegistry:
                 name=f"extension:{key}", healthy=bool(result), severity=severity
             )
 
-        health_module.register_health_check(f"extension:{key}", wrapper)
+        health_module.register_health_check(
+            f"extension:{key}", wrapper, severity=severity
+        )
         self._health_hooks[key] = hook
 
     def manifests(self) -> list[ExtensionManifest]:

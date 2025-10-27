@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from apps.modular_accounting.application import ScenarioPlanValidationError
 
 from ..schemas import (
     ScenarioBatchRequest,
     ScenarioBatchResponse,
+    ScenarioPlanPayload,
+    ScenarioPlanPreviewResponse,
     SnapshotResponse,
 )
 from ..services.snapshot_service import SnapshotOrchestrator
@@ -69,3 +73,16 @@ def fetch_snapshot_scenarios(
         reset_cache_between_runs=payload.reset_cache_between_runs,
     )
     return ScenarioBatchResponse.from_batch(batch)
+
+
+@router.post("/plans/preview", response_model=ScenarioPlanPreviewResponse)
+def preview_scenario_plan(payload: ScenarioPlanPayload) -> ScenarioPlanPreviewResponse:
+    """Validate a scenario plan and return a metadata summary."""
+
+    try:
+        plan = payload.to_plan()
+    except ScenarioPlanValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    summary = plan.summary()
+    return ScenarioPlanPreviewResponse.from_plan(plan, summary)

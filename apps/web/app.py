@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
+import tomllib
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -66,6 +69,16 @@ def _format_provider(key: str, providers: dict[str, dict[str, Any]]) -> str:
     return f"{name} ({key})" if key else name
 
 
+def _parse_plan_bytes(data: bytes, name: str) -> tuple[dict[str, Any] | None, str | None]:
+    suffix = Path(name).suffix.lower()
+    try:
+        if suffix in {".toml", ".tml"}:
+            return tomllib.loads(data.decode("utf-8")), None
+        return json.loads(data.decode("utf-8")), None
+    except (json.JSONDecodeError, tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        return None, str(exc)
+
+
 st.set_page_config(page_title="Modular Accounting", layout="wide")
 st.title("📒 Modular Accounting Console")
 
@@ -77,8 +90,15 @@ providers_by_key = {
     if isinstance(entry, dict) and entry.get("key")
 }
 
-health_tab, budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(
-    ["Health", "Budgets", "Cashflow", "FX Sync", "Market Sync"]
+health_tab, budget_tab, cashflow_tab, fx_tab, market_tab, plan_tab = st.tabs(
+    [
+        "Health",
+        "Budgets",
+        "Cashflow",
+        "FX Sync",
+        "Market Sync",
+        "Scenario Plans",
+    ]
 )
 
 with health_tab:
@@ -291,3 +311,61 @@ with market_tab:
             st.success(response.json())
         except Exception as exc:  # pragma: no cover - runtime feedback
             st.error(f"Failed to sync market prices: {exc}")
+
+with plan_tab:
+    st.subheader("Scenario plan preview")
+    st.caption("Upload JSON or TOML plans to validate coverage before execution.")
+    uploaded_plan = st.file_uploader(
+        "Scenario plan",
+        type=["json", "toml", "tml"],
+        key="scenario_plan_uploader",
+        help="Preview metadata, defaults, and coverage via the API without running providers.",
+    )
+
+    if uploaded_plan is not None:
+        try:
+            st.session_state["scenario_plan_bytes"] = uploaded_plan.getvalue()
+            st.session_state["scenario_plan_name"] = uploaded_plan.name
+        except Exception as exc:
+            st.error(f"Failed to read uploaded file: {exc}")
+
+    stored_plan = st.session_state.get("scenario_plan_bytes")
+    stored_plan_name = st.session_state.get("scenario_plan_name", "scenario_plan.json")
+
+    if st.button("Preview plan", key="scenario_plan_preview_button"):
+        if not stored_plan:
+            st.warning("Upload a scenario plan before requesting a preview.")
+        else:
+            parsed_plan, error = _parse_plan_bytes(stored_plan, stored_plan_name)
+            if error:
+                st.error(f"Plan parsing failed: {error}")
+            elif not isinstance(parsed_plan, dict):
+                st.error("Scenario plans must define a JSON or TOML object.")
+            else:
+                try:
+                    response = requests.post(
+                        f"{API}/snapshot/plans/preview",
+                        json=parsed_plan,
+                        timeout=30,
+                    )
+                    response.raise_for_status()
+                except Exception as exc:  # pragma: no cover - runtime feedback
+                    st.error(f"Failed to preview plan: {exc}")
+                else:
+                    st.session_state["scenario_plan_preview"] = response.json()
+                    st.success("Plan preview generated")
+
+    preview_payload = st.session_state.get("scenario_plan_preview")
+    if isinstance(preview_payload, dict):
+        summary = preview_payload.get("summary", {})
+        metadata = preview_payload.get("plan", {}).get("metadata", {})
+        cols = st.columns(3)
+        cols[0].metric("Scenarios", summary.get("scenario_count", 0))
+        cols[1].metric("Base currencies", len(summary.get("base_currencies", [])))
+        cols[2].metric("Tags", len(summary.get("tags", [])))
+        with st.expander("Plan metadata", expanded=True):
+            st.json(metadata)
+        with st.expander("Coverage summary", expanded=True):
+            st.json(summary)
+    else:
+        st.info("Upload a plan to preview metadata and coverage details.")

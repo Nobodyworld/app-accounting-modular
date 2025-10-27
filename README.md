@@ -30,17 +30,19 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
    python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table
    ```
    The command reuses the configured provider plugins, surfaces cache statistics, and prints provider provenance so you can audit inputs. Swap `--format json` to emit a machine-friendly payload that includes cache metrics and request metadata.
-4. Execute batch plans when you need to compare multiple markets or jurisdictions in one go:
+4. Inspect and execute batch plans when you need to compare multiple markets or jurisdictions in one go:
    ```bash
+   python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json
    python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table
    ```
-   Plans are simple JSON or TOML files describing each scenario. The CLI prints an aggregated summary and per-scenario diagnostics so you can spot stale data or missing sections before handing results to downstream systems.
+   Plans are simple JSON or TOML files describing each scenario. Start with `inspect-plan` to verify metadata, defaults, and coverage; then run `snapshot-scenarios` to emit per-scenario diagnostics and aggregated summaries. Automate previews with `POST /snapshot/plans/preview` before triggering `/snapshot/scenarios` from CI pipelines.
 5. Implement custom adapters by satisfying the runtime-checkable ports in [`apps/modular_accounting/domain/ports.py`](apps/modular_accounting/domain/ports.py) and wiring them into your own CLI, service, or background job. Compose `SnapshotRequest` instances (or call `DataSnapshotService.build_snapshot`) to pass around snapshot intent. The service ships with thread-safe, TTL-aware caches that prevent duplicate adapter calls, expose hit/miss metrics, and can be disabled when a workload demands fresh data every time.
 6. Validate platform health and extension wiring:
    ```bash
    make health             # runs macli health under the hood
    python -m cli.macli inspect-extensions
    python -m cli.macli inspect-contracts
+   python -m cli.macli observe --format table
    curl http://localhost:8000/health/ready
    curl http://localhost:8000/health/telemetry
    ```

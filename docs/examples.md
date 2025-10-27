@@ -82,11 +82,16 @@ The command returns a JSON payload containing FX rates, commodity quotes, tax ru
 used for each capability. Switch to `--format table` for a human-friendly summary when demonstrating the workflow.
 ## Execute batch scenario plans
 ```bash
+python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json
 python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table
 ```
-The command parses a JSON or TOML plan, reuses the configured providers for each scenario, and prints an aggregated summary
-alongside per-scenario diagnostics. Use the companion HTTP endpoint to automate the same workflow:
+Start with `inspect-plan` to validate metadata, defaults, and coverage directly from the plan file. The subsequent
+`snapshot-scenarios` execution reuses the configured providers for each scenario and prints an aggregated summary
+alongside per-scenario diagnostics. Use the companion HTTP endpoints to automate the same workflow:
 ```bash
+curl -X POST http://localhost:8000/snapshot/plans/preview \
+  -H "Content-Type: application/json" \
+  -d @docs/examples/scenario-plan.json
 curl -X POST http://localhost:8000/snapshot/scenarios \
   -H "Content-Type: application/json" \
   -d @docs/examples/scenario-plan.json

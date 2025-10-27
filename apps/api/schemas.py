@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from apps.extensions.contracts import ExtensionContract
 from apps.modular_accounting.application import (
     ScenarioBatchResult,
+    ScenarioPlan,
+    ScenarioPlanSummary,
     ScenarioResult,
     ScenarioSummary,
     SnapshotDiagnostics,
@@ -60,6 +62,10 @@ __all__ = [
     "ScenarioResultSchema",
     "ScenarioSummarySchema",
     "ScenarioBatchResponse",
+    "ScenarioPlanMetadataSchema",
+    "ScenarioPlanPayload",
+    "ScenarioPlanSummarySchema",
+    "ScenarioPlanPreviewResponse",
     "ExtensionContractSchema",
 ]
 
@@ -639,6 +645,107 @@ class ScenarioBatchResponse(BaseModel):
             results=[
                 ScenarioResultSchema.from_result(result) for result in batch.results
             ],
+        )
+
+
+class ScenarioPlanMetadataSchema(BaseModel):
+    """Metadata describing a scenario plan submitted via the API."""
+
+    name: str = Field(min_length=1)
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    schedule: str | None = None
+    parameters: dict[str, object] = Field(default_factory=dict)
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _normalise_tags(cls, value: object) -> list[str]:
+        if value is None:
+            return []
+        tags: list[str] = []
+        seen: set[str] = set()
+        if isinstance(value, Iterable) and not isinstance(value, str | bytes):
+            iterable = value
+        else:
+            iterable = [value]
+        for item in iterable:
+            if isinstance(item, bytes):
+                candidate = item.decode("utf-8", errors="ignore").strip()
+            elif isinstance(item, str):
+                candidate = item.strip()
+            else:
+                continue
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                tags.append(candidate)
+        return tags
+
+
+class ScenarioPlanPayload(BaseModel):
+    """Request payload describing a scenario plan for preview."""
+
+    metadata: ScenarioPlanMetadataSchema
+    scenarios: list[ScenarioDefinition] = Field(min_length=1)
+    defaults: dict[str, object] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _ensure_defaults_keys(self) -> ScenarioPlanPayload:
+        for key in self.defaults.keys():
+            if not isinstance(key, str):
+                raise ValueError("Plan default keys must be strings")
+        return self
+
+    def to_plan(self) -> ScenarioPlan:
+        return ScenarioPlan.from_components(
+            name=self.metadata.name,
+            description=self.metadata.description,
+            tags=self.metadata.tags,
+            schedule=self.metadata.schedule,
+            parameters=self.metadata.parameters,
+            defaults=self.defaults,
+            scenarios=[definition.to_mapping() for definition in self.scenarios],
+        )
+
+
+class ScenarioPlanSummarySchema(BaseModel):
+    """Aggregate describing scenario plan coverage."""
+
+    scenario_count: int
+    base_currencies: list[str]
+    commodity_symbols: list[str]
+    jurisdictions: list[str]
+    tags: list[str]
+    tag_counts: dict[str, int]
+    defaults_applied: list[str]
+
+    @classmethod
+    def from_summary(
+        cls, summary: ScenarioPlanSummary
+    ) -> ScenarioPlanSummarySchema:
+        return cls(
+            scenario_count=summary.scenario_count,
+            base_currencies=list(summary.base_currencies),
+            commodity_symbols=list(summary.commodity_symbols),
+            jurisdictions=list(summary.jurisdictions),
+            tags=list(summary.tags),
+            tag_counts=dict(summary.tag_counts),
+            defaults_applied=list(summary.defaults_applied),
+        )
+
+
+class ScenarioPlanPreviewResponse(BaseModel):
+    """Response payload containing plan metadata and coverage summary."""
+
+    plan: dict[str, object]
+    summary: ScenarioPlanSummarySchema
+
+    @classmethod
+    def from_plan(
+        cls, plan: ScenarioPlan, summary: ScenarioPlanSummary
+    ) -> ScenarioPlanPreviewResponse:
+        return cls(
+            plan=plan.as_payload(),
+            summary=ScenarioPlanSummarySchema.from_summary(summary),
         )
 
 

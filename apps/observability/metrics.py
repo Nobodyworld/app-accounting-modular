@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
-from typing import Any
+from types import TracebackType
+from typing import Any, Protocol
 
 try:  # pragma: no cover - prefer real library when available
     from prometheus_client import (  # type: ignore[import]
@@ -137,7 +138,18 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from apps.modular_accounting.application.cache import CacheObserver
+
+class CacheObserverProtocol(Protocol):
+    """Subset of :class:`TTLCache` observer callbacks used for metrics."""
+
+    def record_hit(self) -> None:  # pragma: no cover - delegation to gauges
+        """Record that a cache lookup resulted in a hit."""
+
+    def record_miss(self) -> None:  # pragma: no cover - delegation to gauges
+        """Record that a cache lookup resulted in a miss."""
+
+    def record_size(self, size: int) -> None:  # pragma: no cover - delegation
+        """Record the current size of the cache."""
 
 __all__ = [
     "MetricsRegistry",
@@ -152,6 +164,8 @@ __all__ = [
     "scenario_telemetry",
     "ExtensionTelemetryAdapter",
     "extension_telemetry",
+    "HealthTelemetryAdapter",
+    "health_telemetry",
 ]
 
 
@@ -173,6 +187,9 @@ class MetricsRegistry:
     cache_hits: Counter
     cache_misses: Counter
     cache_entries: Gauge
+    health_checks_total: Counter
+    health_check_latency_seconds: Histogram
+    health_check_status: Gauge
     snapshot_latency_seconds: Histogram
     snapshot_failures: Counter
     extension_load_total: Counter
@@ -232,6 +249,36 @@ class MetricsRegistry:
             "modacct_cache_entries",
             "Current entry count for application caches.",
             labelnames=("cache",),
+            registry=registry,
+        )
+        health_checks_total = Counter(
+            "modacct_health_checks_total",
+            "Total health check evaluations grouped by outcome.",
+            labelnames=("check", "severity", "status"),
+            registry=registry,
+        )
+        health_check_latency = Histogram(
+            "modacct_health_check_latency_seconds",
+            "Latency of health check evaluations.",
+            labelnames=("check", "severity"),
+            registry=registry,
+            buckets=(
+                0.001,
+                0.005,
+                0.01,
+                0.025,
+                0.05,
+                0.1,
+                0.25,
+                0.5,
+                1,
+                2,
+            ),
+        )
+        health_check_status = Gauge(
+            "modacct_health_check_status",
+            "Gauge reflecting the latest health outcome per check (1=healthy).",
+            labelnames=("check", "severity"),
             registry=registry,
         )
         snapshot_latency = Histogram(
@@ -327,6 +374,9 @@ class MetricsRegistry:
             cache_hits=cache_hits,
             cache_misses=cache_misses,
             cache_entries=cache_entries,
+            health_checks_total=health_checks_total,
+            health_check_latency_seconds=health_check_latency,
+            health_check_status=health_check_status,
             snapshot_latency_seconds=snapshot_latency,
             snapshot_failures=snapshot_failures,
             extension_load_total=extension_load_total,
@@ -346,7 +396,7 @@ class MetricsRegistry:
 metrics_registry = MetricsRegistry.create()
 
 
-class CacheMetricsObserver(CacheObserver):
+class CacheMetricsObserver(CacheObserverProtocol):
     """Adapter bridging :class:`TTLCache` events to Prometheus metrics."""
 
     def __init__(self, *, registry: MetricsRegistry, cache_name: str) -> None:
@@ -445,6 +495,38 @@ class ScenarioTelemetryAdapter:
             else:
                 self._record(status="success", start=start, label_base=label_base)
 
+    @asynccontextmanager
+    async def track_async(
+        self,
+        *,
+        scenario: str,
+        tags: tuple[str, ...] = (),
+    ) -> AsyncIterator[None]:
+        """Async counterpart to :meth:`track` for awaitable workloads."""
+
+        label_base = {
+            "scenario": scenario,
+            "tags": ",".join(sorted(tags)) if tags else "<none>",
+        }
+        tracker = self._registry.scenario_inflight.labels(**label_base).track_inprogress()
+        tracker.__enter__()
+        start = time.perf_counter()
+        status = "success"
+        exc_type: type[BaseException] | None = None
+        exc: BaseException | None = None
+        tb: TracebackType | None = None
+        try:
+            yield
+        except Exception as err:
+            status = "error"
+            exc_type = err.__class__
+            exc = err
+            tb = err.__traceback__
+            raise
+        finally:
+            self._record(status=status, start=start, label_base=label_base)
+            tracker.__exit__(exc_type, exc, tb)
+
     def _record(
         self,
         *,
@@ -462,6 +544,40 @@ class ScenarioTelemetryAdapter:
 
 
 scenario_telemetry = ScenarioTelemetryAdapter(metrics_registry)
+
+
+class HealthTelemetryAdapter:
+    """Helper emitting metrics around health check execution."""
+
+    def __init__(self, registry: MetricsRegistry) -> None:
+        self._registry = registry
+
+    def record_evaluation(
+        self,
+        *,
+        check: str,
+        severity: str,
+        status: str,
+        healthy: bool,
+        duration: float,
+    ) -> None:
+        labels = {"check": check, "severity": severity}
+        status_labels = {**labels, "status": status}
+        try:
+            self._registry.health_checks_total.labels(**status_labels).inc()
+            self._registry.health_check_latency_seconds.labels(**labels).observe(
+                duration
+            )
+            # Prime gauges so dashboards show an explicit unhealthy value instead of
+            # missing series when checks start failing.
+            self._registry.health_check_status.labels(**labels).set(
+                1.0 if healthy else 0.0
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging only
+            _logger.debug("Unable to record health telemetry", exc_info=exc)
+
+
+health_telemetry = HealthTelemetryAdapter(metrics_registry)
 
 
 class RequestMetricsMiddleware(BaseHTTPMiddleware):

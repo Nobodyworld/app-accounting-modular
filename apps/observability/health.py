@@ -1,9 +1,9 @@
-"""Health check registry and evaluation utilities."""
-
+"""Health registry primitives for modular accounting observability."""
 from __future__ import annotations
 
 import asyncio
 import inspect
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -34,36 +34,78 @@ class HealthRegistry:
 
     def __init__(self) -> None:
         self._checks: dict[str, HealthCheck] = {}
+        self._metadata: dict[str, dict[str, str]] = {}
 
-    def register(self, name: str, check: HealthCheck) -> None:
+    def register(
+        self,
+        name: str,
+        check: HealthCheck,
+        *,
+        severity: str = "critical",
+    ) -> None:
         """Register a named health check. Later registrations override."""
 
         self._checks[name] = check
+        self._metadata[name] = {"severity": severity}
 
     def unregister(self, name: str) -> None:
         """Remove a health check from the registry when no longer needed."""
 
         self._checks.pop(name, None)
+        self._metadata.pop(name, None)
 
     async def evaluate(self) -> list[HealthReport]:
         """Execute all registered checks and return their reports."""
 
         reports: list[HealthReport] = []
+        # Import at runtime to avoid module cycles during process startup.
+        from apps.observability.metrics import health_telemetry
+
         for name, check in self._checks.items():
-            result = check()
-            if inspect.isawaitable(result):
-                report = await asyncio.wait_for(result, timeout=5)
-            else:
-                report = result
-            if not isinstance(report, HealthReport):
-                report = HealthReport(name=name, healthy=bool(report))
-            elif report.name != name:
+            metadata = self._metadata.get(name, {})
+            severity_hint = metadata.get("severity", "critical")
+            status = "completed"
+            start = time.perf_counter()
+            try:
+                result = check()
+                if inspect.isawaitable(result):
+                    result = await asyncio.wait_for(result, timeout=5)
+                if isinstance(result, HealthReport):
+                    report = result
+                else:
+                    report = HealthReport(
+                        name=name,
+                        healthy=bool(result),
+                        severity=severity_hint,
+                    )
+            except Exception as exc:  # pragma: no cover - defensive safety net
+                status = "exception"
                 report = HealthReport(
                     name=name,
-                    healthy=report.healthy,
-                    details=report.details,
-                    severity=report.severity,
+                    healthy=False,
+                    severity=severity_hint,
+                    details={"error": str(exc)},
                 )
+            else:
+                if not isinstance(report, HealthReport):  # pragma: no cover - guard
+                    report = HealthReport(name=name, healthy=bool(report))
+                if report.name != name:
+                    report = HealthReport(
+                        name=name,
+                        healthy=report.healthy,
+                        details=report.details,
+                        severity=report.severity,
+                    )
+            finally:
+                duration = time.perf_counter() - start
+                health_telemetry.record_evaluation(
+                    check=name,
+                    severity=report.severity,
+                    status=status,
+                    healthy=report.healthy,
+                    duration=duration,
+                )
+
             reports.append(report)
         return reports
 
@@ -85,7 +127,9 @@ class HealthRegistry:
 health_registry = HealthRegistry()
 
 
-def register_health_check(name: str, check: HealthCheck) -> None:
+def register_health_check(
+    name: str, check: HealthCheck, *, severity: str = "critical"
+) -> None:
     """Module level helper delegating to :class:`HealthRegistry`."""
 
-    health_registry.register(name, check)
+    health_registry.register(name, check, severity=severity)

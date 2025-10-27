@@ -1,12 +1,11 @@
-"""Health and metrics endpoints for operational visibility."""
-
+"""Health, telemetry, and metrics endpoints for the public API."""
 from __future__ import annotations
 
 from fastapi import APIRouter
 
+from apps.api.services.extension_loader import active_extensions
 from apps.observability.health import health_registry
 from apps.observability.metrics import metrics_registry, metrics_response
-from apps.api.services.extension_loader import active_extensions
 
 router = APIRouter(prefix="/health", tags=["Health"])
 

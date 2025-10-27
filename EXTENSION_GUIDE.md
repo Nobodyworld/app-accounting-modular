@@ -9,7 +9,9 @@ Extensions live in importable Python modules. Each module should expose a
 `register(registry: ExtensionRegistry)` function and optionally a module-level
 `MANIFEST` describing the extension. The quickest way to bootstrap a new
 package is the `macli scaffold-extension` command which generates the skeleton
-files described below, complete with tracing hooks and a health probe.
+files described below, complete with tracing hooks and a health probe. Pass
+`--observability-contract` to scaffold a starter incident playbook contract that
+matches the pattern used by the `ops:resilience` reference extension.
 
 ```python
 from apps.extensions import ExtensionManifest, ExtensionRegistry
@@ -71,9 +73,11 @@ installation via:
 * `macli inspect-extensions` – the CLI lists configured extensions, manifest
   metadata, and whether they loaded successfully. `--format json` produces a
   machine-friendly snapshot for automation.
-* `macli scaffold-extension reporting:example` – generates a ready-to-edit
-  package in `plugins/` to accelerate development. The scaffolder mirrors the
-  reference `reporting:cashflow` extension that now ships disabled by default.
+* `macli scaffold-extension reporting:example --observability-contract` –
+  generates a ready-to-edit package in `plugins/` with a health probe and an
+  incident playbook contract.
+* `macli observe` – emits an aggregated telemetry snapshot (metrics, health,
+  tracing) that includes extension readiness and contract exposure.
 
 ## Testing extensions
 
@@ -88,7 +92,8 @@ installation via:
 
 Extensions can publish structured contracts so downstream agents know which
 automation hooks exist. Register contracts with the new
-`ExtensionContract` dataclass:
+`ExtensionContract` dataclass; see `plugins/ops_resilience` for a full example
+that exposes an incident playbook contract consumed by operators.
 
 ```python
 from apps.extensions import ExtensionContract
@@ -120,6 +125,7 @@ capabilities without bespoke glue code.
   automation.
 * Use the Makefile quality targets (`make quality`) before publishing to ensure
   linting, typing, and coverage gates pass consistently.
-* Refer to `plugins/ops_heartbeat` when wiring observability for operational
-  add-ons; it demonstrates registering gauges, emitting heartbeat probes, and
-  integrating with the extension registry without touching core modules.
+* Refer to `plugins/ops_heartbeat` and `plugins/ops_resilience` when wiring
+  observability for operational add-ons; they demonstrate registering gauges,
+  emitting heartbeat probes, publishing contracts, and integrating with the
+  extension registry without touching core modules.

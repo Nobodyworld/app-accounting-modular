@@ -198,3 +198,45 @@ def test_snapshot_scenarios_endpoint(monkeypatch) -> None:
     assert payload["results"][0]["providers"]["fx"] == "fx:stub"
     assert orchestrator.reset_cache is True
     assert orchestrator.calls[0].name == "demo"
+
+
+def test_snapshot_plan_preview_endpoint(monkeypatch) -> None:
+    app = create_app()
+
+    def _stub_user() -> User:
+        return User(
+            id=2,
+            email="plan@example.com",
+            password_hash="stub",
+            is_active=True,
+        )
+
+    app.dependency_overrides[get_current_user] = _stub_user
+
+    client = TestClient(app)
+    response = client.post(
+        "/snapshot/plans/preview",
+        json={
+            "metadata": {"name": "QA Plan", "tags": ["ci"]},
+            "defaults": {"base_currency": "USD"},
+            "scenarios": [
+                {
+                    "name": "baseline",
+                    "base_currency": "USD",
+                    "commodity_symbols": ["XAU"],
+                },
+                {
+                    "name": "eur_fx",
+                    "base_currency": "EUR",
+                    "commodity_symbols": [],
+                    "tags": ["emea"],
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["plan"]["metadata"]["name"] == "QA Plan"
+    assert payload["summary"]["scenario_count"] == 2
+    assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]

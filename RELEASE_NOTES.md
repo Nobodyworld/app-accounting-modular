@@ -1,6 +1,21 @@
 # Release Notes
 
 ## Highlights
+- Added health-check telemetry metrics, an observability snapshot API consumed
+  by the new `macli observe` command, the `ops:resilience` incident playbook
+  extension, optional observability contract scaffolding via
+  `macli scaffold-extension --observability-contract`, and a scripted
+  `make quality-gate` target for consolidated lint/type/test/security runs.
+- Hardened scenario plan parsing by reinstating union-aware validation, adding
+  byte-string tag normalisation, and extending loader regression tests to catch
+  invalid defaults before orchestration reaches provider adapters.
+- Promoted scenario plans to first-class application artifacts, shipping
+  `ScenarioPlan`/`ScenarioPlanSummary`, a `macli inspect-plan` CLI command, the
+  `/snapshot/plans/preview` API route, Streamlit plan previews, and refreshed
+  docs so agents can validate coverage before running provider workloads.
+- Added async-aware scenario telemetry instrumentation with matching pytest
+  coverage, removed cache observer import cycles so adapters can be tested in
+  isolation, and fixed Makefile tabs to keep `make ci` usable in automation.
 - Instrumented scenario batches with dedicated metrics/tracing, exposed
   extension contracts through `macli inspect-contracts` and the new
   `/extensions/contracts` API, shipped the `scenarios:variance` reference
@@ -57,6 +72,10 @@
   works; `make install` already handles this locally.
 - Update automation to call `make quality` and `make health` instead of ad-hoc
   lint/test scripts, and include `make audit` when compiling steward reports.
+- Incorporate `make quality-gate` and `macli observe` into operational runbooks
+  to capture an aggregated telemetry snapshot alongside the existing health
+  probes. Enable the `ops:resilience` extension (default in configuration) to
+  expose the incident playbook contract to agents.
 - When re-running audits in constrained environments, prefer
   `python -m tools.audit_metrics --skip-trace` to reuse the prior coverage
   snapshot while still emitting complexity and dependency metrics.
