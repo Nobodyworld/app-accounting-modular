@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "name": "demo_portfolio",
+    "description": "Demo coverage for API, CLI, and agent scenarios",
+    "tags": ["demo", "portfolio"],
+    "parameters": {
+      "owner": "platform"
+    }
+  },
+  "defaults": {
+    "base_currency": "USD",
+    "jurisdictions": ["US"],
+    "tags": ["reference"]
+  },
+  "scenarios": [
+    {
+      "name": "usd_metals",
+      "commodity_symbols": ["XAU", "XAG"],
+      "jurisdictions": ["US", "US-CA"],
+      "tags": ["metals"]
+    },
+    {
+      "name": "eur_fx_only",
+      "base_currency": "EUR",
+      "commodity_symbols": [],
+      "jurisdictions": null,
+      "tags": ["fx"]
+    }
+  ]
+}

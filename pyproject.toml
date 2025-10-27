@@ -1,0 +1,94 @@
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+include = "(apps|cli|plugins|tests|docs)/.*\\.py$"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+fix = false
+show-fixes = true
+src = ["apps", "cli", "plugins", "tests"]
+respect-gitignore = true
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",  # isort
+  "UP", # pyupgrade
+  "B",  # flake8-bugbear
+]
+ignore = [
+  "B008",  # allow dependency injection defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "plugins", "cli", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+pythonpath = ["."]
+filterwarnings = [
+  "error::sqlalchemy.exc.SADeprecationWarning",
+  "ignore::DeprecationWarning:passlib",
+  "ignore::altair.utils.deprecation.AltairDeprecationWarning",
+]
+markers = [
+  "asyncio: tests that require an asyncio event loop",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true
+color_output = true
+mypy_path = ["."]
+files = [
+  "apps/api/config.py",
+  "apps/api/services/forecast_service.py",
+  "apps/api/audit.py",
+  "apps/api/dependencies.py",
+  "apps/api/db.py",
+  "apps/api/routers/core.py",
+  "apps/api/security.py",
+  "apps/api/services/plugin_loader.py",
+  "apps/api/services/extension_loader.py",
+  "apps/api/services/health.py",
+  "apps/extensions/registry.py",
+  "apps/observability/health.py",
+  "apps/observability/metrics.py",
+  "apps/modular_accounting/application/cache.py",
+  "apps/modular_accounting/application/scenarios.py",
+  "apps/modular_accounting/application/snapshots.py",
+  "apps/modular_accounting/application/telemetry.py",
+  "cli/macli.py",
+]
+
+[[tool.mypy.overrides]]
+module = [
+  "apscheduler.*",
+  "jose.*",
+  "passlib.*",
+  "pandas.*",
+  "requests.*",
+  "statsmodels.*",
+  "streamlit.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "apps.api.config",
+  "apps.api.services.forecast_service",
+]
+strict = true
