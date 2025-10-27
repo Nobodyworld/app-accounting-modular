@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
-from typing import Iterable
 
 __all__ = ["ExtensionScaffold", "normalise_package_name", "scaffold_extension"]
 
@@ -53,6 +53,7 @@ def scaffold_extension(
     capabilities: Iterable[str] = (),
     author: str | None = None,
     force: bool = False,
+    observability_contract: bool = False,
 ) -> ExtensionScaffold:
     """Create a new extension package skeleton."""
 
@@ -95,44 +96,87 @@ def scaffold_extension(
         manifest_lines.append(f"    author=\"{author}\",")
     manifest_lines.append(")")
 
-    extension_file = target / "extension.py"
-    extension_file.write_text(
-        dedent(
-            "\n".join(
-                [
-                    "\"\"\"Auto-generated extension entrypoint.\"\"\"",
-                    "",
-                    "from __future__ import annotations",
-                    "",
-                    "from datetime import UTC, datetime",
-                    "",
-                    "from apps.extensions import ExtensionManifest, ExtensionRegistry",
-                    "from apps.observability.health import HealthReport",
-                    "",
-                    *manifest_lines,
-                    "",
-                    "",
-                    "def _health_probe() -> HealthReport:",
-                    "    return HealthReport(",
-                    "        name=f\"extension:{MANIFEST.key}\",",
-                    "        healthy=True,",
-                    "        severity=\"info\",",
-                    "        details={",
-                    "            \"generated_at\": datetime.now(tz=UTC).isoformat(),",
-                    "            \"exporter\": \"scaffold\",",
-                    "        },",
-                    "    )",
-                    "",
-                    "",
-                    "def register(registry: ExtensionRegistry) -> None:",
-                    "    \"\"\"Register the generated extension with the registry.\"\"\"",
-                    "",
-                    "    registry.register(MANIFEST)",
-                    "    registry.register_health_check(MANIFEST.key, _health_probe, severity=\"info\")",
-                ]
-            )
-        ).lstrip()
+    extension_lines = [
+        '"""Auto-generated extension entrypoint."""',
+        "",
+        "from __future__ import annotations",
+        "",
+        "from datetime import UTC, datetime",
+        "",
+        "from apps.extensions import ExtensionManifest, ExtensionRegistry",
+    ]
+    if observability_contract:
+        extension_lines.append("from apps.extensions.contracts import ExtensionContract")
+    extension_lines.append("from apps.observability.health import HealthReport")
+    extension_lines.append("")
+    extension_lines.extend(manifest_lines)
+    extension_lines.extend(["", ""])
+
+    if observability_contract:
+        extension_lines.extend(
+            [
+                "PLAYBOOK_CONTRACT = ExtensionContract(",
+                '    kind="observability:incident-playbook",',
+                f'    name="{safe_name} Incident Playbook",',
+                '    version="1.0",',
+                '    description="Starter incident response playbook for generated extensions.",',
+                f'    entrypoint="{package}.extension:get_playbook",',
+                '    tags=("observability", "operations"),',
+                ")",
+                "",
+                "",
+                "def get_playbook() -> list[dict[str, str]]:",
+                '    """Return a starter incident response playbook."""',
+                "",
+                "    return [",
+                "        {",
+                '            "step": "database",',
+                '            "action": "Verify database connectivity and pending migrations.",',
+                "        },",
+                "        {",
+                '            "step": "metrics",',
+                '            "action": "Confirm Prometheus scrapes and exporter uptime.",',
+                "        },",
+                "    ]",
+                "",
+                "",
+            ]
+        )
+
+    extension_lines.extend(
+        [
+            "def _health_probe() -> HealthReport:",
+            "    return HealthReport(",
+            '        name=f"extension:{MANIFEST.key}",',
+            '        healthy=True,',
+            '        severity="info",',
+            "        details={",
+            '            "generated_at": datetime.now(tz=UTC).isoformat(),',
+            '            "exporter": "scaffold",',
+            "        },",
+            "    )",
+            "",
+            "",
+        ]
     )
+
+    register_lines = [
+        "def register(registry: ExtensionRegistry) -> None:",
+        '    """Register the generated extension with the registry."""',
+        "",
+        "    registry.register(MANIFEST)",
+    ]
+    if observability_contract:
+        register_lines.append(
+            "    registry.register_contract(MANIFEST.key, PLAYBOOK_CONTRACT)"
+        )
+    register_lines.append(
+        '    registry.register_health_check(MANIFEST.key, _health_probe, severity="info")'
+    )
+    extension_lines.extend(register_lines)
+
+    extension_file = target / "extension.py"
+    extension_file.write_text(dedent("\n".join(extension_lines)).lstrip())
 
     readme_file = target / "README.md"
     readme_file.write_text(

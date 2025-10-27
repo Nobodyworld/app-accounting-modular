@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import os
 import secrets
+from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal, Mapping, cast
+from typing import Any, Literal, cast
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
@@ -102,6 +103,12 @@ DEFAULT_ALLOWED_EXTENSIONS: dict[str, ExtensionInfo] = {
         module="plugins.analytics_baseline.extension",
         description="Baseline analytics instrumentation extension",
         capabilities=("analytics", "observability"),
+    ),
+    "ops:resilience": ExtensionInfo(
+        module="plugins.ops_resilience.extension",
+        description="Operations resilience playbook and observability contracts",
+        capabilities=("operations", "observability"),
+        enabled=True,
     ),
     "reporting:cashflow": ExtensionInfo(
         module="plugins.reference_cashflow.extension",
@@ -205,7 +212,7 @@ class Settings(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _normalise(self) -> "Settings":
+    def _normalise(self) -> Settings:
         """Sanitise derived fields and capture secret provenance."""
 
         if self.jwt_secret_key in _SECRET_PROVENANCE:
@@ -229,8 +236,8 @@ class Settings(BaseModel):
         level = value.upper() or DEFAULT_LOG_LEVEL
         if level not in VALID_LOG_LEVELS:
             msg = (
-                "Unsupported log level '{value}'. "
-                "Valid options: {levels}".format(value=value, levels=sorted(VALID_LOG_LEVELS))
+                f"Unsupported log level '{value}'. "
+                f"Valid options: {sorted(VALID_LOG_LEVELS)}"
             )
             raise ValueError(msg)
         return level
@@ -241,10 +248,8 @@ class Settings(BaseModel):
         format_normalized = value.upper() or DEFAULT_LOG_FORMAT
         if format_normalized not in VALID_LOG_FORMATS:
             msg = (
-                "Unsupported log format '{value}'. "
-                "Valid options: {formats}".format(
-                    value=value, formats=sorted(VALID_LOG_FORMATS)
-                )
+                f"Unsupported log format '{value}'. "
+                f"Valid options: {sorted(VALID_LOG_FORMATS)}"
             )
             raise ValueError(msg)
         return cast(LogFormat, format_normalized)
@@ -255,10 +260,8 @@ class Settings(BaseModel):
         exporter = (value or DEFAULT_TRACING_EXPORTER).strip().lower()
         if exporter not in VALID_TRACING_EXPORTERS:
             msg = (
-                "Unsupported tracing exporter '{value}'. "
-                "Valid options: {choices}".format(
-                    value=value, choices=sorted(VALID_TRACING_EXPORTERS)
-                )
+                f"Unsupported tracing exporter '{value}'. "
+                f"Valid options: {sorted(VALID_TRACING_EXPORTERS)}"
             )
             raise ValueError(msg)
         return exporter
@@ -305,10 +308,8 @@ class Settings(BaseModel):
         algorithm = value.upper()
         if algorithm not in ALLOWED_JWT_ALGORITHMS:
             msg = (
-                "Unsupported JWT algorithm '{value}'. "
-                "Valid options: {algorithms}".format(
-                    value=value, algorithms=sorted(ALLOWED_JWT_ALGORITHMS)
-                )
+                f"Unsupported JWT algorithm '{value}'. "
+                f"Valid options: {sorted(ALLOWED_JWT_ALGORITHMS)}"
             )
             raise ValueError(msg)
         return algorithm
@@ -321,9 +322,7 @@ class Settings(BaseModel):
             raise ValueError(msg)
         if value > MAX_ACCESS_TOKEN_MINUTES:
             msg = (
-                "access_token_expire_minutes must not exceed {limit} minutes".format(
-                    limit=MAX_ACCESS_TOKEN_MINUTES
-                )
+                f"access_token_expire_minutes must not exceed {MAX_ACCESS_TOKEN_MINUTES} minutes"
             )
             raise ValueError(msg)
         return value
@@ -336,7 +335,7 @@ class Settings(BaseModel):
         *,
         env_file: str | os.PathLike[str] | None = None,
         override_env_file: bool = False,
-    ) -> "Settings":
+    ) -> Settings:
         """Load settings from ``environ`` honoring optional ``prefix`` values."""
 
         if env_file is not None:
@@ -410,7 +409,7 @@ class Settings(BaseModel):
         return self._jwt_secret_is_ephemeral
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """Return an immutable :class:`Settings` instance."""
 

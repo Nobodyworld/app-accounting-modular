@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- 2025-11-03: Added health-check latency/status metrics, an observability
+  snapshot API (`apps.observability.diagnostics.collect_observability_snapshot`),
+  and the `macli observe` command. Shipped the `ops:resilience` reference
+  extension with an incident playbook contract, taught the extension scaffolder
+  to generate observability contracts on demand, and introduced a scripted
+  `make quality-gate` wrapper for lint/type/test/security automation.
+- 2025-11-02: Hardened scenario plan parsing by preserving union-aware type
+  checks, normalising byte-string tags, and backfilling loader regression tests
+  so plan defaults reject non-string values before reaching provider
+  orchestration.
+- 2025-11-01: Promoted scenario plan parsing to the application layer with
+  shared coverage summaries, added `macli inspect-plan`, exposed a
+  `/snapshot/plans/preview` endpoint, refreshed the Streamlit console with a
+  plan preview tab, and documented the workflow across README, examples, and
+  stewardship guides.
+- 2025-10-31: Added an async-aware scenario telemetry context manager with
+  regression tests, decoupled cache observer typing to avoid circular
+  initialisation, fixed Makefile tab alignment so `make ci` runs cleanly, and
+  documented the new instrumentation in stewardship records.
 - 2025-10-30: Instrumented scenario orchestration with dedicated Prometheus
   metrics and tracing, introduced extension contract discovery via
   `macli inspect-contracts` and `/extensions/contracts`, shipped the

@@ -2,6 +2,15 @@
 
 from .cache import CacheEntry, CacheObserver, CacheStats, TTLCache
 from .diagnostics import SnapshotDiagnostics, compute_snapshot_diagnostics
+from .plans import (
+    ScenarioPlan,
+    ScenarioPlanFormatError,
+    ScenarioPlanMetadata,
+    ScenarioPlanSummary,
+    ScenarioPlanValidationError,
+    load_plan_from_bytes,
+    load_plan_from_path,
+)
 from .scenarios import (
     ScenarioBatchResult,
     ScenarioResult,
@@ -22,6 +31,11 @@ __all__ = [
     "DataSnapshot",
     "DataSnapshotService",
     "SnapshotRequest",
+    "ScenarioPlan",
+    "ScenarioPlanMetadata",
+    "ScenarioPlanSummary",
+    "ScenarioPlanFormatError",
+    "ScenarioPlanValidationError",
     "SnapshotScenario",
     "ScenarioResult",
     "ScenarioSummary",
@@ -29,4 +43,6 @@ __all__ = [
     "ScenarioSnapshotRunner",
     "SnapshotTelemetry",
     "telemetry_provider",
+    "load_plan_from_bytes",
+    "load_plan_from_path",
 ]

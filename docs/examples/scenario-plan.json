@@ -1,11 +1,23 @@
 {
+  "metadata": {
+    "name": "demo_portfolio",
+    "description": "Demo coverage for API, CLI, and agent scenarios",
+    "tags": ["demo", "portfolio"],
+    "parameters": {
+      "owner": "platform"
+    }
+  },
+  "defaults": {
+    "base_currency": "USD",
+    "jurisdictions": ["US"],
+    "tags": ["reference"]
+  },
   "scenarios": [
     {
       "name": "usd_metals",
-      "base_currency": "USD",
       "commodity_symbols": ["XAU", "XAG"],
       "jurisdictions": ["US", "US-CA"],
-      "tags": ["demo", "metals"]
+      "tags": ["metals"]
     },
     {
       "name": "eur_fx_only",

@@ -6,14 +6,19 @@ repository to remain safe, observable, and reversible.
 ## Golden rules
 
 1. **Use the Makefile targets**. `make quality` executes linting, type checks,
-   tests with coverage gates, and security scanning. `make ci` mirrors the full
-   pipeline for local smoke checks. `make health` runs a full suite of health
-   probes using the CLI, and `make audit` snapshots coverage/complexity metrics
-   via the trace-based fallback for air-gapped environments. When coverage data
-   already exists, rerun `tools.audit_metrics` with `--skip-trace` to reuse the
-   stored `.cover` files and refresh only the lightweight metrics.
-   Pair `make health` with `python -m cli.macli inspect-extensions` to verify
-   extension manifests loaded and expose version metadata for release notes.
+   tests with coverage gates, and security scanning, while
+   `make quality-gate` wraps the scripted `tools.quality_gate` runner for a
+   single-command verdict. `make ci` mirrors the full pipeline for local smoke
+   checks. `make health` runs a full suite of health probes using the CLI, and
+   `make audit` snapshots coverage/complexity metrics via the trace-based
+   fallback for air-gapped environments. When coverage data already exists,
+   rerun `tools.audit_metrics` with `--skip-trace` to reuse the stored `.cover`
+   files and refresh only the lightweight metrics.
+   Pair `make health` with `python -m cli.macli inspect-extensions` and
+   `python -m cli.macli observe` to verify extension manifests, capture version
+   metadata for release notes, and archive a telemetry snapshot.
+   Validate scenario plans with `make plan-validate PLAN=docs/examples/scenario-plan.json`
+   (wraps `macli inspect-plan`) before triggering provider-heavy workloads.
 2. **Record decisions in docs**. Significant architectural or operational
    changes should be summarised in `ARCHITECTURE_OVERVIEW.md` and the relevant
    README section.
@@ -28,6 +33,8 @@ repository to remain safe, observable, and reversible.
 
 1. Install dependencies (`make install`).
 2. Run targeted quality gates during development:
+   * `make quality-gate` – sequential lint/type/test/security verdict with a
+     single exit code.
    * `make lint` – style and bugbear checks.
    * `make typecheck` – strict mypy coverage across application, API, and
      extension layers.
@@ -39,6 +46,10 @@ repository to remain safe, observable, and reversible.
      load status for each configured extension.
    * `python -m cli.macli inspect-contracts` – lists automation contracts
      published by extensions so orchestrators know which hooks are available.
+   * `python -m cli.macli observe` – exports a metrics/health/tracing snapshot
+     for incident response logs.
+   * `python -m cli.macli inspect-plan --plan <file>` – validates plan metadata,
+     defaults, and coverage before calling provider-backed orchestration.
    * `curl http://localhost:8000/health/ready` – verifies HTTP readiness when
      the API is running.
    * `curl http://localhost:8000/health/telemetry` – aggregates metrics,
@@ -58,21 +69,27 @@ repository to remain safe, observable, and reversible.
   registry (`apps/extensions/registry.py`) to avoid modifying core modules.
 * **Observability** – when building automation, emit metrics using
   `apps.observability.metrics.snapshot_telemetry`, register custom gauges and
-  counters, and wrap long-running blocks with `apps.observability.tracing.traced`
-  so trace IDs propagate through structured logs.
+  counters, call `apps.observability.diagnostics.collect_observability_snapshot`
+  for high-level reporting, and wrap long-running blocks with
+  `apps.observability.tracing.traced` so trace IDs propagate through structured
+  logs.
 * **Health reporting** – any long-running automation should register a health
   probe via `register_health_check` so its status appears in `/health/ready`.
 
 ## Incident response
 
 1. Use `macli health` to capture an immediate snapshot of subsystem status.
-2. Inspect extension load telemetry via `macli inspect-extensions` (table or
+2. Run `macli observe --format json` to persist aggregated metrics, health, and
+   tracing data, then consult the `ops:resilience` incident playbook surfaced in
+   `macli inspect-contracts` (entrypoint
+   `plugins.ops_resilience.extension:get_playbook`).
+3. Inspect extension load telemetry via `macli inspect-extensions` (table or
    JSON) to confirm the modules your automation depends on are available.
-3. Inspect logs with correlation IDs (CLI and HTTP both emit `correlation_id`
+4. Inspect logs with correlation IDs (CLI and HTTP both emit `correlation_id`
    fields) to trace requests end-to-end.
-4. Roll back recent deployments by reverting the Git commit or disabling the
+5. Roll back recent deployments by reverting the Git commit or disabling the
    affected extension in configuration (`MODACCT_ALLOWED_EXTENSIONS__key__enabled=false`).
-5. Regenerate extension packages with `macli scaffold-extension` when
+6. Regenerate extension packages with `macli scaffold-extension` when
    backfilling automation or agent-specific hooks to ensure the latest tracing
    primitives are included.
 

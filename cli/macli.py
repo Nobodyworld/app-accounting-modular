@@ -6,9 +6,8 @@ import asyncio
 import csv
 import json
 import logging
-import tomllib
 from collections import defaultdict
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -43,7 +42,14 @@ from apps.api.services.snapshot_service import (
 from apps.api.services.workflow_service import WorkflowService
 from apps.extensions import extension_registry
 from apps.extensions import scaffold_extension as generate_extension
-from apps.modular_accounting.application import SnapshotScenario
+from apps.modular_accounting.application import (
+    ScenarioPlan,
+    ScenarioPlanFormatError,
+    ScenarioPlanSummary,
+    ScenarioPlanValidationError,
+    load_plan_from_bytes,
+)
+from apps.observability.diagnostics import collect_observability_snapshot
 from apps.observability.health import health_registry
 from apps.observability.logging import configure_logging, logging_context
 from apps.observability.tracing import configure_tracing, traced
@@ -119,8 +125,8 @@ def _command_scope(command: str, **context: object) -> Iterator[None]:
                 logger.info("Completed CLI command")
 
 
-def _load_scenario_plan(path: Path) -> list[SnapshotScenario]:
-    """Load snapshot scenarios from a JSON or TOML plan file."""
+def _load_scenario_plan(path: Path) -> ScenarioPlan:
+    """Load a scenario plan from disk and return the parsed object."""
 
     try:
         content = path.read_bytes()
@@ -129,45 +135,12 @@ def _load_scenario_plan(path: Path) -> list[SnapshotScenario]:
             f"Failed to read scenario plan: {exc}", param_hint="--plan"
         ) from exc
 
-    suffix = path.suffix.lower()
     try:
-        if suffix == ".json":
-            payload = json.loads(content.decode("utf-8"))
-        elif suffix in {".toml", ".tml"}:
-            payload = tomllib.loads(content.decode("utf-8"))
-        else:
-            raise ValueError("Unsupported plan format (use .json or .toml)")
-    except (json.JSONDecodeError, tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
-        raise click.BadParameter(
-            f"Invalid plan content: {exc}", param_hint="--plan"
-        ) from exc
-    except ValueError as exc:
+        return load_plan_from_bytes(content, format_hint=path.suffix.lower())
+    except ScenarioPlanFormatError as exc:
         raise click.BadParameter(str(exc), param_hint="--plan") from exc
-
-    if not isinstance(payload, Mapping):
-        raise click.BadParameter(
-            "Scenario plan must define an object at the top level", param_hint="--plan"
-        )
-
-    raw_scenarios = payload.get("scenarios")
-    if not isinstance(raw_scenarios, Sequence) or isinstance(raw_scenarios, str | bytes):
-        raise click.BadParameter(
-            "Scenario plan must define a 'scenarios' array", param_hint="--plan"
-        )
-
-    scenarios: list[SnapshotScenario] = []
-    for index, entry in enumerate(raw_scenarios, start=1):
-        if not isinstance(entry, Mapping):
-            raise click.BadParameter(
-                f"Scenario entry #{index} must be a mapping", param_hint="--plan"
-            )
-        try:
-            scenario = SnapshotScenario.from_mapping(entry)
-        except ValueError as exc:
-            raise click.BadParameter(str(exc), param_hint="--plan") from exc
-        scenarios.append(scenario)
-
-    return scenarios
+    except ScenarioPlanValidationError as exc:
+        raise click.BadParameter(str(exc), param_hint="--plan") from exc
 
 
 @click.group()
@@ -336,6 +309,92 @@ def inspect_contracts(output_format: str) -> None:
         click.echo(json.dumps(snapshot, indent=2, sort_keys=True))
         return
     click.echo(_render_contract_table(rows))
+
+
+def _render_observability_table(snapshot) -> str:
+    summary = snapshot.as_dict()
+    lines = [
+        f"Snapshot generated at {summary['generated_at']}",
+        "",
+        "Metrics:",
+        f"  lines: {summary['metrics']['lines']}",
+        f"  bytes: {summary['metrics']['bytes']}",
+        "  checks: " + ", ".join(summary['metrics']['checks'])
+        if summary['metrics']['checks']
+        else "  checks: <none>",
+        "",
+        "Health by severity:",
+    ]
+    if summary["health"]["by_severity"]:
+        for severity, stats in summary["health"]["by_severity"].items():
+            lines.append(
+                f"  {severity}: {stats['open']} open / {stats['total']} total"
+            )
+    else:
+        lines.append("  <no checks registered>")
+
+    if summary["incidents"]:
+        lines.append("")
+        lines.append("Open incidents:")
+        for incident in summary["incidents"]:
+            lines.append(
+                "  - {name} ({severity}): {action}".format(**incident)
+            )
+    else:
+        lines.append("")
+        lines.append("Open incidents: none")
+
+    tracing = summary["tracing"]
+    lines.extend(
+        [
+            "",
+            "Tracing:",
+            f"  enabled: {'yes' if tracing['enabled'] else 'no'}",
+            f"  exporter: {tracing['exporter']}",
+            f"  otel_enabled: {'yes' if tracing['otel_enabled'] else 'no'}",
+        ]
+    )
+    if "endpoint" in tracing:
+        lines.append(f"  endpoint: {tracing['endpoint']}")
+
+    lines.append("")
+    lines.append("Extensions:")
+    if summary["extensions"]:
+        for extension in summary["extensions"]:
+            state = "enabled" if extension["enabled"] else "disabled"
+            loaded = "loaded" if extension["loaded"] else "not loaded"
+            capabilities = ", ".join(extension["capabilities"]) or "<none>"
+            lines.append(
+                f"  - {extension['key']} ({state}, {loaded}) -> {capabilities}"
+            )
+    else:
+        lines.append("  <no extensions configured>")
+
+    return "\n".join(lines)
+
+
+@cli.command(name="observe")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    default="table",
+    show_default=True,
+    help="Output format for the observability snapshot.",
+)
+def observe(output_format: str) -> None:
+    """Summarise metrics, health, and tracing state for operators."""
+
+    load_configured_extensions()
+    snapshot = asyncio.run(
+        collect_observability_snapshot(
+            extension_status_provider=active_extensions
+        )
+    )
+    if output_format.lower() == "json":
+        click.echo(json.dumps(snapshot.as_dict(), indent=2, sort_keys=True))
+        return
+    click.echo(_render_observability_table(snapshot))
 
 
 @cli.command()
@@ -552,10 +611,12 @@ def snapshot_scenarios(
 ) -> None:
     """Execute multiple snapshot scenarios from a plan file."""
 
-    scenarios = _load_scenario_plan(plan_path)
+    plan = _load_scenario_plan(plan_path)
+    scenarios = plan.scenarios
     with _command_scope(
         "snapshot-scenarios",
         plan=str(plan_path),
+        plan_name=plan.metadata.name,
         scenario_count=len(scenarios),
         reset_cache=reset_cache,
     ):
@@ -565,10 +626,82 @@ def snapshot_scenarios(
         )
         if output_format.lower() == "json":
             payload = scenario_batch_to_payload(batch)
+            payload["plan"] = plan.as_payload(include_scenarios=False)
             click.echo(json.dumps(payload, indent=2, default=str))
             return
 
         click.echo(format_scenario_batch_table(batch))
+
+
+def _format_plan_summary_table(plan: ScenarioPlan, summary: ScenarioPlanSummary) -> str:
+    lines = [
+        f"Plan: {plan.metadata.name}",
+        f"Description: {plan.metadata.description or '—'}",
+        f"Schedule: {plan.metadata.schedule or '—'}",
+        "",
+        "Scenarios",
+        "---------",
+        f"Total: {summary.scenario_count}",
+        f"Names: {', '.join(s.name for s in plan.scenarios)}",
+        f"Base currencies: {', '.join(summary.base_currencies) or '—'}",
+        f"Commodities: {', '.join(summary.commodity_symbols) or '—'}",
+        f"Jurisdictions: {', '.join(summary.jurisdictions) or '—'}",
+        f"Defaults applied: {', '.join(summary.defaults_applied) or '—'}",
+        "",
+        "Tags",
+        "----",
+    ]
+
+    if summary.tag_counts:
+        tag_lines = [f"{tag}: {count}" for tag, count in sorted(summary.tag_counts.items())]
+        lines.extend(tag_lines)
+    else:
+        lines.append("(none)")
+
+    if plan.metadata.parameters:
+        lines.extend(["", "Parameters", "----------"])
+        for key, value in sorted(plan.metadata.parameters.items()):
+            lines.append(f"{key}: {value}")
+
+    return "\n".join(lines)
+
+
+@cli.command(name="inspect-plan")
+@click.option(
+    "--plan",
+    "plan_path",
+    required=True,
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    help="Path to a JSON or TOML scenario plan file.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["json", "table"], case_sensitive=False),
+    default="table",
+    show_default=True,
+    help="Render the plan summary as a table or JSON payload.",
+)
+def inspect_plan(plan_path: Path, output_format: str) -> None:
+    """Display a plan summary without executing any providers."""
+
+    plan = _load_scenario_plan(plan_path)
+    summary = plan.summary()
+    with _command_scope(
+        "inspect-plan",
+        plan=str(plan_path),
+        plan_name=plan.metadata.name,
+        scenario_count=summary.scenario_count,
+    ):
+        if output_format.lower() == "json":
+            payload = {
+                "plan": plan.as_payload(),
+                "summary": summary.as_payload(),
+            }
+            click.echo(json.dumps(payload, indent=2, default=str))
+            return
+
+        click.echo(_format_plan_summary_table(plan, summary))
 
 
 @cli.command()
@@ -702,6 +835,11 @@ def list_extensions() -> None:
 @click.option("--description", default=None, help="Short extension summary.")
 @click.option("--author", default=None, help="Manifest author metadata.")
 @click.option("--force", is_flag=True, help="Overwrite existing files if present.")
+@click.option(
+    "--observability-contract/--no-observability-contract",
+    default=False,
+    help="Generate a starter observability playbook contract.",
+)
 def scaffold_extension_command(
     key: str,
     directory: Path,
@@ -711,6 +849,7 @@ def scaffold_extension_command(
     description: str | None,
     author: str | None,
     force: bool,
+    observability_contract: bool,
 ) -> None:
     """Generate an extension package skeleton."""
 
@@ -728,6 +867,7 @@ def scaffold_extension_command(
                 capabilities=capabilities,
                 author=author,
                 force=force,
+                observability_contract=observability_contract,
             )
         except (ValueError, FileExistsError) as exc:
             raise click.ClickException(str(exc)) from exc

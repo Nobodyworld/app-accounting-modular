@@ -1,5 +1,4 @@
-"""Domain-specific health checks registered with the health registry."""
-
+"""Service-layer health checks for the Modular Accounting API."""
 from __future__ import annotations
 
 from contextlib import suppress
@@ -124,8 +123,8 @@ def register_default_health_checks() -> None:
     """Install the built-in health checks for API bootstrapping."""
     from apps.observability.health import register_health_check
 
-    register_health_check("database", _database_health)
-    register_health_check("metrics", _metrics_health)
-    register_health_check("scheduler", _scheduler_health)
-    register_health_check("tracing", _tracing_health)
-    register_health_check("extensions", _extensions_health)
+    register_health_check("database", _database_health, severity="critical")
+    register_health_check("metrics", _metrics_health, severity="warning")
+    register_health_check("scheduler", _scheduler_health, severity="warning")
+    register_health_check("tracing", _tracing_health, severity="info")
+    register_health_check("extensions", _extensions_health, severity="info")
