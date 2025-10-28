@@ -1,6 +1,13 @@
 # Release Notes
 
 ## Highlights
+- Rebuilt the `macli` CLI diagnostics commands with deterministic table/JSON
+  output, added regression tests for health/observability snapshots, and made
+  the scheduler tolerant of missing legacy models so automation entry points
+  keep working while the database layer is modernised.
+- Hardened API startup orchestration with abort summaries for fatal failures,
+  skip telemetry, and extended regression coverage while restoring Makefile
+  tab alignment so `make health`/`make quality-gate` operate correctly in CI.
 - Added health-check telemetry metrics, an observability snapshot API consumed
   by the new `macli observe` command, the `ops:resilience` incident playbook
   extension, optional observability contract scaffolding via

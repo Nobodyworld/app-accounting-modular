@@ -43,10 +43,17 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 ## Runtime flow
 
 1. **Entry points** initialise logging, tracing, metrics middleware, and
-   database state. The FastAPI app wires both `RequestTraceMiddleware` and
+   database state.  The FastAPI app wires both `RequestTraceMiddleware` and
    `RequestMetricsMiddleware` so every request gains a traceparent header and
    latency metrics, while the CLI uses `logging_context` + `traced` to provide
-   correlation IDs and trace IDs for background work.
+   correlation IDs and trace IDs for background work.  A dedicated
+   `StartupManager` (`apps/api/startup.py`) now orchestrates the API bootstrap
+   sequence so logging/tracing configuration, database initialisation, health
+   registration, and extension loading emit structured step metadata.  The
+   collected records are exposed via `app.state.startup_records` for diagnostics
+   and surfaced in logs for incident response, while fatal failures emit an
+   aggregated "startup sequence aborted" summary before bubbling the error so
+   operators can see which steps executed or failed.
 2. **Extension loader** imports every enabled module declared in
    `Settings.allowed_extensions`. Extensions register an `ExtensionManifest`
    with `apps.extensions.registry.extension_registry` and can contribute health

@@ -23,3 +23,6 @@
 - Use environment variables (see `.env.example`) to configure sensitive settings.
 - Review [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) quarterly for updated
   security posture notes and dependency audit status.
+- Audit startup failure logs for sensitive payloads; `StartupManager` surfaces
+  exception metadata for diagnostics, so ensure startup steps raise errors
+  without embedding secrets or personal data.
