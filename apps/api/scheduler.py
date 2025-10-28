@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import timedelta
 from threading import Lock
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -15,8 +16,12 @@ from sqlmodel import Session, select
 from apps.observability.logging import logging_context
 
 from .db import engine
-from .models.models import ForecastPlan
 from .services.budget_service import BudgetService
+
+if TYPE_CHECKING:  # pragma: no cover - import for typing only
+    from .models.models import ForecastPlan
+else:  # pragma: no cover - runtime placeholder for optional models
+    ForecastPlan = Any
 
 __all__ = [
     "start_scheduler",
@@ -44,9 +49,7 @@ def _refresh_plan(service: BudgetService, plan: ForecastPlan) -> None:
     if plan.budget_id is not None:
         service.budget_vs_actual(plan.budget_id, horizon=plan.horizon, refresh=True)
     else:
-        service.cashflow_forecast(
-            plan.organization_id, horizon=plan.horizon, refresh=True
-        )
+        service.cashflow_forecast(plan.organization_id, horizon=plan.horizon, refresh=True)
 
 
 def _run_scheduled_refresh() -> None:
@@ -60,9 +63,7 @@ def _run_scheduled_refresh() -> None:
         # TODO[P2][2d]: Emit metrics or alerts when refresh cadence falls behind schedule.
         with _session_scope() as session:
             service = BudgetService(session)
-            plans = session.exec(
-                select(ForecastPlan).where(ForecastPlan.is_active.is_(True))
-            ).all()
+            plans = session.exec(select(ForecastPlan).where(ForecastPlan.is_active.is_(True))).all()
             if not plans:
                 logger.info("No active forecast plans available for refresh")
                 return

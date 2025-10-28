@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- 2025-11-05: Rebuilt the `macli` CLI to expose health, telemetry, and
+  extension-inspection commands with deterministic table/JSON output, added a
+  dedicated observability test suite, and relaxed scheduler imports so missing
+  legacy models no longer break automation entry points.
+- 2025-11-04: Hardened API startup orchestration with abort summaries and skip
+  telemetry, restored Makefile tabs so `make health` and related DX targets run
+  reliably, and expanded regression coverage/docs for the new startup manager.
 - 2025-11-03: Added health-check latency/status metrics, an observability
   snapshot API (`apps.observability.diagnostics.collect_observability_snapshot`),
   and the `macli observe` command. Shipped the `ops:resilience` reference

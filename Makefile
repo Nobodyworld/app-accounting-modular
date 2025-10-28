@@ -28,17 +28,17 @@ quality: lint typecheck test security
 ci: lint typecheck test security
 
 health:
-        $(PYTHON) -m cli.macli health
+	$(PYTHON) -m cli.macli health
 
 quality-gate:
-        $(PYTHON) -m tools.quality_gate
+	$(PYTHON) -m tools.quality_gate
 
 plan-validate:
-        test -n "$(PLAN)" || (echo "PLAN=<path> is required" >&2 && exit 1)
-        $(PYTHON) -m cli.macli inspect-plan --plan $(PLAN)
+	test -n "$(PLAN)" || (echo "PLAN=<path> is required" >&2 && exit 1)
+	$(PYTHON) -m cli.macli inspect-plan --plan $(PLAN)
 
 audit:
-        $(PYTHON) -m tools.audit_metrics --format markdown --output REPORTS/audit-latest.md
+	$(PYTHON) -m tools.audit_metrics --format markdown --output REPORTS/audit-latest.md
 
 release:
 	$(PYTHON) -m tools.release_manager bump --part $${PART:-patch} --message "$${MESSAGE:-TODO: describe release}"

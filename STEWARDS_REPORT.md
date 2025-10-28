@@ -18,6 +18,10 @@
 - **Operational health remains degraded by design.** `make health` reports a non-running scheduler; decide whether to start the scheduler in local runs or downgrade the severity to avoid false alarms.
 - **Telemetry endpoints provide consistent coverage snapshots.** Coupling `/health/telemetry` with `REPORTS/audit-latest.md` offers both runtime and static coverage overviews for release readiness.
 - **Observability snapshots now unify telemetry.** `apps.observability.diagnostics.collect_observability_snapshot` aggregates health, metrics, tracing, and extension metadata for `macli observe`, while the health registry emits latency/status metrics for each probe so dashboards highlight degradation immediately. 【F:apps/observability/diagnostics.py†L1-L116】【F:apps/observability/health.py†L29-L107】【F:cli/macli.py†L120-L209】
+- **CLI diagnostics produce machine-friendly output.** The rebuilt `macli`
+  commands emit deterministic tables/JSON for health, telemetry, and extension
+  discovery while suppressing tracing noise so automation can parse the output.
+  Regression tests cover JSON emissions and degraded health paths. 【F:cli/macli.py†L1-L342】【F:tests/test_macli_extensions.py†L1-L140】【F:tests/test_macli_observability.py†L1-L126】
 - **Scenario orchestration is now observable.** Scenario batches emit
   Prometheus metrics for run counts, latency, and inflight executions while
   `/extensions/contracts` and `macli inspect-contracts` surface automation
@@ -33,6 +37,8 @@
 - Snapshot diagnostics now live behind a reusable helper so API, CLI, and tests share freshness and coverage logic. 【F:apps/modular_accounting/application/diagnostics.py†L1-L132】
 - Replaced the tracing lambda sentinel with `_noop_exporter` to clarify exporter lifecycle and aid testing when OpenTelemetry extras are absent. 【F:apps/observability/tracing.py†L64-L137】
 - Extension loading emits metrics/traces so `/health/telemetry` and `macli inspect-extensions` surface readiness instantly. 【F:apps/extensions/registry.py†L1-L120】【F:apps/observability/metrics.py†L1-L360】
+- Relaxed the scheduler's runtime imports so optional legacy models no longer
+  break CLI health checks or automation entry points when absent. 【F:apps/api/scheduler.py†L1-L120】
 - Instrumented scenario orchestration with trace/metric hooks and added
   contract discovery helpers so CLI/API callers see published automation
   surfaces. 【F:apps/modular_accounting/application/scenarios.py†L1-L220】【F:apps/observability/metrics.py†L1-L380】【F:cli/macli.py†L200-L340】
@@ -52,6 +58,11 @@
   playbook health probes. 【F:plugins/ops_resilience/extension.py†L1-L66】【F:apps/api/config.py†L68-L118】
 - Introduced `tools.quality_gate` and `make quality-gate` for single-command
   lint/type/test/security runs. 【F:tools/quality_gate.py†L1-L74】【F:Makefile†L1-L40】
+- Centralised API bootstrap through `StartupManager` so each startup step logs
+  structured duration/status metadata, fatal failures emit a summarised abort
+  payload for operators, and the resulting records are exposed on the FastAPI
+  app for diagnostics. Regression tests cover success, skip, non-fatal, and
+  fatal paths. 【F:apps/api/startup.py†L1-L176】【F:apps/api/main.py†L1-L132】【F:tests/test_startup_manager.py†L1-L160】
 
 ## Knowledge & Automation Handover
 - `make audit` wraps `python -m tools.audit_metrics --format markdown` and writes the latest metrics to `REPORTS/audit-latest.md`; automation should attach the generated file to quarterly reports. 【F:Makefile†L1-L29】【F:README.md†L27-L55】

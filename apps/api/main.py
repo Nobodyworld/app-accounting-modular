@@ -33,6 +33,7 @@ from .scheduler import shutdown_scheduler, start_scheduler
 from .security import get_current_user
 from .services.extension_loader import load_configured_extensions
 from .services.health import register_default_health_checks
+from .startup import StartupContext, StartupManager, StartupStep
 from .version import API_VERSION
 
 __all__ = ["create_app", "app"]
@@ -43,31 +44,56 @@ logger = logging.getLogger(__name__)
 def create_app() -> FastAPI:
     """Instantiate and configure the FastAPI application."""
 
-    configure_logging(
-        settings.log_level,
-        settings.log_format,
-        service_name="modular-accounting-api",
-        force=True,
-    )
-    configure_tracing(
-        service_name="modular-accounting-api",
-        exporter=settings.tracing_exporter,
-        endpoint=settings.tracing_otlp_endpoint,
-    )
-    init_db()
-    register_default_health_checks()
-    manifests = load_configured_extensions()
-    if settings.jwt_secret_is_ephemeral:
-        logger.warning(
-            "JWT secret is ephemeral and will rotate on process restart. "
-            "Set MODACCT_JWT_SECRET_KEY or JWT_SECRET_KEY for persistent sessions."
+    startup_manager = StartupManager(logger=logging.getLogger("apps.api.startup"))
+    startup_context: StartupContext = {}
+
+    def _configure_logging(_: StartupContext) -> None:
+        configure_logging(
+            settings.log_level,
+            settings.log_format,
+            service_name="modular-accounting-api",
+            force=True,
         )
-    if manifests:
-        logger.info(
-            "Loaded extensions",
-            extra={"extensions": [manifest.key for manifest in manifests]},
+
+    def _configure_tracing(_: StartupContext) -> None:
+        configure_tracing(
+            service_name="modular-accounting-api",
+            exporter=settings.tracing_exporter,
+            endpoint=settings.tracing_otlp_endpoint,
         )
-    # TODO[P2][1d]: Wire structured logging around startup failures for easier triage.
+
+    def _initialise_database(_: StartupContext) -> None:
+        init_db()
+
+    def _register_health(_: StartupContext) -> None:
+        register_default_health_checks()
+
+    def _load_extensions(context: StartupContext) -> None:
+        manifests = load_configured_extensions()
+        context["extensions"] = tuple(manifests)
+        if manifests:
+            logger.info(
+                "Loaded extensions",
+                extra={"extensions": [manifest.key for manifest in manifests]},
+            )
+
+    def _warn_ephemeral_secret(_: StartupContext) -> None:
+        if settings.jwt_secret_is_ephemeral:
+            logger.warning(
+                "JWT secret is ephemeral and will rotate on process restart. "
+                "Set MODACCT_JWT_SECRET_KEY or JWT_SECRET_KEY for persistent sessions."
+            )
+
+    startup_steps = (
+        StartupStep(name="configure_logging", action=_configure_logging),
+        StartupStep(name="configure_tracing", action=_configure_tracing),
+        StartupStep(name="initialise_database", action=_initialise_database),
+        StartupStep(name="register_health_checks", action=_register_health),
+        StartupStep(name="load_extensions", action=_load_extensions),
+        StartupStep(name="warn_ephemeral_secret", action=_warn_ephemeral_secret, fatal=False),
+    )
+
+    startup_records = startup_manager.run(startup_steps, context=startup_context)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # pragma: no cover - exercised via tests
@@ -81,6 +107,8 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestTraceMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(RequestMetricsMiddleware, registry=metrics_registry)
+    app.state.startup_records = startup_records
+    app.state.extension_manifests = startup_context.get("extensions", ())
     protected = [Depends(get_current_user)]
     router_registry: Iterable[tuple[APIRouter, bool]] = (
         (core.router, False),
