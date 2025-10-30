@@ -30,6 +30,6 @@
 - **Governance files** (CODE_OF_CONDUCT, CONTRIBUTING, SECURITY, SUPPORT) already exist at the root for contributor onboarding.【F:CONTRIBUTING.md†L1-L37】
 
 ## Known pain points & TODOs
-- Outstanding tasks include shipping real provider packages, expanding snapshot/CLI edge-case tests, and delivering persistence examples for ledger integrations.【F:TODO.md†L1-L5】
-- API startup lacks structured failure logging hooks, called out as a TODO in the main application factory.【F:apps/api/main.py†L33-L40】
-- Plugin caching requires manual invalidation when provider configuration changes, relying on explicit refresh calls to avoid stale metadata.【F:apps/api/services/plugin_loader.py†L78-L178】
+- Outstanding tasks include shipping real provider packages, expanding snapshot/CLI edge-case tests, and delivering persistence examples for ledger integrations (tracked via TASK-0001 through TASK-0003).
+- API startup lacks structured failure logging hooks, called out as a TODO in the main application factory (tracked via TASK-0083).【F:apps/api/main.py†L1-L87】
+- Plugin caching requires manual invalidation when provider configuration changes, relying on explicit refresh calls to avoid stale metadata (tracked via TASK-0080 and TASK-0084).【F:apps/api/services/plugin_loader.py†L53-L178】

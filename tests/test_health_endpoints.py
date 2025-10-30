@@ -1,10 +1,66 @@
 from __future__ import annotations
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
-from apps.api.main import app
+from apps.api.routers import core as core_router
+from apps.api.routers import health as health_router
+from apps.observability.health import HealthReport, health_registry
+from apps.observability.metrics import RequestMetricsMiddleware, metrics_registry
 
-client = TestClient(app)
+api_app = FastAPI()
+api_app.add_middleware(RequestMetricsMiddleware, registry=metrics_registry)
+api_app.include_router(core_router.router)
+api_app.include_router(health_router.router)
+
+client = TestClient(api_app)
+
+
+@pytest.fixture(autouse=True)
+def _stub_health_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake_evaluate() -> list[HealthReport]:
+        return [
+            HealthReport(
+                name="database",
+                healthy=True,
+                severity="critical",
+                details={"status": "ok"},
+            ),
+            HealthReport(
+                name="scheduler",
+                healthy=True,
+                severity="info",
+                details={"running": True, "jobs": 1},
+            ),
+            HealthReport(
+                name="extensions",
+                healthy=True,
+                severity="info",
+                details={"configured": 0, "enabled": 0, "loaded": []},
+            ),
+        ]
+
+    monkeypatch.setattr(health_registry, "evaluate", _fake_evaluate)
+
+
+def test_core_health_endpoint_includes_database_and_scheduler() -> None:
+    response = client.get("/health")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"ok", "degraded", "critical", "unknown"}
+    assert isinstance(payload["checks"], list)
+    checks = {entry["name"]: entry for entry in payload["checks"]}
+    assert "database" in checks
+    assert "scheduler" in checks
+    for name in ("database", "scheduler"):
+        check = checks[name]
+        assert "healthy" in check
+        assert "severity" in check
+        assert isinstance(check.get("details"), dict)
+        summary = payload[name]
+        assert summary["name"] == name
+        assert summary["details"] == check["details"]
 
 
 def test_liveness_probe() -> None:

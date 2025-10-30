@@ -7,9 +7,6 @@
 - `expression`: a simple expression or JSON logic describing applicability and rate
 - `valid_from`, `valid_to`
 
-## TODO
+## Follow-up Work
 
-- Add strong typing for expressions (e.g., JSONLogic schema)
-- Add precedence & override strategy
-- Add source provenance (URL, statute reference)
-- Add automated updaters per jurisdiction
+Outstanding enhancements for the tax model are tracked in TASKSLIST.md as TASK-0007 through TASK-0010, covering expression typing, precedence rules, provenance metadata, and automated jurisdictional updaters.
