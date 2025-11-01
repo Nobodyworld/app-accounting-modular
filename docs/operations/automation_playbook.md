@@ -20,7 +20,7 @@ repository to remain safe, observable, and reversible.
    Validate scenario plans with `make plan-validate PLAN=docs/examples/scenario-plan.json`
    (wraps `macli inspect-plan`) before triggering provider-heavy workloads.
 2. **Record decisions in docs**. Significant architectural or operational
-   changes should be summarised in `ARCHITECTURE_OVERVIEW.md` and the relevant
+   changes should be summarised in `docs/architecture/overview.md` and the relevant
    README section.
 3. **Tag TODOs** with the `[priority][estimate]` format (for example
    `# TODO[P2][2d]: Add async provider loading`). This keeps the future work
@@ -58,7 +58,7 @@ repository to remain safe, observable, and reversible.
    * Update `CHANGELOG.md` and `RELEASE_NOTES.md` (or run
      `make release PART=patch MESSAGE="<summary>"` to bump the version and
      seed both files automatically).
-   * Run `make audit` to refresh `REPORTS/audit-latest.md` with up-to-date
+   * Run `make audit` to refresh `docs/reports/audit-latest.md` with up-to-date
      metrics whenever steward reports are compiled. If trace collection is too
      slow, rerun `tools.audit_metrics --skip-trace` to reuse the prior coverage
      snapshot while still emitting complexity and dependency profiles.

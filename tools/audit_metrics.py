@@ -209,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     """Execute the audit workflow and print metrics in the requested format."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--trace-dir", type=Path, default=Path("REPORTS/tracecov"))
+    parser.add_argument("--trace-dir", type=Path, default=Path("docs/reports/tracecov"))
     parser.add_argument(
         "--skip-tests",
         action="store_true",

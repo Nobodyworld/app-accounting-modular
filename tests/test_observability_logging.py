@@ -8,7 +8,6 @@ import logging
 from typing import Any
 
 import pytest
-
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
@@ -18,8 +17,8 @@ from apps.observability.logging import (
     JsonFormatter,
     RequestContextMiddleware,
     TextFormatter,
-    configure_logging,
     async_logging_context,
+    configure_logging,
     get_context,
     logging_context,
 )
@@ -40,7 +39,8 @@ def test_logging_context_injects_fields() -> None:
 
     assert record.correlation_id == "cid-123"
     assert record.request_id == "req-456"
-    assert getattr(record, "tenant") == "demo"
+    assert hasattr(record, "tenant")
+    assert record.tenant == "demo"
 
 
 def test_json_formatter_outputs_expected_structure() -> None:

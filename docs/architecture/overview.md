@@ -145,7 +145,7 @@ incident playbooks.
 * **Automation hooks** – Extension manifests surface capabilities so automation
   agents can decide which module to invoke, while explicit contracts document
   the callable surfaces available to agents. Coupled with the incident response
-  guidelines in `AUTOMATION.md`, this enables future agentic tooling to safely
+  guidelines in `docs/operations/automation_playbook.md`, this enables future agentic tooling to safely
   orchestrate new connectors.
 * **Release automation** – `tools.release_manager` underpins `make release`,
   which bumps semantic versions and seeds changelog/release notes to keep

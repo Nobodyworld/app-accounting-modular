@@ -38,7 +38,7 @@ plan-validate:
 	$(PYTHON) -m cli.macli inspect-plan --plan $(PLAN)
 
 audit:
-	$(PYTHON) -m tools.audit_metrics --format markdown --output REPORTS/audit-latest.md
+	$(PYTHON) -m tools.audit_metrics --format markdown --output docs/reports/audit-latest.md
 
 release:
 	$(PYTHON) -m tools.release_manager bump --part $${PART:-patch} --message "$${MESSAGE:-TODO: describe release}"

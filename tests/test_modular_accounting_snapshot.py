@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Iterable, Sequence
 
 from apps.modular_accounting.application import DataSnapshotService, SnapshotRequest
 from apps.modular_accounting.domain import CommodityQuote, FXRate, Money, TaxRule

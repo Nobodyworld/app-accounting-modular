@@ -26,7 +26,7 @@
 
 ## Documentation Health
 - `README.md` and `docs/` now include usage examples, architecture diagrams, and provider development guidance to support rapid onboarding.
-- Governance and support files (`CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md`) align with contribution expectations defined in `CONTRIBUTING.md`.
+- Governance and support files (`CODE_OF_CONDUCT.md`, `SECURITY.md`, `docs/governance/support.md`) align with contribution expectations defined in `CONTRIBUTING.md`.
 
 ## Next Steps
-Continue executing the modernisation plan outlined in `PLAN.md`: broaden strict typing coverage, introduce metrics/telemetry, and build on the refreshed documentation to streamline contributor onboarding.
+Continue executing the modernisation plan outlined in `docs/governance/plan.md`: broaden strict typing coverage, introduce metrics/telemetry, and build on the refreshed documentation to streamline contributor onboarding.

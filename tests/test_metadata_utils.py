@@ -1,6 +1,6 @@
 """Metadata utility tests covering normalisation and serialisation helpers."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from apps.api.utils.metadata import (
@@ -34,7 +34,7 @@ def test_normalise_metadata_parses_zulu_timestamps() -> None:
 
     value = normalised["generated_at"]
     assert isinstance(value, datetime)
-    assert value.tzinfo == timezone.utc
+    assert value.tzinfo == UTC
 
 
 def test_normalise_metadata_preserves_non_iso_strings() -> None:
@@ -47,7 +47,7 @@ def test_serialise_diagnostics_coerces_scalars() -> None:
     diagnostics = {
         "observations": 12,
         "baseline": Decimal("42.125"),
-        "generated": datetime(2024, 2, 1, 12, 0, tzinfo=timezone.utc),
+        "generated": datetime(2024, 2, 1, 12, 0, tzinfo=UTC),
         "effective_date": date(2024, 2, 1),
         "active": True,
         "notes": None,
@@ -118,7 +118,7 @@ def test_prepare_metadata_for_response_combines_normalisation_steps() -> None:
 
     prepared = prepare_metadata_for_response(metadata)
 
-    assert prepared["generated_at"].tzinfo == timezone.utc
+    assert prepared["generated_at"].tzinfo == UTC
     assert prepared["forecast_diagnostics"] == {"observations": 5, "flag": True}
 
 

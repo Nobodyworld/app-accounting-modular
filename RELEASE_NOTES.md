@@ -62,8 +62,8 @@
   operational state.
 - Shipped `tools.audit_metrics` with a `make audit` wrapper so coverage,
   complexity, and dependency ratios can be regenerated without `pytest-cov`.
-- Published new collateral (`ARCHITECTURE_OVERVIEW.md`, `EXTENSION_GUIDE.md`,
-  `AUTOMATION.md`) and a Makefile-driven quality pipeline to simplify future
+- Published new collateral (`docs/architecture/overview.md`, `docs/guides/extension_guide.md`,
+  `docs/operations/automation_playbook.md`) and a Makefile-driven quality pipeline to simplify future
   contributions.
 
 ## Upgrade Guidance

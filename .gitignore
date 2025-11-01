@@ -178,6 +178,9 @@ docker-compose.override.yml
 .pytest_cache/
 coverage/
 
+# Audit trace artifacts
+docs/reports/tracecov/
+
 # my local vim swap files and backup
 .*.swp
 *.swo

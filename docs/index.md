@@ -5,18 +5,26 @@ setup, architecture, adapter design, practical examples, and the forward-looking
 roadmap.
 
 - [Setup](setup.md) – install dependencies, run tests, and execute the demo CLI.
-- [Architecture Overview](architecture.md) – visualise the layered design and
+- [Architecture Overview](architecture/overview.md) – visualise the layered design and
   understand how requests flow through ports and adapters.
-- [System Map](../ARCHITECTURE_OVERVIEW.md) – top-level runtime surfaces and
+- [System Map](architecture/overview.md) – top-level runtime surfaces and
   operational safeguards introduced in Stage 3.
 - [Adapter Contracts](adapters.md) – implement custom providers that satisfy the
   runtime-checkable protocols.
 - [Examples](examples.md) – copy-paste ready commands and snippets for common
   tasks.
-- [Extension Guide](../EXTENSION_GUIDE.md) – build and register optional
+- [Extension Guide](guides/extension_guide.md) – build and register optional
   automation packs with health probes and metrics.
 - [Operations & Incident Response](operations.md) – observability, tracing, and
   recovery playbooks for operators and agents.
 - [Roadmap](roadmap.md) – upcoming milestones and strategic investments.
 - [Dependencies](DEPENDENCIES.md) – pinned packages, license posture, and
   security review notes.
+- [Governance plan](governance/plan.md) – contributor expectations and
+  prioritised initiatives tracked by the stewardship team.
+- [Stewardship report](governance/stewards_report.md) – quarterly metrics,
+  audit results, and automation handover notes.
+- [Support channels](governance/support.md) – where to request help and follow
+  incident communications.
+- [Directory overviews](../README.md#repository-structure) – quick links to
+  per-folder READMEs (architecture, governance, operations, plugins, tests).

@@ -1,4 +1,4 @@
-# REPORT
+# Reporting Overview
 
 ## Structure & Dependency Map
 - **Services**: `apps/api/routers` expose FastAPI routes layered over service modules such as `budget_service`, `forecast_service`, and `ledger_service`. Persistence sits in `apps/api/models` (SQLModel) with session helpers in `apps/api/db.py`.

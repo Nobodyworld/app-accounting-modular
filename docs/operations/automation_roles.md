@@ -24,16 +24,16 @@
 - **Checklist**:
   1. Run `python -m trace --count --coverdir tracecov --module pytest`.
   2. Use the provided parsing script (see Steward's Report) to compute aggregate coverage percentages.
-  3. Attach the resulting metrics to `REPORTS/` or release notes as needed.
+  3. Attach the resulting metrics to `docs/reports/` or release notes as needed.
 - **Fallback**: If trace output is noisy, prune standard-library `.cover` files before archiving to focus on project modules. 【0a7457†L1-L41】
 
 ## Quality Metrics Agent
 - **Trigger**: Quarterly stewardship reviews or automation health checks.
-- **Entry points**: `python -m tools.audit_metrics --format markdown --output REPORTS/audit-latest.md`.
+- **Entry points**: `python -m tools.audit_metrics --format markdown --output docs/reports/audit-latest.md`.
 - **Checklist**:
   1. Ensure dependencies are installed (`make install`) and run `make audit`.
   2. Review the generated Markdown to confirm coverage, complexity, and dependency ratios meet expectations.
-  3. Update `STEWARDS_REPORT.md` with new metrics, citing the rendered report for traceability.
+  3. Update `docs/governance/stewards_report.md` with new metrics, citing the rendered report for traceability.
 - **Fallback**: When trace instrumentation is too slow, rerun `tools.audit_metrics` with `--skip-trace`; the command now reuses the previous trace directory to preserve coverage figures while refreshing the remaining metrics.
 
 ## Telemetry Sentinel Agent
