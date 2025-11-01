@@ -3,7 +3,7 @@
 ## Metrics Overview
 | Metric | Measurement | Notes |
 | --- | --- | --- |
-| Coverage (apps / cli / plugins) | 68.74% / 56.70% / 64.10% | Trace-based aggregation from the steward audit workflow. 【F:REPORTS/audit-latest.md†L1-L5】 |
+| Coverage (apps / cli / plugins) | 68.74% / 56.70% / 64.10% | Trace-based aggregation from the steward audit workflow. 【F:docs/reports/audit-latest.md†L1-L5】 |
 | Test runtime | 6.43s (`pytest`) | Baseline execution without instrumentation. 【4343b1†L1-L14】 |
 | Trace-instrumented runtime | 36.68s (`python -m trace --count --module pytest`) | Overhead for periodic coverage snapshots using the trace fallback. 【4ebee4†L1-L7】 |
 | Health check runtime | 2.69s (`make health`) | Provides a quick proxy for CLI responsiveness and telemetry fan-out. 【c62d2b†L1-L4】 |
@@ -16,7 +16,7 @@
 - **Audit automation now covers offline reuse.** `tools.audit_metrics` can read existing trace directories when `--skip-trace` is set, enabling agents to refresh complexity/dependency metrics without rerunning heavy coverage sweeps.
 - **CLI CSV ingestion is manageable after refactor.** Splitting `_load_transactions_from_csv` into smaller helpers trimmed the worst cyclomatic hotspot and clarified validation boundaries.
 - **Operational health remains degraded by design.** `make health` reports a non-running scheduler; decide whether to start the scheduler in local runs or downgrade the severity to avoid false alarms.
-- **Telemetry endpoints provide consistent coverage snapshots.** Coupling `/health/telemetry` with `REPORTS/audit-latest.md` offers both runtime and static coverage overviews for release readiness.
+- **Telemetry endpoints provide consistent coverage snapshots.** Coupling `/health/telemetry` with `docs/reports/audit-latest.md` offers both runtime and static coverage overviews for release readiness.
 - **Observability snapshots now unify telemetry.** `apps.observability.diagnostics.collect_observability_snapshot` aggregates health, metrics, tracing, and extension metadata for `macli observe`, while the health registry emits latency/status metrics for each probe so dashboards highlight degradation immediately. 【F:apps/observability/diagnostics.py†L1-L116】【F:apps/observability/health.py†L29-L107】【F:cli/macli.py†L120-L209】
 - **CLI diagnostics produce machine-friendly output.** The rebuilt `macli`
   commands emit deterministic tables/JSON for health, telemetry, and extension
@@ -33,7 +33,9 @@
 
 ## Simplification Log
 - Decomposed `_load_transactions_from_csv` into validation, parsing, and assembly helpers so ledger import logic is easier to unit test and extend. 【F:cli/macli.py†L565-L676】
-- Allowed `tools.audit_metrics` to reuse prior trace outputs and ensured generated Markdown includes a trailing newline for clean check-ins. 【F:tools/audit_metrics.py†L101-L219】【F:REPORTS/audit-latest.md†L1-L5】
+- Cached SQLModel metadata initialisation in `apps.api.db` so dependency-injected sessions avoid repeated `create_all` calls during tests while preserving schema bootstrapping. 【F:apps/api/db.py†L1-L74】
+- Added defensive header parsing metrics hooks by logging malformed identifiers in the shared dependency so audit provenance issues surface early. 【F:apps/api/dependencies.py†L1-L44】
+- Allowed `tools.audit_metrics` to reuse prior trace outputs and ensured generated Markdown includes a trailing newline for clean check-ins. 【F:tools/audit_metrics.py†L101-L219】【F:docs/reports/audit-latest.md†L1-L5】
 - Snapshot diagnostics now live behind a reusable helper so API, CLI, and tests share freshness and coverage logic. 【F:apps/modular_accounting/application/diagnostics.py†L1-L132】
 - Replaced the tracing lambda sentinel with `_noop_exporter` to clarify exporter lifecycle and aid testing when OpenTelemetry extras are absent. 【F:apps/observability/tracing.py†L64-L137】
 - Extension loading emits metrics/traces so `/health/telemetry` and `macli inspect-extensions` surface readiness instantly. 【F:apps/extensions/registry.py†L1-L120】【F:apps/observability/metrics.py†L1-L360】
@@ -65,9 +67,9 @@
   fatal paths. 【F:apps/api/startup.py†L1-L176】【F:apps/api/main.py†L1-L132】【F:tests/test_startup_manager.py†L1-L160】
 
 ## Knowledge & Automation Handover
-- `make audit` wraps `python -m tools.audit_metrics --format markdown` and writes the latest metrics to `REPORTS/audit-latest.md`; automation should attach the generated file to quarterly reports. 【F:Makefile†L1-L29】【F:README.md†L27-L55】
+- `make audit` wraps `python -m tools.audit_metrics --format markdown` and writes the latest metrics to `docs/reports/audit-latest.md`; automation should attach the generated file to quarterly reports. 【F:Makefile†L1-L29】【F:README.md†L27-L55】
 - When full trace runs are impractical, invoke `python -m tools.audit_metrics --skip-trace --format json` to reuse the previous trace coverage while refreshing complexity and dependency metrics. 【F:tools/audit_metrics.py†L149-L215】
-- `AUTOMATION_ROLES.md` now enumerates telemetry- and quality-focused agent responsibilities so orchestration pipelines know which commands are `# agent-entrypoint` or `# agent-safe-task`. 【F:AUTOMATION_ROLES.md†L1-L60】
+- `docs/operations/automation_roles.md` now enumerates telemetry- and quality-focused agent responsibilities so orchestration pipelines know which commands are `# agent-entrypoint` or `# agent-safe-task`. 【F:docs/operations/automation_roles.md†L1-L60】
 - `/health/telemetry`, `macli inspect-extensions`, and `macli inspect-contracts`
   provide machine-friendly snapshots; capture all three in incident playbooks
   for complete situational awareness. 【F:apps/api/routers/health.py†L1-L120】【F:cli/macli.py†L200-L340】
@@ -89,7 +91,7 @@
 ## Future Roadmap
 ### Short Term (next sprint)
 - Increase CLI coverage around CSV import edge cases to push the CLI package past 60% coverage and lock in the refactored helpers.
-- Capture `REPORTS/audit-latest.md` and `/health/telemetry` payloads as CI artifacts to monitor drift across branches.
+- Capture `docs/reports/audit-latest.md` and `/health/telemetry` payloads as CI artifacts to monitor drift across branches.
 - Decide on a minimal scheduler bootstrap (or severity downgrade) so health checks represent the expected local posture.
 - Monitor scenario metrics in dashboards and alert when failure rates spike or
   latency exceeds thresholds once deployed. Extend the plan preview endpoint

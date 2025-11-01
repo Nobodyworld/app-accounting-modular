@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- 2025-05-24: Validated the post-refactor layout by adding directory-level
+  READMEs, refreshing repository navigation docs (README, SPEC, STYLE-GUIDE),
+  tightening API model typing/logging utilities, and aligning smoke/metadata
+  tests with modern Ruff expectations.
+- 2025-11-06: Reorganized the repository structure by grouping documentation under
+  `docs/architecture`, `docs/governance`, and `docs/operations`, relocating audit
+  artifacts to `docs/reports`, updating automation tooling defaults, and
+  annotating TASKSLIST entries with explicit review statuses for stewardship
+  visibility.
 - 2025-11-05: Rebuilt the `macli` CLI to expose health, telemetry, and
   extension-inspection commands with deterministic table/JSON output, added a
   dedicated observability test suite, and relaxed scheduler imports so missing
@@ -63,8 +72,9 @@
   rendering utilities, provider provenance, and cache metrics.
 - 2024-11-04: Added Prometheus-compatible metrics, health probes, and extension
   scaffolding. Shipping CLI tooling (`macli health`, `macli extensions`),
-  Makefile quality gates, and companion docs (`ARCHITECTURE_OVERVIEW.md`,
-  `EXTENSION_GUIDE.md`, `AUTOMATION.md`) to stabilise long-term operations.
+  Makefile quality gates, and companion docs (`docs/architecture/overview.md`,
+  `docs/guides/extension_guide.md`, `docs/operations/automation_playbook.md`) to
+  stabilise long-term operations.
 - 2024-11-03: Hardened snapshot caching by enforcing lint/type compliance,
   capturing deterministic coverage artifacts, and documenting verification
   outputs for release readiness.

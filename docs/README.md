@@ -63,4 +63,4 @@ Open the API docs at <http://localhost:8000/docs> and the UI at <http://localhos
 - [ ] Fine-grained permissions and audit trail
 - [ ] Web UI (React) option (tracked via TASK-0023) alongside Streamlit
 
-See more in `docs/ARCHITECTURE.md` and `docs/PLUGINS.md`.
+See more in `docs/architecture/overview.md` and `docs/PLUGINS.md`.

@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy.engine import make_url
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 
 from .config import settings
 
@@ -18,6 +18,10 @@ url = make_url(database_url)
 
 connect_args: dict[str, Any] = {}
 engine_kwargs: dict[str, Any] = {"echo": False}
+
+# Track engines that have already had metadata created so repeated dependency
+# injections in tests do not try to re-run expensive schema creation.
+_initialised_engines: set[int] = set()
 
 if url.get_backend_name() == "sqlite":
     connect_args = {"check_same_thread": False}
@@ -39,6 +43,7 @@ def init_db() -> None:
 
     # TODO - Migrate towards Alembic-managed schema evolutions instead of create_all.
     SQLModel.metadata.create_all(engine)
+    _initialised_engines.add(id(engine))
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -46,8 +51,10 @@ def get_session() -> Generator[Session, None, None]:
 
     with Session(engine, expire_on_commit=False) as session:
         bind = session.get_bind()
-        if bind is not None and not getattr(bind, "_ma_tables_initialized", False):
-            SQLModel.metadata.create_all(bind)
-            setattr(bind, "_ma_tables_initialized", True)
-            # TODO - Replace eager create_all with idempotent migration bootstrapping.
+        if bind is not None:
+            bind_identifier = id(bind)
+            if bind_identifier not in _initialised_engines:
+                SQLModel.metadata.create_all(bind)
+                _initialised_engines.add(bind_identifier)
+                # TODO - Replace eager create_all with idempotent migration bootstrapping.
         yield session

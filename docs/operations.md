@@ -36,7 +36,7 @@ spans via console or OTLP exporters. Without them, spans are logged locally.
 4. Decide on remediation: disable suspect extensions via configuration or roll
    back to a known good commit. The `macli inspect-extensions` command lists
    active modules, their versions, and whether they loaded successfully.
-5. Document the outcome in `STEWARDS_REPORT.md` so future operators understand
+5. Document the outcome in `docs/governance/stewards_report.md` so future operators understand
    the action taken.
 
 ## Developer Tooling

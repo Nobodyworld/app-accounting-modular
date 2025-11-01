@@ -3,7 +3,7 @@
 ## Milestone 1: Engineering Governance & CI Foundations
 
 ### Workstream 1.1: Repository Governance
-- **Task**: Establish community health files (CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, SUPPORT.md, CODEOWNERS) and update README/CHANGELOG scaffolding.
+- **Task**: Establish community health files (CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, support.md, CODEOWNERS) and update README/CHANGELOG scaffolding.
   - **Goal**: Provide clear contribution, support, and security reporting guidance.
   - **Acceptance Criteria**: New docs added with project-specific instructions; README references governance; CHANGELOG adopts semantic-versioning header; no code behavior changes.
   - **Blast Radius**: Documentation only.

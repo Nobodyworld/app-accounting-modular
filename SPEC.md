@@ -1,175 +1,71 @@
-<!-- Detected primary: python -->
-# URGENT: Repo Standardization Plan (Template)
+# Repository Specification
 
-Use this template to create a repo-local `URGENT.md` when we begin alignment work. Copy into a repo after direction and Master Versions are finalized. Keep tasks ONLY in `TASKLIST.md`.
+- **Repository**: `app-accounting-modular`
+- **Maintainers**: Stewardship team (see [docs/governance/support.md](docs/governance/support.md))
+- **Last Updated**: 2025-05-24
 
-- Repo: app-accounting-modular
-- Maintainers: <owners or CODEOWNERS>
-- Contacts: <slack/email>
-- Last Updated: <YYYY-MM-DD>
+## Stack Overview
 
-## Summary
-## Repo Snapshot
-- **Stack**: Python
-- **Package Manager**: poetry
-- **Lock Files**: 
-- **CI Present**: Yes
-- **Tests Present**: Yes
-- **Binary Files**:  detected
-- **Defaults Status**: 
+| Layer | Details |
+| ----- | ------- |
+| Runtime | Python 3.11 |
+| Frameworks | FastAPI, SQLModel, Streamlit |
+| Tooling | Ruff, Pytest, Makefile-driven quality gates |
+| Packaging | PEP 621 via `pyproject.toml` |
+| CI | GitHub Actions (lint, tests, release automation) |
 
-### Repo-Specific Tasks
-- Review binary file policy and relocation strategy
+## Layout
 
-## Outputs
-- Paste check-only results (lint/format/tests) into the PR.
-- Check off items in TASKLIST.md as you complete them.
+The repository is organised into documentation-first modules with README files in every directory:
 
-## Fallback
-- If central version targets are unavailable, capture current versions and note 'version snapshot only; awaiting org targets' in the PR.
+- [`apps/`](apps/README.md) – Service packages (API, domain, extensions, observability, Streamlit UI).
+- [`cli/`](cli/README.md) – Demo and operational CLIs for snapshot orchestration.
+- [`docs/`](docs/README.md) – Architecture, governance, operations, and roadmap references.
+- [`plugins/`](plugins/README.md) – Reference adapters and operational extensions.
+- [`tests/`](tests/README.md) – Pytest suites mirroring the runtime packages.
+- [`tools/`](tools/README.md) – Audit, release, and quality gate automation.
 
-- Stack classification (choose one primary):
-  - [ ] Tauri (Rust + TS + React + Vite)
-  - [ ] Electron (Node + TS + React)
-  - [ ] React + Vite (SPA/PWA)
-  - [ ] Next.js (SSR/ISR)
-  - [x] Python service/app
-  - [ ] Rust CLI/service
-  - [ ] Other: <describe>
-- Current CI: <describe workflows/checks>
-- Current tests: <frameworks and coverage notes>
+See the root [README](README.md#repository-structure) for a tabular map of all directories.
 
-## Phase 0 � Audit (read-only)
-- Git state clean and fetched: [ ]
-- Language(s) and runtime(s): <list>
-- Package manager(s): <npm/yarn/pnpm/pip/poetry/go mod/etc>
-- Build tooling: <list>
-- Lint/format/test: <tools + status>
-- CI/CD: <workflows + gates>
-- Releases/versioning: <semver/tags/changelog>
-- Security: <secret scanning, SAST/DAST, deps scanning>
-- Docs: <README, docs/, ADRs>
-- License & NOTICE: <files>
-- Special notes: <generated code, LFS, submodules, binaries>
+## Key Workflows
 
-## Phase 1 � Defaults (no functional changes)
-- [.editorconfig] Add/verify: [x] - EXISTS but incomplete (missing comprehensive language settings from template)
-- [.gitattributes] Add/verify: [x] - EXISTS and matches template perfectly
-- [.gitignore] Language-appropriate: [ ]
-- [CODEOWNERS] Define or confirm: [x] - CONFLICT: Has both root CODEOWNERS (repo-specific rules) and .github/CODEOWNERS (template). Root should be moved to .github/ and merged.
-- [CONTRIBUTING.md] Add/refresh: [ ]
-- [SECURITY.md] Add/refresh: [ ]
-- [PR/Issue templates] Add/refresh: [ ]
-- [CI check-only] Lint/format/test baseline: [ ]
-- [Pre-commit] Whitespace/EOL/secret scan (check-only): [ ]
-- [README] Standard sections present: [ ]
+- **Install dependencies**: `make install`
+- **Static analysis**: `make lint`
+- **Health probes**: `make health`
+- **End-to-end checks**: `make ci`
+- **Audit snapshot**: `make audit` (writes to `docs/reports/`)
+- **Release**: `make release PART=<major|minor|patch> MESSAGE="<summary>"`
 
-## Conflicts Found
-- **CODEOWNERS Conflict**: ✅ RESOLVED - Root CODEOWNERS merged into .github/CODEOWNERS, preserving modular-accounting specific rules and adding standard security/CI/CD rules. Root file removed.
-- **.editorconfig Incomplete**: ✅ RESOLVED - Updated to match comprehensive organization template with all language settings.
+## Configuration & Environment
 
-## Version Alignment Plan
-- Refer to the organization-wide Master Versions Record (maintained centrally) for target versions.
-- Node (dev tooling):
-  - [ ] Align TypeScript/ESLint/Prettier/@typescript-eslint/vitest to org targets.
-  - [ ] Re-run lint/format in check-only mode.
-- Node (runtime, if applicable):
-  - [ ] Review `react`, `vite`, `next`, `zod` against targets, plan upgrades if safe.
-- Python:
-  - [ ] Align `numpy`, `pandas`, `pydantic`, `fastapi`, `uvicorn`, `requests`, `pyyaml`, `matplotlib`, `scikit-learn`, `prometheus-client`, `torch`, `torchvision`, `streamlit`.
-  - [ ] Decide pinned vs compatible specifiers; prefer pinned + lockfile where feasible.
-- Rust:
-  - [ ] Align key crates (`tauri`, `tokio`, `serde`, `anyhow`) if present.
+- Environment variables documented in [docs/setup.md](docs/setup.md) and mirrored in `.env.example`.
+- Default database is SQLite via `DATABASE_URL`; override for Postgres/MySQL as needed.
+- Observability tracing bootstrap lives in `apps/observability/tracing/configure_tracing` (see [AGENTS.md](AGENTS.md)).
 
-### Repo-specific deltas vs the organization version targets
-- Example: `numpy` current: <x>, target: <y>, action: <pin/upgrade/hold>
-- Example: `typescript` current: <x>, target: <y>, action: <pin/upgrade/hold>
+## Testing Strategy
 
-## Risks & Constraints
-- Potential secret exposure, licensing, binary/LFS concerns, line-endings changes, large diffs. Mitigations: check-only first, small PRs, opt-in auto-fixes later.
-- Upgrade risk: run full tests in CI; stage upgrades in small batches.
+- Unit and integration tests under `tests/` with pytest fixtures for the CLI, API services, observability, and smoke paths.
+- CI runs `make ci`, invoking Ruff, pytest, and safety checks.
+- Generated audit artefacts stored in `docs/reports/` and summarised in `CHANGELOG.md` during releases.
 
-## Decisions & ADRs
-- <Link or inline notes>
+## Dependencies & Security
 
-## Timeline & Owners
-- Target window: <dates>
-- Responsible: <name>
-- Reviewers: <names>
+- Requirements tracked in `requirements.txt` and `requirements-dev.txt`.
+- Renovate configuration (`renovate.json`) automates dependency update PRs.
+- Security policy documented in `SECURITY.md`; responsible disclosure contacts in the same file.
 
-## Definition of Done (Phase 1)
-- Defaults added, CI check-only green.
-- Version alignment plan approved (no functional changes yet).
-- No behavioral changes introduced.
+## Documentation Sources
 
-## Upgrade Playbook (Concise)
+- Central index at [docs/index.md](docs/index.md) with links to setup, architecture, adapters, operations, governance, and roadmap.
+- Directory-specific READMEs explain the intent and cross-link to detailed guides.
+- Stewardship changes recorded in [docs/governance/stewards_report.md](docs/governance/stewards_report.md).
 
-- Pre-flight
-  - [ ] Create branch `chore/align-versions`
-  - [ ] Ensure clean git state and fetched remotes
-  - [ ] Open directory `TASKLIST.md` and list upgrade tasks; no other TODO docs
+## Task Management
 
-- Node (TypeScript/React/Vite/Next)
-  - [ ] Pin dev tooling to the centrally maintained version targets (TypeScript, ESLint, Prettier, @typescript-eslint, Vitest)
-  - [ ] Install; run `lint` and `test` in check-only mode; fix config only (no large code changes)
-  - [ ] Upgrade runtime libs as needed (react, react-dom, next, vite, zod, router, etc.) to targets
-  - [ ] Run `build` and smoke `dev`; address minor type breaks; avoid behavior changes
+- All active initiatives tracked in [TASKSLIST.md](TASKSLIST.md).
+- Use the `[priority][estimate]` TODO format described in [AGENTS.md](AGENTS.md) for inline annotations.
 
-- Python
-  - [ ] Update requirements/pyproject to targets; refresh lock if used
-  - [ ] Run tests; fix minimal type/compat issues (pydantic/fastapi/numpy)
-  - [ ] Record blockers in `TASKLIST.md`
+## Release Notes
 
-- Rust
-  - [ ] Update crate versions; run `cargo check`, `cargo test`
-  - [ ] Fix warnings and minor API changes only
-
-- Wrap-up
-  - [ ] Ensure CI check-only passes (lint/format/test/security/license)
-  - [ ] Update repo `README` only if necessary
-  - [ ] Summarize changes and deltas vs the organization version targets in PR body
-
-## Agent Quickstart
-
-- Do not change behavior; planning and check-only tasks first.
-- Always sync first: run the Preflight commands below.
-- Prefer small, reviewable changes with clear checklists.
-
-### Preflight
-```
-git status --porcelain
-git fetch --all --prune
-```
-
-### Branching & Commits
-- Branch: `chore/standards-setup`
-- Commits: Conventional Commits (e.g., `chore: add .editorconfig`)
-
-### Commands - Python
-```
-python -m venv .venv
-# Windows
-. .venv\Scripts\activate
-# Unix
-source .venv/bin/activate
-pip install --upgrade pip
-if exist requirements.txt ( pip install -r requirements.txt )
-ruff check . || true
-black --check . || true
-pytest -q || true
-```
-
-### Version Alignment
-- Consult the organization-wide version targets (central record) when proposing upgrades.
-- Prefer conservative, compatible updates; propose plan before changing major versions.
-
-### PR Checklist (Planning-Only)
-- [ ] Defaults verified/added (.editorconfig, .gitattributes, .gitignore, CODEOWNERS, CONTRIBUTING.md, SECURITY.md)
-- [ ] CI run locally (check-only) with results pasted in PR
-- [ ] Version deltas summarized vs organization targets
-- [ ] No functional changes made
-
-## Binary Artifacts
-- Do not commit binaries (executables, archives, large models, images/datasets).
-- If any are tracked, propose relocating to object storage or Git LFS and add ignore rules.
-- List any found binaries in the PR body and add a plan to remove them (planning-only change first).
+- Follow semantic versioning; record highlights in [CHANGELOG.md](CHANGELOG.md) and [RELEASE_NOTES.md](RELEASE_NOTES.md).
+- Version metadata stored in `VERSION`.

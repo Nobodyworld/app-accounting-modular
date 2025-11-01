@@ -15,7 +15,7 @@ changes:
    manual file creation to ensure tracing and health hooks are present.
 4. **Respect TODO tags** – new TODOs must use the `[priority][estimate]` format
    (e.g. `# TODO[P2][1d]: backfill forecast tracing`).
-5. **Document intent** – update `ARCHITECTURE_OVERVIEW.md` and `STEWARDS_REPORT.md`
+5. **Document intent** – update `docs/architecture/overview.md` and `docs/governance/stewards_report.md`
    when altering cross-cutting concerns (observability, extension contracts,
    release tooling). Use `make release PART=<patch|minor|major> MESSAGE="..."`
    to bump versions and seed changelog notes when shipping larger changes.

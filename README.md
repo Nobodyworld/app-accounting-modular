@@ -57,7 +57,7 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
 8. Generate an audit snapshot with coverage, complexity, and dependency metrics:
    ```bash
    make audit
-   cat REPORTS/audit-latest.md
+   cat docs/reports/audit-latest.md
    ```
    The audit uses `python -m trace` under the hood, making it safe to run in
    restricted environments where `pytest-cov` cannot be installed. When a trace
@@ -73,18 +73,40 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
    automatically. Adjust `PART` (`major`, `minor`, or `patch`) and tailor the
    summary message for each release.
 
+## Repository Structure
+
+The project follows a docs-first layout with directory-level READMEs to explain
+each surface. Start with the links below when navigating the codebase:
+
+| Path | Description |
+| ---- | ----------- |
+| [`apps/`](apps/README.md) | Service packages (API, domain, extensions, observability, Streamlit UI). |
+| [`cli/`](cli/README.md) | Demo and operational CLIs for building snapshots and inspecting health. |
+| [`docs/`](docs/README.md) | In-depth guides, architecture references, and stewardship reports. |
+| [`docs/architecture/`](docs/architecture/README.md) | Architecture diagrams and cross-cutting notes. |
+| [`docs/governance/`](docs/governance/README.md) | Governance plans, reports, and support channels. |
+| [`docs/operations/`](docs/operations/README.md) | Runbooks for automation, incidents, and audits. |
+| [`docs/reports/`](docs/reports/README.md) | Generated audit artefacts from `make audit`. |
+| [`plugins/`](plugins/README.md) | Reference extensions that implement adapter contracts. |
+| [`tests/`](tests/README.md) | Pytest suites mirroring the runtime modules. |
+| [`tools/`](tools/README.md) | Automation scripts for audits, releases, and gates. |
+| [`docker/`](docker/README.md) | Container builds for the API and Streamlit experiences. |
+
 ## Documentation
 Extended guides live under the [`docs/`](docs/index.md) folder:
 - [Setup](docs/setup.md)
-- [Architecture overview](docs/architecture.md)
+- [Architecture overview](docs/architecture/overview.md)
 - [Adapter contracts](docs/adapters.md)
 - [Examples](docs/examples.md)
 - [Roadmap](docs/roadmap.md)
 - [Dependency and security posture](docs/DEPENDENCIES.md)
-- [High-level architecture map](ARCHITECTURE_OVERVIEW.md)
-- [Extension development guide](EXTENSION_GUIDE.md)
-- [Automation & agent playbook](AUTOMATION.md)
+- [High-level architecture map](docs/architecture/overview.md)
+- [Extension development guide](docs/guides/extension_guide.md)
+- [Automation & agent playbook](docs/operations/automation_playbook.md)
 - [Operations & incident response](docs/operations.md)
+- [Governance plan](docs/governance/plan.md)
+- [Stewardship report](docs/governance/stewards_report.md)
+- [Support channels](docs/governance/support.md)
 - [Agent operations quick reference](AGENTS.md)
 
 ## Contributing

@@ -15,14 +15,14 @@ This document is a concise, drop-in style and process guide for any repository i
 
 ## 1. Repository Organization
 
-- Typical directories
-  - `src/` — source code
-  - `tests/` — automated tests mirroring `src/` structure
-  - `docs/` — documentation (README(s), ADRs, diagrams)
-  - `.github/` — workflows and templates
-  - `scripts/` — developer tooling (idempotent, cross‑platform when possible)
-  - `assets/` — small static assets (icons, images) needed at build/runtime
-  - `data/` — small sample/test data only (large datasets belong in storage)
+- Directory map (docs-first layout)
+  - `apps/` — service packages (`api`, `modular_accounting`, `extensions`, `observability`, `web`).
+  - `cli/` — demo and operational CLIs.
+  - `docs/` — documentation, ADRs, governance, and roadmap artefacts.
+  - `plugins/` — reference provider extensions.
+  - `tests/` — pytest suites mirroring `apps/` and `cli/` modules.
+  - `tools/` — automation scripts (audit, release, quality gates).
+  - `docker/` — container definitions for the API and Streamlit surfaces.
 - Naming
   - Directories: `kebab-case` (e.g., `ui-components`)
   - Files (JS/TS/Go/Rust): `camelCase.ts|.go|.rs` where idiomatic; Python: `snake_case.py`
@@ -31,6 +31,7 @@ This document is a concise, drop-in style and process guide for any repository i
 - Binary artifacts
   - Do not commit compiled binaries, archives, large images/models/datasets.
   - Use Git LFS or external object storage and add ignore rules.
+- Directory-level READMEs are required (see [README.md](README.md#repository-structure)). Update them when moving code.
 
 ## 1.1 Tasks and Reporting (Consolidated)
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
-from typing import Optional
 from uuid import uuid4
 
 from fastapi import Depends, Header
@@ -12,13 +12,18 @@ from sqlmodel import Session
 from .audit import AuditActor, use_actor
 from .db import get_session
 
+logger = logging.getLogger(__name__)
 
-def _parse_optional_int(value: Optional[str]) -> Optional[int]:
+
+def _parse_optional_int(value: str | None) -> int | None:
+    """Safely coerce a header value into an integer identifier."""
+
     if value is None:
         return None
     try:
         return int(value)
     except ValueError:  # pragma: no cover - defensive
+        logger.warning("invalid identifier header", extra={"value": value})
         # TODO - Emit structured metrics for malformed identifier headers.
         return None
 

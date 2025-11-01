@@ -3,8 +3,8 @@
 Need help with Modular Accounting? Choose the path that fits best:
 
 ## Self-Service
-- Review the [README](README.md) and [docs/](docs/) for architecture guides.
-- Check the [PLAN](PLAN.md) for upcoming milestones and workstreams.
+- Review the [documentation overview](../README.md) and [index](../index.md) for architecture guides.
+- Check the [PLAN](plan.md) for upcoming milestones and workstreams.
 - Search existing [issues](https://github.com/modular-accounting/modular-accounting/issues) before filing a new one.
 
 ## Filing Issues
