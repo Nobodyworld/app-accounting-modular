@@ -12,4 +12,4 @@ API:
 
 ## Follow-up Work
 
-Extended forecasting capabilities are catalogued in TASKSLIST.md as TASK-0013 through TASK-0015, spanning advanced regressors, causal impact analysis, and backtesting infrastructure.
+Extended forecasting capabilities are catalogued in TASKLIST.md as TASK-0013 through TASK-0015, spanning advanced regressors, causal impact analysis, and backtesting infrastructure.

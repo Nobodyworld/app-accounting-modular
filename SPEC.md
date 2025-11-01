@@ -62,7 +62,7 @@ See the root [README](README.md#repository-structure) for a tabular map of all d
 
 ## Task Management
 
-- All active initiatives tracked in [TASKSLIST.md](TASKSLIST.md).
+- All active initiatives tracked in [TASKLIST.md](TASKLIST.md).
 - Use the `[priority][estimate]` TODO format described in [AGENTS.md](AGENTS.md) for inline annotations.
 
 ## Release Notes

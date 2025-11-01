@@ -9,4 +9,4 @@
 
 ## Follow-up Work
 
-Outstanding enhancements for the tax model are tracked in TASKSLIST.md as TASK-0007 through TASK-0010, covering expression typing, precedence rules, provenance metadata, and automated jurisdictional updaters.
+Outstanding enhancements for the tax model are tracked in TASKLIST.md as TASK-0007 through TASK-0010, covering expression typing, precedence rules, provenance metadata, and automated jurisdictional updaters.

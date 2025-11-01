@@ -27,7 +27,7 @@ Completion note (indented, one line):
 - [ ] Provide persistence examples mapping domain transactions to external ledgers (Source: TODO.md) - TASK-0003 - When completed: _
 - [ ] Re-run the dependency version audit once external package indexes are reachable (Source: TODO.md) - TASK-0004 - When completed: _
 - [ ] Resolve mypy errors in `apps.observability` to satisfy strict configuration requirements (Source: TODO.md) - TASK-0005 - When completed: _
-- [ ] Integrate `make audit` into CI and publish `REPORTS/audit-latest.md` artifacts (Source: TODO.md) - TASK-0006 - When completed: _
+- [ ] Integrate `make audit` into CI and publish `docs/reports/audit-latest.md` artifacts (Source: TODO.md) - TASK-0006 - When completed: _
 - [ ] Add strong typing for tax rule expressions, e.g., JSONLogic schemas (Source: docs/TAX_MODEL.md) - TASK-0007 - When completed: _
 - [ ] Define a precedence and override strategy for layered tax rules (Source: docs/TAX_MODEL.md) - TASK-0008 - When completed: _
 - [ ] Capture source provenance metadata for tax rules (Source: docs/TAX_MODEL.md) - TASK-0009 - When completed: _
@@ -80,9 +80,9 @@ Completion note (indented, one line):
 - [ ] Revisit audit log context reset handling for cross-thread usage (Source: apps/api/audit.py) - TASK-0056 - When completed: _
 - [ ] Support asynchronous audit log flushing to reduce hot path latency (Source: apps/api/audit.py) - TASK-0057 - When completed: _
 - [ ] Load the provider catalog from persistence so admin edits survive restarts (Source: apps/api/config.py) - TASK-0058 - When completed: _
-- [ ] Replace runtime `create_all` calls with Alembic-managed migrations (Source: apps/api/db.py & REPORTS/001_DIAGNOSIS.md) - TASK-0059 - When completed: _
+- [ ] Replace runtime `create_all` calls with Alembic-managed migrations (Source: apps/api/db.py & docs/reports/001_DIAGNOSIS.md) - TASK-0059 - When completed: _
 - [ ] Swap eager schema creation for idempotent migration bootstrapping (Source: apps/api/db.py) - TASK-0060 - When completed: _
-- [x] Incorporate database and scheduler checks into the health response payload (Source: apps/api/routers/core.py) - TASK-0061 - When completed: 2025-10-30, [REPORT-2025-10-30-1](REPORTS.md#report-2025-10-30-1)
+- [x] Incorporate database and scheduler checks into the health response payload (Source: apps/api/routers/core.py) - TASK-0061 - When completed: 2025-10-30, see docs/reports/README.md
 - [ ] Cache provider metadata and expose version compatibility information in health endpoints (Source: apps/api/routers/core.py) - TASK-0062 - When completed: _
 - [ ] Add pagination controls to workflow router staging table endpoints (Source: apps/api/routers/workflow.py) - TASK-0063 - When completed: _
 - [ ] Cache report refresh results to avoid repeated model executions (Source: apps/api/routers/reports.py) - TASK-0064 - When completed: _
@@ -99,11 +99,11 @@ Completion note (indented, one line):
 - [ ] Bind actor context to authentication session identifiers for replay protection (Source: apps/api/dependencies.py) - TASK-0075 - When completed: _
 - [ ] Dispatch background FX sync jobs for longer historical windows (Source: apps/api/routers/fx.py) - TASK-0076 - When completed: _
 - [ ] Capture FX provider latency metrics to tune retry policies (Source: apps/api/routers/fx.py) - TASK-0077 - When completed: _
-- [ ] Implement rate limiting for authentication flows alongside refresh tokens (Source: REPORTS/001_DIAGNOSIS.md) - TASK-0078 - When completed: _
-- [ ] Enforce organisation scoping and pagination safeguards across reports and workflow routers (Source: REPORTS/001_DIAGNOSIS.md) - TASK-0079 - When completed: _
-- [ ] Enhance plugin loader validation, cache invalidation, and health checks (Source: REPORTS/001_DIAGNOSIS.md) - TASK-0080 - When completed: _
-- [ ] Expand strict typing coverage to the remaining services and routers (Source: REPORTS/001_DIAGNOSIS.md) - TASK-0081 - When completed: _
-- [ ] Broaden observability metrics instrumentation per stewardship notes (Source: REPORTS/001_DIAGNOSIS.md) - TASK-0082 - When completed: _
-- [ ] Add structured failure logging hooks during API startup (Source: REPORTS/003_CODEX_STEP1.md) - TASK-0083 - When completed: _
-- [ ] Automate plugin cache invalidation when provider configuration changes (Source: REPORTS/003_CODEX_STEP1.md) - TASK-0084 - When completed: _
-- [ ] Implement multi-factor authentication support for secure sign-ins (Source: REPORTS/001_DIAGNOSIS.md) - TASK-0085 - When completed: _
+- [ ] Implement rate limiting for authentication flows alongside refresh tokens (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0078 - When completed: _
+- [ ] Enforce organisation scoping and pagination safeguards across reports and workflow routers (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0079 - When completed: _
+- [ ] Enhance plugin loader validation, cache invalidation, and health checks (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0080 - When completed: _
+- [ ] Expand strict typing coverage to the remaining services and routers (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0081 - When completed: _
+- [ ] Broaden observability metrics instrumentation per stewardship notes (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0082 - When completed: _
+- [ ] Add structured failure logging hooks during API startup (Source: docs/reports/003_CODEX_STEP1.md) - TASK-0083 - When completed: _
+- [ ] Automate plugin cache invalidation when provider configuration changes (Source: docs/reports/003_CODEX_STEP1.md) - TASK-0084 - When completed: _
+- [ ] Implement multi-factor authentication support for secure sign-ins (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0085 - When completed: _

@@ -1,4 +1,6 @@
-# TASKLIST: Task Compilation
+# TASKLIST: Task Compilation (Deprecated)
+
+NOTE: This file is deprecated. Use `TASKLIST.md` for all task tracking.
 
 -*NEVER REMOVE SPEC.md, STYLE-GUIDE.md, or TASKLIST.md FROM THE ROOT*
 
