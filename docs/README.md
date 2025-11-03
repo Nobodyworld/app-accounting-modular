@@ -1,66 +1,42 @@
-# Modular Accounting (ModAcct)
+# Modular Accounting Documentation
 
-An extensible, **portable** accounting platform with a plugin system for **tax rules**, **FX**, **market data**, **commodities**, and **event-aware forecasting**.
+This directory contains comprehensive documentation for the Modular Accounting platform.
 
-- Backend: **FastAPI** + **SQLModel** (SQLite by default for zero-setup portability)
-- UI: **Streamlit** (lightweight) + **OpenAPI docs** at `/docs`
-- Plugins: Drop-in modules for data providers and tax rules
-- Forecasting: Basic ARIMA via statsmodels (pluggable)
-- CLI: `python -m cli.macli` for imports, syncs, and reports
-- Docker: `docker-compose up` for a two-service dev stack
+## Overview
 
-> Use `# TODO` markers inside code to highlight expansion points.
+Modular Accounting is a portable, modular accounting toolkit with pluggable data sources for tax, foreign exchange, and commodity pricing. The project ships with lightweight domain models, adapter contracts, and a demo CLI so teams can stitch together finance workflows without committing to a heavyweight stack.
 
-## Quickstart
+## Getting Started
 
-```bash
-# 1) Python env
-pip install -r requirements.txt
-cp .env.example .env
+- **[Setup](setup.md)**: Installation, prerequisites, and running tests
+- **[Architecture Overview](architecture/overview.md)**: System design and runtime flow
+- **[Adapter Contracts](adapters.md)**: Implementing custom data providers
+- **[Examples](examples.md)**: Code samples and usage patterns
 
-# 2) Run API
-uvicorn apps.api.main:app --reload
+## Key Components
 
-# 3) Run UI
-streamlit run apps/web/app.py
-```
+- **Backend**: FastAPI application with SQLModel and SQLite
+- **UI**: Streamlit web interface
+- **Plugins**: Drop-in provider modules for data sources
+- **CLI**: Operational commands for snapshots and health checks
+- **Extensions**: Optional automation packs with observability
 
-Open the API docs at <http://localhost:8000/docs> and the UI at <http://localhost:8501>.
+## Documentation Sections
 
-## Key Ideas
+- **[Plugins](PLUGINS.md)**: How to create and integrate data providers
+- **[Operations](operations.md)**: Observability, health checks, and incident response
+- **[Extension Guide](guides/extension_guide.md)**: Building automation extensions
+- **[Roadmap](roadmap.md)**: Future development milestones
+- **[Dependencies](DEPENDENCIES.md)**: Package information and security notes
 
-- **Modularity first**: Everything is a provider or plugin with a clear interface.
-- **Portable**: SQLite by default, swap to Postgres by changing `DATABASE_URL`.
-- **Auditable**: Double-entry ledger primitives, typed models, and versioned ETL runs.
-- **Global-aware**: Country + jurisdiction taxonomy for tax rules, rates, and regulatory data.
-- **Event-informed**: Optional event-feeds (e.g., GDELT/NewsAPI) to nudge forecasts (tracked via TASK-0013 and TASK-0021).
+## Governance
 
-## Features (MVP + Stubs)
+- **[Contributing](../CONTRIBUTING.md)**: Development workflow and standards
+- **[Governance Plan](governance/plan.md)**: Project governance and stewardship
+- **[Support](governance/support.md)**: Getting help and incident communication
 
-- Ledger: Accounts, Transactions, JournalEntries, Reports (P&L, Balance Sheet)
-- Data Providers:
-  - FX (`ECB`, `OpenExchangeRates` – tracked via TASK-0016)
-  - Markets (`yfinance` for equities/ETFs; commodity and futures expansion tracked via TASK-0017)
-  - Macro (integration tracked via TASK-0018)
-- Tax:
-  - Core tax schema + rule engine
-  - OECD VAT scaffold (data puller tracked via TASK-0019)
-  - US Federal/State stubs (tables and updates tracked via TASK-0020)
-- Forecasting:
-  - ARIMA baseline
-  - Event signals placeholder (NLP and causal features tracked via TASK-0021)
-- CLI:
-  - Import CSV
-  - Sync FX and Market prices
-  - Generate reports
+## Additional Resources
 
-## Roadmap
-
-- [ ] Rich plugin discovery via entry points
-- [ ] Multi-tenant bookkeeping
-- [ ] Advanced reconciliation (bank feeds, Plaid tracked via TASK-0022)
-- [ ] Caching layer + job queue
-- [ ] Fine-grained permissions and audit trail
-- [ ] Web UI (React) option (tracked via TASK-0023) alongside Streamlit
-
-See more in `docs/architecture/overview.md` and `docs/PLUGINS.md`.
+- **[Main README](../README.md)**: Project overview and quickstart
+- **[AGENTS.md](../AGENTS.md)**: Guidelines for automated contributions
+- **[CHANGELOG.md](../CHANGELOG.md)**: Release history and changes

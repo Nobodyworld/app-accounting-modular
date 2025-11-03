@@ -9,6 +9,7 @@ roadmap.
   understand how requests flow through ports and adapters.
 - [System Map](architecture/overview.md) – top-level runtime surfaces and
   operational safeguards introduced in Stage 3.
+- [API Reference](api.md) – REST API endpoints and integration guide.
 - [Adapter Contracts](adapters.md) – implement custom providers that satisfy the
   runtime-checkable protocols.
 - [Examples](examples.md) – copy-paste ready commands and snippets for common
