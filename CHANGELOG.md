@@ -9,7 +9,7 @@
 - 2025-11-06: Reorganized the repository structure by grouping documentation under
   `docs/architecture`, `docs/governance`, and `docs/operations`, relocating audit
   artifacts to `docs/reports`, updating automation tooling defaults, and
-  annotating TASKSLIST entries with explicit review statuses for stewardship
+  annotating TASKLIST entries with explicit review statuses for stewardship
   visibility.
 - 2025-11-05: Rebuilt the `macli` CLI to expose health, telemetry, and
   extension-inspection commands with deterministic table/JSON output, added a
