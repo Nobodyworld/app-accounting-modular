@@ -1,8 +1,28 @@
 # Global Style Guide
 
-Last Updated: October 31, 2025
+Last Updated: November 03, 2025
 
 This document is a concise, drop-in style and process guide for any repository in this organization. It emphasizes reliability, maintainability, reproducibility, and security. Use this as a baseline and tailor via ADRs where justified.
+
+## Organization Constants
+
+- **Organization**: Nobody Production
+- **GitHub Org**: Nobodyworld
+- **Maintainer**: Nobody
+- **License**: Proprietary (see LICENSE file)
+- **Solo Developer**: Yes - all repositories are maintained by a single developer
+
+## Expected Stack Classifications
+
+All repositories should use one of the following primary stacks:
+
+- **Tauri** (Rust + TypeScript + React + Vite) - Preferred for desktop apps with web UI
+- **Electron** (Node + TypeScript + React) - For complex desktop applications
+- **React + Vite** (SPA/PWA) - For web applications
+- **Next.js** (SSR/ISR) - For server-rendered web apps
+- **Python service/app** - For backend services and data processing
+- **Rust CLI/service** - For high-performance CLI tools and services
+- **Other** - Document justification in SPEC.md
 
 ## 0. Core Root Files (Do Not Remove)
 
@@ -15,14 +35,14 @@ This document is a concise, drop-in style and process guide for any repository i
 
 ## 1. Repository Organization
 
-- Directory map (docs-first layout)
-  - `apps/` — service packages (`api`, `modular_accounting`, `extensions`, `observability`, `web`).
-  - `cli/` — demo and operational CLIs.
-  - `docs/` — documentation, ADRs, governance, and roadmap artefacts.
-  - `plugins/` — reference provider extensions.
-  - `tests/` — pytest suites mirroring `apps/` and `cli/` modules.
-  - `tools/` — automation scripts (audit, release, quality gates).
-  - `docker/` — container definitions for the API and Streamlit surfaces.
+- Typical directories (each must include a README describing scope)
+  - `src/` — source code ([src/README.md](src/README.md))
+  - `tests/` — automated tests mirroring `src/` structure ([tests/README.md](tests/README.md))
+  - `docs/` — documentation ([docs/README.md](docs/README.md))
+  - `.github/` — workflows and templates
+  - `scripts/` — developer tooling ([scripts/README.md](scripts/README.md))
+  - `assets/` — small static assets (icons, images) needed at build/runtime
+  - `data/` — small sample/test data only (large datasets belong in storage)
 - Naming
   - Directories: `kebab-case` (e.g., `ui-components`)
   - Files (JS/TS/Go/Rust): `camelCase.ts|.go|.rs` where idiomatic; Python: `snake_case.py`
@@ -31,7 +51,6 @@ This document is a concise, drop-in style and process guide for any repository i
 - Binary artifacts
   - Do not commit compiled binaries, archives, large images/models/datasets.
   - Use Git LFS or external object storage and add ignore rules.
-- Directory-level READMEs are required (see [README.md](README.md#repository-structure)). Update them when moving code.
 
 ## 1.1 Tasks and Reporting (Consolidated)
 
@@ -64,6 +83,7 @@ We standardize on a single file for tasks and lightweight reporting: `TASKLIST.m
   - Add timeouts, retries with backoff, and circuit breakers for I/O.
 - Logging
   - Structured logs (JSON fields where possible); avoid PII; include correlation/trace IDs.
+  - Use appropriate observability libraries for CLI and automation surfaces; wrap long-running operations in tracing spans.
 - Imports
   - Order: stdlib → third‑party → local; avoid unused imports/exports.
 - Dependencies
