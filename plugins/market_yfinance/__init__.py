@@ -3,4 +3,3 @@
 from .provider import YFinanceMarketProvider, provider
 
 __all__ = ["YFinanceMarketProvider", "provider"]
-

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 from apps.modular_accounting.application import (
     DataSnapshot,
@@ -63,11 +64,7 @@ class ProviderFXPort(FXDataPort):
             if quote is None or value is None:
                 logger.debug("Skipping FX record missing quote/value", extra={"record": record})
                 continue
-            as_of = (
-                datetime.combine(record_date, time.min, tzinfo=UTC)
-                if isinstance(record_date, date)
-                else now
-            )
+            as_of = datetime.combine(record_date, time.min, tzinfo=UTC) if isinstance(record_date, date) else now
             yield FXRate(
                 base_currency=base,
                 quote_currency=quote,
@@ -181,16 +178,10 @@ class SnapshotResult:
             "request": {
                 "base_currency": self.request.base_currency,
                 "commodity_symbols": list(self.request.commodity_symbols),
-                "jurisdictions": (
-                    list(self.request.jurisdictions)
-                    if self.request.jurisdictions is not None
-                    else None
-                ),
+                "jurisdictions": (list(self.request.jurisdictions) if self.request.jurisdictions is not None else None),
             },
             "providers": dict(self.providers),
-            "cache_stats": {
-                key: asdict(stats) for key, stats in self.cache_stats.items()
-            },
+            "cache_stats": {key: asdict(stats) for key, stats in self.cache_stats.items()},
         }
 
 
@@ -233,9 +224,7 @@ class SnapshotOrchestrator:
         resolved_key = key or self._default_key(capability)
         handle = self._provider_loader(resolved_key)
         if capability not in handle.metadata.capabilities:
-            raise ValueError(
-                f"Provider '{resolved_key}' does not advertise '{capability}' capability"
-            )
+            raise ValueError(f"Provider '{resolved_key}' does not advertise '{capability}' capability")
         return handle
 
     def _default_key(self, capability: str) -> str:
@@ -278,15 +267,11 @@ class SnapshotOrchestrator:
         if not scenarios:
             raise ValueError("At least one scenario must be provided")
 
-        runner = ScenarioSnapshotRunner(
-            self._service, reset_cache_between_runs=reset_cache_between_runs
-        )
+        runner = ScenarioSnapshotRunner(self._service, reset_cache_between_runs=reset_cache_between_runs)
         return runner.run(scenarios, providers=dict(self._providers))
 
 
-def snapshot_to_payload(
-    snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None
-) -> dict[str, object]:
+def snapshot_to_payload(snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None) -> dict[str, object]:
     """Return a dictionary representation of :class:`DataSnapshot`."""
 
     payload = {
@@ -328,9 +313,7 @@ def scenario_batch_to_payload(batch: ScenarioBatchResult) -> dict[str, object]:
 
     results_payload: list[dict[str, object]] = []
     for result in batch.results:
-        scenario_payload = snapshot_to_payload(
-            result.snapshot, diagnostics=result.diagnostics
-        )
+        scenario_payload = snapshot_to_payload(result.snapshot, diagnostics=result.diagnostics)
         scenario_payload.update(
             {
                 "name": result.scenario.name,
@@ -339,16 +322,11 @@ def scenario_batch_to_payload(batch: ScenarioBatchResult) -> dict[str, object]:
                     "base_currency": result.scenario.base_currency,
                     "commodity_symbols": list(result.scenario.commodity_symbols),
                     "jurisdictions": (
-                        list(result.scenario.jurisdictions)
-                        if result.scenario.jurisdictions is not None
-                        else None
+                        list(result.scenario.jurisdictions) if result.scenario.jurisdictions is not None else None
                     ),
                 },
                 "providers": dict(result.providers) if result.providers else None,
-                "cache_stats": {
-                    name: asdict(stats)
-                    for name, stats in result.cache_stats.items()
-                },
+                "cache_stats": {name: asdict(stats) for name, stats in result.cache_stats.items()},
             }
         )
         results_payload.append(scenario_payload)
@@ -359,10 +337,7 @@ def scenario_batch_to_payload(batch: ScenarioBatchResult) -> dict[str, object]:
         "base_currencies": list(summary.base_currencies),
         "commodity_symbols": list(summary.commodity_symbols),
         "jurisdictions": list(summary.jurisdictions),
-        "missing_sections": {
-            name: list(sections)
-            for name, sections in summary.missing_sections.items()
-        },
+        "missing_sections": {name: list(sections) for name, sections in summary.missing_sections.items()},
         "total_fx_rates": summary.total_fx_rates,
         "total_commodity_quotes": summary.total_commodity_quotes,
         "total_tax_rules": summary.total_tax_rules,

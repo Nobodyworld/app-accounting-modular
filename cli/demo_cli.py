@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
-from collections.abc import Iterable
 
 import click
 
@@ -52,6 +52,8 @@ def _seed_tax_rules() -> Iterable[TaxRule]:
 @click.group()
 def demo() -> None:
     """Commands showcasing the adapter orchestration layer."""
+
+
 @demo.command()
 @click.option("--base", "base_currency", default="USD", show_default=True)
 @click.option(
@@ -116,11 +118,7 @@ def snapshot(
         raise click.BadParameter(str(exc), param_hint="--base") from exc
 
     snapshot = service.create_snapshot(request)
-    diagnostics = (
-        compute_snapshot_diagnostics(snapshot, request=request)
-        if include_diagnostics
-        else None
-    )
+    diagnostics = compute_snapshot_diagnostics(snapshot, request=request) if include_diagnostics else None
 
     if output_format.lower() == "json":
         payload = snapshot_to_payload(snapshot, diagnostics=diagnostics)

@@ -52,17 +52,11 @@ class SnapshotScenario:
         if isinstance(tags_value, str):
             tag_iterable: Iterable[str] = (tags_value,)
         elif isinstance(tags_value, Iterable):
-            tag_iterable = (
-                str(tag) for tag in tags_value if isinstance(tag, str | bytes)
-            )
+            tag_iterable = (str(tag) for tag in tags_value if isinstance(tag, str | bytes))
         else:
             tag_iterable = ()
 
-        tags = tuple(
-            dict.fromkeys(
-                tag.strip() for tag in tag_iterable if tag and tag.strip()
-            )
-        )
+        tags = tuple(dict.fromkeys(tag.strip() for tag in tag_iterable if tag and tag.strip()))
 
         request = SnapshotRequest.from_primitives(
             base_currency=str(payload.get("base_currency", "")),
@@ -201,22 +195,14 @@ class ScenarioBatchResult:
                         "base_currency": result.scenario.base_currency,
                         "commodity_symbols": list(result.scenario.commodity_symbols),
                         "jurisdictions": (
-                            list(result.scenario.jurisdictions)
-                            if result.scenario.jurisdictions is not None
-                            else None
+                            list(result.scenario.jurisdictions) if result.scenario.jurisdictions is not None else None
                         ),
                     },
                     "diagnostics": asdict(result.diagnostics),
-                    "cache_stats": {
-                        name: asdict(stats)
-                        for name, stats in result.cache_stats.items()
-                    },
+                    "cache_stats": {name: asdict(stats) for name, stats in result.cache_stats.items()},
                     "providers": dict(result.providers) if result.providers else None,
                     "snapshot": {
-                        "fx_rates": [
-                            asdict(rate)
-                            for rate in result.snapshot.fx_rates
-                        ],
+                        "fx_rates": [asdict(rate) for rate in result.snapshot.fx_rates],
                         "commodity_quotes": [
                             {
                                 **asdict(quote),
@@ -224,9 +210,7 @@ class ScenarioBatchResult:
                             }
                             for quote in result.snapshot.commodity_quotes
                         ],
-                        "tax_rules": [
-                            asdict(rule) for rule in result.snapshot.tax_rules
-                        ],
+                        "tax_rules": [asdict(rule) for rule in result.snapshot.tax_rules],
                     },
                 }
             )
@@ -236,10 +220,7 @@ class ScenarioBatchResult:
             "base_currencies": list(self.summary.base_currencies),
             "commodity_symbols": list(self.summary.commodity_symbols),
             "jurisdictions": list(self.summary.jurisdictions),
-            "missing_sections": {
-                name: list(sections)
-                for name, sections in self.summary.missing_sections.items()
-            },
+            "missing_sections": {name: list(sections) for name, sections in self.summary.missing_sections.items()},
             "total_fx_rates": self.summary.total_fx_rates,
             "total_commodity_quotes": self.summary.total_commodity_quotes,
             "total_tax_rules": self.summary.total_tax_rules,
@@ -280,15 +261,11 @@ class ScenarioSnapshotRunner:
                 scenario=scenario.name,
                 tags=trace_tags,
             ):
-                with scenario_telemetry.track(
-                    scenario=scenario.name, tags=tag_tuple
-                ):
+                with scenario_telemetry.track(scenario=scenario.name, tags=tag_tuple):
                     if self._reset_cache:
                         self._service.clear_cache()
                     snapshot = self._service.create_snapshot(scenario.request)
-                    diagnostics = compute_snapshot_diagnostics(
-                        snapshot, request=scenario.request
-                    )
+                    diagnostics = compute_snapshot_diagnostics(snapshot, request=scenario.request)
                     cache_stats = self._service.cache_stats()
                 logger.info(
                     "Scenario executed",

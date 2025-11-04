@@ -138,9 +138,7 @@ class TTLCache(Generic[K, V]):
         """Return usage metrics for observability and testing."""
 
         with self._lock:
-            return CacheStats(
-                size=len(self._entries), hits=self._hits, misses=self._misses
-            )
+            return CacheStats(size=len(self._entries), hits=self._hits, misses=self._misses)
 
     def _expiry(self, ttl: float | None) -> float | None:
         effective_ttl = ttl if ttl is not None else self._default_ttl

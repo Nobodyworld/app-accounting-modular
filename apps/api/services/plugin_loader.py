@@ -132,9 +132,7 @@ def _validate_provider_interface(provider: Any, metadata: ProviderMetadata) -> N
 
     if missing:
         methods = ", ".join(sorted(missing))
-        raise ValueError(
-            f"Provider '{metadata.key}' is missing required callable methods: {methods}"
-        )
+        raise ValueError(f"Provider '{metadata.key}' is missing required callable methods: {methods}")
 
 
 def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
@@ -153,9 +151,7 @@ def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
     try:
         mod = importlib.import_module(module_path)
     except (ModuleNotFoundError, ImportError) as exc:
-        raise ValueError(
-            f"Unable to import provider module '{module_path}' for key '{key}'"
-        ) from exc
+        raise ValueError(f"Unable to import provider module '{module_path}' for key '{key}'") from exc
 
     if not hasattr(mod, factory):
         raise ValueError(f"Factory '{factory}' not found in {module_path}")

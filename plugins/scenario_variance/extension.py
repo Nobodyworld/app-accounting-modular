@@ -1,4 +1,5 @@
 """Scenario variance extension advertising augmentation contracts."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -71,7 +72,7 @@ def generate_variants(scenario: SnapshotScenario) -> Iterable[SnapshotScenario]:
         yield SnapshotScenario(
             name=f"{scenario.name}_{label}",
             request=scenario.request,
-            tags=base_tags + (f"variance:{label}", f"shift:{percentage}")
+            tags=base_tags + (f"variance:{label}", f"shift:{percentage}"),
         )
 
 

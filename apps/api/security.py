@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, cast
 from uuid import uuid4
 
@@ -129,24 +129,18 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     """Create a signed JWT access token embedding ``data``."""
 
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta
-        if expires_delta is not None
-        else timedelta(minutes=settings.access_token_expire_minutes)
+    expire = datetime.now(UTC) + (
+        expires_delta if expires_delta is not None else timedelta(minutes=settings.access_token_expire_minutes)
     )
     to_encode.update({"exp": expire})
     # TODO - Issue refresh tokens to allow long-lived sessions with rotation.
-    token = jwt.encode(
-        to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
-    )
+    token = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     return cast(str, token)
 
 
 def _decode_token(token: str) -> dict[str, Any]:
     try:
-        payload = jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-        )
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         return cast(dict[str, Any], payload)
     except JWTError as exc:  # pragma: no cover - library raises numerous subclasses
         logger.warning("Failed to decode access token", exc_info=exc)

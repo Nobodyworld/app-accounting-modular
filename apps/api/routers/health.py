@@ -1,4 +1,5 @@
 """Health, telemetry, and metrics endpoints for the public API."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -22,11 +23,7 @@ async def ready() -> dict[str, object]:
     """Execute registered health checks and return their status."""
 
     reports = await health_registry.evaluate()
-    critical_failures = [
-        report
-        for report in reports
-        if not report.healthy and report.severity == "critical"
-    ]
+    critical_failures = [report for report in reports if not report.healthy and report.severity == "critical"]
     status = "ok" if not critical_failures else "degraded"
     return {
         "status": status,

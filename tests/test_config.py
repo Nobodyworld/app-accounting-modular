@@ -93,8 +93,7 @@ def test_settings_rejects_invalid_expiry(monkeypatch) -> None:
 
     assert "greater than zero" in str(exc.value)
 
-
-# TODO - (config) Cover settings overrides for per-environment log destinations.
+    # TODO - (config) Cover settings overrides for per-environment log destinations.
 
     monkeypatch.setenv(
         "MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES",

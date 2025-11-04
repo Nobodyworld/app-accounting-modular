@@ -79,11 +79,7 @@ def trial_balance(
         session=session,
         current_user=current_user,
     )
-    if not (
-        org_ctx.membership.is_admin
-        or org_ctx.membership.can_manage_ledger
-        or org_ctx.membership.can_manage_tax
-    ):
+    if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_ledger or org_ctx.membership.can_manage_tax):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     service = _service_for_org(session, org_ctx.organization.id)

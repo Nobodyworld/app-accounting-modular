@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from apps.api.routers import core as core_router
 from apps.api.routers import health as health_router

@@ -1,4 +1,5 @@
 """Service-layer health checks for the Modular Accounting API."""
+
 from __future__ import annotations
 
 from contextlib import suppress

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from threading import Lock
-from typing import Deque
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
@@ -16,7 +15,7 @@ from ..security import authenticate_user, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_failed_attempts: defaultdict[str, Deque[datetime]] = defaultdict(deque)
+_failed_attempts: defaultdict[str, deque[datetime]] = defaultdict(deque)
 _lockouts: dict[str, datetime] = {}
 _lock = Lock()
 _MAX_ATTEMPTS = 5
@@ -57,7 +56,7 @@ def login(
     """Exchange username/password credentials for a bearer token."""
 
     identifier = _normalize_identifier(form_data.username)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     with _lock:
         locked_until = _lockouts.get(identifier)

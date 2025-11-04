@@ -86,9 +86,7 @@ def _jsonify(payload: Any) -> Any:
     return jsonable_encoder(payload)
 
 
-def _compute_diff(
-    before: Mapping[str, Any] | None, after: Mapping[str, Any] | None
-) -> dict[str, Any] | None:
+def _compute_diff(before: Mapping[str, Any] | None, after: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """Return a simple diff structure describing key/value changes."""
 
     if before is None and after is None:

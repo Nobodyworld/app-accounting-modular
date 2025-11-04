@@ -60,9 +60,7 @@ class SpanContext:
 
 
 _CONFIG: TracingConfig | None = None
-_CURRENT_SPAN: ContextVar[SpanContext | None] = ContextVar(
-    "modacct_current_span", default=None
-)
+_CURRENT_SPAN: ContextVar[SpanContext | None] = ContextVar("modacct_current_span", default=None)
 _OTEL_TRACER: Any | None = None
 
 
@@ -127,9 +125,7 @@ def configure_tracing(
 
     exporter = exporter.lower()
     if exporter == "disabled":
-        _CONFIG = TracingConfig(
-            service_name=service_name, exporter=exporter, enabled=False
-        )
+        _CONFIG = TracingConfig(service_name=service_name, exporter=exporter, enabled=False)
         _OTEL_TRACER = None
         _EXPORTER = _noop_exporter
         logger.info("Tracing disabled via configuration.")
@@ -147,9 +143,7 @@ def configure_tracing(
             ConsoleSpanExporter,
         )
 
-        provider = TracerProvider(
-            resource=Resource.create({"service.name": service_name})
-        )
+        provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
         if exporter == "otlp":
             try:
                 from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore[import]
@@ -157,9 +151,7 @@ def configure_tracing(
                 )
 
                 otlp_kwargs = {"endpoint": otel_endpoint} if otel_endpoint else {}
-                provider.add_span_processor(
-                    BatchSpanProcessor(OTLPSpanExporter(**otlp_kwargs))
-                )
+                provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(**otlp_kwargs)))
             except Exception as exc:  # pragma: no cover - optional dependency
                 logger.warning(
                     "OTLP exporter unavailable; falling back to console spans.",
@@ -173,26 +165,17 @@ def configure_tracing(
         _OTEL_TRACER = trace.get_tracer(service_name)
         otel_enabled = True
         _EXPORTER = _noop_exporter
-        logger.info(
-            "Configured OpenTelemetry tracer", extra={"exporter": exporter}
-        )
+        logger.info("Configured OpenTelemetry tracer", extra={"exporter": exporter})
     except Exception:  # pragma: no cover - default fallback path
         _OTEL_TRACER = None
 
         if exporter == "otlp":
             logger.warning(
-                (
-                    "OpenTelemetry not installed; OTLP exporter downgraded to "
-                    "console logging."
-                ),
+                ("OpenTelemetry not installed; OTLP exporter downgraded to " "console logging."),
             )
 
         def _log_export(span: SpanContext) -> None:
-            duration = (
-                span.end_time - span.start_time
-                if span.end_time is not None
-                else None
-            )
+            duration = span.end_time - span.start_time if span.end_time is not None else None
             logger.info(
                 "Span completed",
                 extra={
@@ -258,9 +241,7 @@ def _otel_span(name: str, attributes: dict[str, Any]) -> Iterator[Any | None]:
         from apps.observability.logging import logging_context
 
         stack.enter_context(logging_context(trace_id=trace_id, span_id=span_id))
-        token = _CURRENT_SPAN.set(
-            SpanContext(trace_id=trace_id, span_id=span_id, parent_span_id=None)
-        )
+        token = _CURRENT_SPAN.set(SpanContext(trace_id=trace_id, span_id=span_id, parent_span_id=None))
         try:
             yield span
         finally:
@@ -288,9 +269,7 @@ def traced(
         return
 
     parent = _CURRENT_SPAN.get()
-    resolved_trace_id = trace_id or (
-        parent.trace_id if parent else _generate_trace_id()
-    )
+    resolved_trace_id = trace_id or (parent.trace_id if parent else _generate_trace_id())
     resolved_parent = parent_span_id or (parent.span_id if parent else None)
     span_id = _generate_span_id()
     context = SpanContext(
@@ -303,9 +282,7 @@ def traced(
     from apps.observability.logging import logging_context
 
     with ExitStack() as stack:
-        stack.enter_context(
-            logging_context(trace_id=context.trace_id, span_id=context.span_id)
-        )
+        stack.enter_context(logging_context(trace_id=context.trace_id, span_id=context.span_id))
         try:
             yield context
         finally:
@@ -345,9 +322,7 @@ class RequestTraceMiddleware(BaseHTTPMiddleware):
         if not is_tracing_enabled():
             return await call_next(request)
 
-        parent_trace, parent_span = _parse_traceparent(
-            request.headers.get("traceparent")
-        )
+        parent_trace, parent_span = _parse_traceparent(request.headers.get("traceparent"))
         name = self._operation_name or f"HTTP {request.method}"
         async with atraced(
             name,
@@ -368,9 +343,6 @@ class RequestTraceMiddleware(BaseHTTPMiddleware):
 
                 trace_id, span_id = current_span_ids()
                 if trace_id and span_id:
-                    response.headers["traceparent"] = _format_traceparent(
-                        trace_id, span_id
-                    )
+                    response.headers["traceparent"] = _format_traceparent(trace_id, span_id)
 
             return response
-

@@ -45,9 +45,7 @@ def __getattr__(name: str) -> Any:
     try:
         module_name, attribute = _EXPORTS[name]
     except KeyError as exc:
-        raise AttributeError(
-            f"module 'apps.api.services' has no attribute '{name}'"
-        ) from exc
+        raise AttributeError(f"module 'apps.api.services' has no attribute '{name}'") from exc
     module = import_module(module_name)
     value = getattr(module, attribute)
     globals()[name] = value

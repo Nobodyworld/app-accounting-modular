@@ -76,9 +76,7 @@ class SnapshotRequest:
         commodity_symbols = commodity_symbols or ()
         symbol_scope = tuple(
             dict.fromkeys(
-                symbol.strip().upper()
-                for symbol in commodity_symbols
-                if isinstance(symbol, str) and symbol.strip()
+                symbol.strip().upper() for symbol in commodity_symbols if isinstance(symbol, str) and symbol.strip()
             )
         )
 
@@ -156,17 +154,13 @@ class DataSnapshotService:
                 stacklevel=2,
             )
 
-        self._fx_port = self._choose_port(
-            primary=fx_port, legacy=fx_adapter, label="fx_adapter or fx_port"
-        )
+        self._fx_port = self._choose_port(primary=fx_port, legacy=fx_adapter, label="fx_adapter or fx_port")
         self._commodity_port = self._choose_port(
             primary=commodity_port,
             legacy=commodity_adapter,
             label="commodity_adapter or commodity_port",
         )
-        self._tax_port = self._choose_port(
-            primary=tax_port, legacy=tax_adapter, label="tax_adapter or tax_port"
-        )
+        self._tax_port = self._choose_port(primary=tax_port, legacy=tax_adapter, label="tax_adapter or tax_port")
 
         self._enable_caching = enable_caching
         self._clock = clock
@@ -178,34 +172,20 @@ class DataSnapshotService:
             fx_ttl = self._validate_ttl(fx_cache_ttl, default_cache_ttl)
             commodity_ttl = self._validate_ttl(commodity_cache_ttl, default_cache_ttl)
             tax_ttl = self._validate_ttl(tax_cache_ttl, default_cache_ttl)
-            fx_observer = (
-                self._telemetry.cache_observer("snapshot_fx")
-                if self._telemetry is not None
-                else None
-            )
+            fx_observer = self._telemetry.cache_observer("snapshot_fx") if self._telemetry is not None else None
             commodity_observer = (
-                self._telemetry.cache_observer("snapshot_commodities")
-                if self._telemetry is not None
-                else None
+                self._telemetry.cache_observer("snapshot_commodities") if self._telemetry is not None else None
             )
-            tax_observer = (
-                self._telemetry.cache_observer("snapshot_tax")
-                if self._telemetry is not None
-                else None
-            )
+            tax_observer = self._telemetry.cache_observer("snapshot_tax") if self._telemetry is not None else None
             self._fx_cache: TTLCache[str, tuple[FXRate, ...]] | None = TTLCache(
                 default_ttl=fx_ttl, clock=clock, observer=fx_observer
             )
-            self._commodity_cache: TTLCache[
-                tuple[str, ...], tuple[CommodityQuote, ...]
-            ] | None = TTLCache(
+            self._commodity_cache: TTLCache[tuple[str, ...], tuple[CommodityQuote, ...]] | None = TTLCache(
                 default_ttl=commodity_ttl,
                 clock=clock,
                 observer=commodity_observer,
             )
-            self._tax_cache: TTLCache[
-                tuple[str, ...] | None, tuple[TaxRule, ...]
-            ] | None = TTLCache(
+            self._tax_cache: TTLCache[tuple[str, ...] | None, tuple[TaxRule, ...]] | None = TTLCache(
                 default_ttl=tax_ttl,
                 clock=clock,
                 observer=tax_observer,
@@ -216,9 +196,7 @@ class DataSnapshotService:
             self._tax_cache = None
 
     @staticmethod
-    def _validate_ttl(
-        specific_ttl: float | None, default_ttl: float | None
-    ) -> float | None:
+    def _validate_ttl(specific_ttl: float | None, default_ttl: float | None) -> float | None:
         ttl = specific_ttl if specific_ttl is not None else default_ttl
         if ttl is None:
             return None
@@ -312,21 +290,9 @@ class DataSnapshotService:
                 "tax": EMPTY_CACHE_STATS,
             }
 
-        fx_stats = (
-            self._fx_cache.stats()
-            if self._fx_cache is not None
-            else EMPTY_CACHE_STATS
-        )
-        commodity_stats = (
-            self._commodity_cache.stats()
-            if self._commodity_cache is not None
-            else EMPTY_CACHE_STATS
-        )
-        tax_stats = (
-            self._tax_cache.stats()
-            if self._tax_cache is not None
-            else EMPTY_CACHE_STATS
-        )
+        fx_stats = self._fx_cache.stats() if self._fx_cache is not None else EMPTY_CACHE_STATS
+        commodity_stats = self._commodity_cache.stats() if self._commodity_cache is not None else EMPTY_CACHE_STATS
+        tax_stats = self._tax_cache.stats() if self._tax_cache is not None else EMPTY_CACHE_STATS
         return {"fx": fx_stats, "commodities": commodity_stats, "tax": tax_stats}
 
     def _get_fx_rates(self, base_currency: str) -> tuple[FXRate, ...]:
@@ -340,9 +306,7 @@ class DataSnapshotService:
             lambda: tuple(self._fx_port.get_rates(base_currency=base_currency)),
         )
 
-    def _get_commodity_quotes(
-        self, symbols: tuple[str, ...]
-    ) -> tuple[CommodityQuote, ...]:
+    def _get_commodity_quotes(self, symbols: tuple[str, ...]) -> tuple[CommodityQuote, ...]:
         """Return cached commodity quotes for ``symbols`` when provided."""
 
         if not symbols:
@@ -351,9 +315,7 @@ class DataSnapshotService:
         if not self._enable_caching or self._commodity_cache is None:
             return tuple(self._commodity_port.get_quotes(symbols))
 
-        return self._commodity_cache.get_or_set(
-            symbols, lambda: tuple(self._commodity_port.get_quotes(symbols))
-        )
+        return self._commodity_cache.get_or_set(symbols, lambda: tuple(self._commodity_port.get_quotes(symbols)))
 
     def _resolve_tax_rules(self, request: SnapshotRequest) -> tuple[TaxRule, ...]:
         """Collect tax rules for the request's jurisdictions."""

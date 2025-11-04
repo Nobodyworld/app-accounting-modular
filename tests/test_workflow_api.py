@@ -77,9 +77,7 @@ def test_workflow_api_end_to_end() -> None:
     assert len(data["staged_ids"]) == 2
     assert len(data["results"]) == 2
 
-    failed = next(
-        r for r in data["results"] if r["status"] == WorkflowStatus.FAILED.value
-    )
+    failed = next(r for r in data["results"] if r["status"] == WorkflowStatus.FAILED.value)
     assert "account 9999 not found" in failed["validation_errors"][0]
 
     with Session(db.engine, expire_on_commit=False) as session:
@@ -101,9 +99,7 @@ def test_workflow_api_end_to_end() -> None:
     processed = process_response.json()
     assert processed[0]["status"] == WorkflowStatus.POSTED.value
 
-    detail_response = client.get(
-        f"/workflow/{failed['staged_transaction_id']}"
-    )
+    detail_response = client.get(f"/workflow/{failed['staged_transaction_id']}")
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["status"] == WorkflowStatus.POSTED.value

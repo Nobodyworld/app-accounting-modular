@@ -10,8 +10,8 @@ from sqlmodel import Session
 
 from ..db import get_session
 from ..models.models import Budget
-from ..services.budget_service import BudgetReport, BudgetService, CashflowReport
 from ..schemas import BudgetReportResponse, CashflowForecastResponse
+from ..services.budget_service import BudgetReport, BudgetService, CashflowReport
 from ..utils.metadata import (
     merge_forecast_diagnostics,
     prepare_metadata_for_response,
@@ -79,9 +79,7 @@ def _response_from_cashflow(report: CashflowReport) -> CashflowForecastResponse:
     )
 
 
-def _ensure_budget_scope(
-    session: Session, budget_id: int, organization_id: int
-) -> None:
+def _ensure_budget_scope(session: Session, budget_id: int, organization_id: int) -> None:
     budget = session.get(Budget, budget_id)
     if budget is None or budget.organization_id != organization_id:
         raise HTTPException(
@@ -104,9 +102,7 @@ def budget_vs_actual(
     service = BudgetService(session)
     effective_horizon = _coerce_optional_int(horizon)
     try:
-        report = service.budget_vs_actual(
-            budget_id, horizon=effective_horizon, refresh=refresh
-        )
+        report = service.budget_vs_actual(budget_id, horizon=effective_horizon, refresh=refresh)
     except ValueError as exc:
         detail = str(exc)
         raise HTTPException(
@@ -130,9 +126,7 @@ def cashflow_forecast(
     service = BudgetService(session)
     effective_horizon = _coerce_optional_int(horizon)
     try:
-        report = service.cashflow_forecast(
-            organization_id, horizon=effective_horizon, refresh=refresh
-        )
+        report = service.cashflow_forecast(organization_id, horizon=effective_horizon, refresh=refresh)
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_404_NOT_FOUND

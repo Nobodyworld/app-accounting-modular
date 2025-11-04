@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict
-from typing import Sequence
 
 from apps.modular_accounting.application import (
     DataSnapshot,
@@ -33,9 +33,7 @@ def _render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> list
     return lines
 
 
-def format_snapshot_table(
-    snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None
-) -> str:
+def format_snapshot_table(snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None) -> str:
     """Format snapshot data as a multi-section text table."""
 
     sections: list[str] = []
@@ -69,9 +67,7 @@ def format_snapshot_table(
             )
             for quote in snapshot.commodity_quotes
         ]
-        sections.extend(
-            _render_table(("Symbol", "Currency", "Amount", "As Of"), commodity_rows)
-        )
+        sections.extend(_render_table(("Symbol", "Currency", "Amount", "As Of"), commodity_rows))
     else:
         sections.append("(no commodity quotes)")
 
@@ -123,9 +119,11 @@ def format_snapshot_table(
             ),
             (
                 "Commodity max age (s)",
-                "-"
-                if diagnostics.commodity_max_age_seconds is None
-                else f"{diagnostics.commodity_max_age_seconds:.0f}",
+                (
+                    "-"
+                    if diagnostics.commodity_max_age_seconds is None
+                    else f"{diagnostics.commodity_max_age_seconds:.0f}"
+                ),
             ),
             (
                 "Tax jurisdictions",
@@ -165,9 +163,7 @@ def format_scenario_batch_table(batch: ScenarioBatchResult) -> str:
         ),
         (
             "Max commodity age (s)",
-            "-"
-            if summary.max_commodity_age_seconds is None
-            else f"{summary.max_commodity_age_seconds:.0f}",
+            "-" if summary.max_commodity_age_seconds is None else f"{summary.max_commodity_age_seconds:.0f}",
         ),
         ("Max active tax rules", str(summary.max_active_tax_rules)),
     ]
@@ -204,17 +200,14 @@ def format_scenario_batch_table(batch: ScenarioBatchResult) -> str:
         sections.append("Missing Sections")
         sections.append("----------------")
         missing_rows = [
-            (name, ", ".join(sections_) if sections_ else "-")
-            for name, sections_ in summary.missing_sections.items()
+            (name, ", ".join(sections_) if sections_ else "-") for name, sections_ in summary.missing_sections.items()
         ]
         sections.extend(_render_table(("Scenario", "Sections"), missing_rows))
 
     return "\n".join(sections)
 
 
-def snapshot_to_payload(
-    snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None
-) -> dict[str, object]:
+def snapshot_to_payload(snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None) -> dict[str, object]:
     """Convert snapshot data into a JSON-serialisable payload."""
 
     payload = {

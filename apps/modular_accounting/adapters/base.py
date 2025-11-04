@@ -7,8 +7,7 @@ import warnings
 from ..domain.ports import CommodityDataPort, FXDataPort, TaxDataPort
 
 warnings.warn(
-    "apps.modular_accounting.adapters.base is deprecated; "
-    "import ports from apps.modular_accounting.domain instead.",
+    "apps.modular_accounting.adapters.base is deprecated; " "import ports from apps.modular_accounting.domain instead.",
     DeprecationWarning,
     stacklevel=2,
 )

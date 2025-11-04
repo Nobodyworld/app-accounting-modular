@@ -1,4 +1,5 @@
 """Health registry primitives for modular accounting observability."""
+
 from __future__ import annotations
 
 import asyncio
@@ -127,9 +128,7 @@ class HealthRegistry:
 health_registry = HealthRegistry()
 
 
-def register_health_check(
-    name: str, check: HealthCheck, *, severity: str = "critical"
-) -> None:
+def register_health_check(name: str, check: HealthCheck, *, severity: str = "critical") -> None:
     """Module level helper delegating to :class:`HealthRegistry`."""
 
     health_registry.register(name, check, severity=severity)

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from decimal import Decimal
-from typing import Iterable, Sequence
 
 from ..domain import CommodityQuote, FXRate, Money, TaxRule
 

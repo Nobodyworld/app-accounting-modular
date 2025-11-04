@@ -78,9 +78,7 @@ def fx_adapter():
 @pytest.fixture
 def commodity_adapter():
     """Fixture providing a simple commodity adapter."""
-    return InMemoryCommodityAdapter(
-        {"XAU": Decimal("2034.23"), "XAG": Decimal("24.83")}
-    )
+    return InMemoryCommodityAdapter({"XAU": Decimal("2034.23"), "XAG": Decimal("24.83")})
 
 
 @pytest.fixture
@@ -180,13 +178,13 @@ def test_build_snapshot_with_legacy_args(fx_adapter, commodity_adapter, tax_adap
             commodity_adapter=commodity_adapter,
             tax_adapter=tax_adapter,
         )
-    
+
     snapshot = service.build_snapshot(
         base_currency="USD",
         commodity_symbols=["XAU", "XAG"],
         jurisdictions=["us-ca"],
     )
-    
+
     assert len(snapshot.fx_rates) == 2
     assert len(snapshot.commodity_quotes) == 2
     assert len(snapshot.tax_rules) == 1
@@ -200,13 +198,13 @@ def test_build_snapshot_with_new_args(fx_adapter, commodity_adapter, tax_adapter
         commodity_port=commodity_adapter,
         tax_port=tax_adapter,
     )
-    
+
     snapshot = service.build_snapshot(
         base_currency="USD",
         commodity_symbols=["XAU"],
         jurisdictions=["uk"],
     )
-    
+
     assert len(snapshot.fx_rates) == 2
     assert len(snapshot.commodity_quotes) == 1
     assert len(snapshot.tax_rules) == 1
@@ -392,15 +390,13 @@ def test_port_args_take_precedence_over_adapter_args(commodity_adapter, tax_adap
         base_currency="USD",
         commodity_symbols=[],
     )
-    
+
     # Should have 1 FX rate from fx_adapter_2 (GBP), not 2 from fx_adapter_1 (EUR)
     assert len(snapshot.fx_rates) == 1
     assert snapshot.fx_rates[0].quote_currency == "GBP"
 
 
-def test_build_snapshot_rejects_blank_base_currency(
-    fx_adapter, commodity_adapter, tax_adapter
-):
+def test_build_snapshot_rejects_blank_base_currency(fx_adapter, commodity_adapter, tax_adapter):
     """Ensure callers receive clear feedback when base currency is invalid."""
 
     with pytest.warns(DeprecationWarning):
@@ -417,9 +413,7 @@ def test_build_snapshot_rejects_blank_base_currency(
         )
 
 
-def test_build_snapshot_deduplicates_symbols_and_jurisdictions(
-    fx_adapter, tax_adapter
-):
+def test_build_snapshot_deduplicates_symbols_and_jurisdictions(fx_adapter, tax_adapter):
     """Commodity and tax scopes should be normalised before adapter access."""
 
     commodity_adapter = RecordingCommodityAdapter({"XAU": Decimal("2034.23")})

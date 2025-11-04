@@ -30,7 +30,7 @@ def test_workflow_validation_and_reprocessing() -> None:
             [
                 {
                     "date": date(2024, 3, 1),
-                    "description": "Invoice", 
+                    "description": "Invoice",
                     "postings": [
                         {"account_id": cash.id, "debit": 250.0, "credit": 0.0},
                         {"account_id": revenue.id, "debit": 0.0, "credit": 250.0},

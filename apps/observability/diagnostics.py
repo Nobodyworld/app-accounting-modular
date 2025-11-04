@@ -72,9 +72,7 @@ def _aggregate_health(reports: Iterable[HealthReport]) -> tuple[dict[str, Any], 
                     "name": report.name,
                     "severity": report.severity,
                     "details": report.details,
-                    "action": _INCIDENT_PLAYBOOK.get(
-                        report.name.split(":", 1)[-1], _DEFAULT_INCIDENT_ACTION
-                    ),
+                    "action": _INCIDENT_PLAYBOOK.get(report.name.split(":", 1)[-1], _DEFAULT_INCIDENT_ACTION),
                 }
             )
     return {severity: stats for severity, stats in sorted(grouped.items())}, incidents

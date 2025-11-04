@@ -83,9 +83,7 @@ def _normalise_sequence(value: object) -> tuple[str, ...]:
                 if stripped:
                     result.append(stripped)
         return tuple(result)
-    raise ScenarioPlanValidationError(
-        "Sequence defaults must be strings or iterables of strings"
-    )
+    raise ScenarioPlanValidationError("Sequence defaults must be strings or iterables of strings")
 
 
 @dataclass(slots=True)
@@ -160,15 +158,11 @@ class ScenarioPlan:
         if not plan_name:
             raise ScenarioPlanValidationError("Plan name must be provided")
 
-        description_value = (
-            description.strip() if isinstance(description, str) else description
-        )
+        description_value = description.strip() if isinstance(description, str) else description
         if isinstance(description_value, str) and not description_value:
             description_value = None
 
-        schedule_value = (
-            schedule.strip() if isinstance(schedule, str) else schedule
-        )
+        schedule_value = schedule.strip() if isinstance(schedule, str) else schedule
         if isinstance(schedule_value, str) and not schedule_value:
             schedule_value = None
 
@@ -185,14 +179,10 @@ class ScenarioPlan:
         if defaults:
             for key, value in defaults.items():
                 if key not in _SUPPORTED_DEFAULT_KEYS:
-                    raise ScenarioPlanValidationError(
-                        f"Unsupported default field '{key}'"
-                    )
+                    raise ScenarioPlanValidationError(f"Unsupported default field '{key}'")
                 if key == "base_currency":
                     if not isinstance(value, str | bytes):
-                        raise ScenarioPlanValidationError(
-                            "Default base_currency must be a string"
-                        )
+                        raise ScenarioPlanValidationError("Default base_currency must be a string")
                     defaults_mapping[key] = _coerce_to_str(value).strip().upper()
                 elif key in {"commodity_symbols", "jurisdictions"}:
                     defaults_mapping[key] = list(_normalise_sequence(value))
@@ -205,9 +195,7 @@ class ScenarioPlan:
         seen_names: dict[str, None] = {}
         for index, scenario_payload in enumerate(scenarios, start=1):
             if not isinstance(scenario_payload, Mapping):
-                raise ScenarioPlanValidationError(
-                    f"Scenario entry #{index} must be a mapping"
-                )
+                raise ScenarioPlanValidationError(f"Scenario entry #{index} must be a mapping")
 
             merged: dict[str, object] = dict(defaults_mapping)
             merged.update(scenario_payload)
@@ -222,9 +210,7 @@ class ScenarioPlan:
                 raise ScenarioPlanValidationError(str(exc)) from exc
 
             if scenario.name in seen_names:
-                raise ScenarioPlanValidationError(
-                    f"Scenario name '{scenario.name}' must be unique"
-                )
+                raise ScenarioPlanValidationError(f"Scenario name '{scenario.name}' must be unique")
             seen_names[scenario.name] = None
             scenarios_built.append(scenario)
 
@@ -244,39 +230,25 @@ class ScenarioPlan:
 
         metadata_payload = payload.get("metadata")
         if not isinstance(metadata_payload, Mapping):
-            raise ScenarioPlanValidationError(
-                "Scenario plan must include a 'metadata' object"
-            )
+            raise ScenarioPlanValidationError("Scenario plan must include a 'metadata' object")
 
         defaults_payload = payload.get("defaults")
         if defaults_payload is not None and not isinstance(defaults_payload, Mapping):
             raise ScenarioPlanValidationError("Plan defaults must be a mapping")
 
         scenarios_payload = payload.get("scenarios")
-        if not isinstance(scenarios_payload, Sequence) or isinstance(
-            scenarios_payload, str | bytes
-        ):
-            raise ScenarioPlanValidationError(
-                "Scenario plan must include a 'scenarios' array"
-            )
+        if not isinstance(scenarios_payload, Sequence) or isinstance(scenarios_payload, str | bytes):
+            raise ScenarioPlanValidationError("Scenario plan must include a 'scenarios' array")
 
         return cls.from_components(
             name=str(metadata_payload.get("name", "")),
             description=(
-                str(metadata_payload.get("description"))
-                if metadata_payload.get("description") is not None
-                else None
+                str(metadata_payload.get("description")) if metadata_payload.get("description") is not None else None
             ),
             tags=_normalise_tags(metadata_payload.get("tags")),
-            schedule=(
-                str(metadata_payload.get("schedule"))
-                if metadata_payload.get("schedule") is not None
-                else None
-            ),
+            schedule=(str(metadata_payload.get("schedule")) if metadata_payload.get("schedule") is not None else None),
             parameters=(
-                metadata_payload.get("parameters")
-                if isinstance(metadata_payload.get("parameters"), Mapping)
-                else {}
+                metadata_payload.get("parameters") if isinstance(metadata_payload.get("parameters"), Mapping) else {}
             ),
             defaults=defaults_payload or {},
             scenarios=[dict(entry) for entry in scenarios_payload],
@@ -319,11 +291,7 @@ class ScenarioPlan:
                     "name": scenario.name,
                     "base_currency": scenario.base_currency,
                     "commodity_symbols": list(scenario.commodity_symbols),
-                    "jurisdictions": (
-                        list(scenario.jurisdictions)
-                        if scenario.jurisdictions is not None
-                        else None
-                    ),
+                    "jurisdictions": (list(scenario.jurisdictions) if scenario.jurisdictions is not None else None),
                     "tags": list(scenario.tags),
                 }
                 for scenario in self.scenarios
@@ -331,9 +299,7 @@ class ScenarioPlan:
         return payload
 
 
-def load_plan_from_bytes(
-    data: bytes, *, format_hint: str | None = None
-) -> ScenarioPlan:
+def load_plan_from_bytes(data: bytes, *, format_hint: str | None = None) -> ScenarioPlan:
     """Decode plan bytes into a :class:`ScenarioPlan`."""
 
     last_error: Exception | None = None
@@ -362,9 +328,7 @@ def load_plan_from_bytes(
             last_error = exc
             continue
 
-    raise ScenarioPlanFormatError(
-        f"Failed to decode scenario plan: {last_error}" if last_error else "Unknown format"
-    )
+    raise ScenarioPlanFormatError(f"Failed to decode scenario plan: {last_error}" if last_error else "Unknown format")
 
 
 def load_plan_from_path(path: Path) -> ScenarioPlan:
@@ -372,4 +336,3 @@ def load_plan_from_path(path: Path) -> ScenarioPlan:
 
     content = path.read_bytes()
     return load_plan_from_bytes(content, format_hint=path.suffix.lower())
-

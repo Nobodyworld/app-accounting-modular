@@ -1,12 +1,16 @@
 from datetime import date
-from typing import List
+
 from sqlmodel import Session, select
-from ..models.models import Price, Instrument
+
+from ..models.models import Instrument, Price
+
 
 class BaseMarketProvider:
     name: str
-    def fetch_prices(self, symbol: str, start: date, end: date) -> List[Price]:
+
+    def fetch_prices(self, symbol: str, start: date, end: date) -> list[Price]:
         raise NotImplementedError
+
 
 class MarketService:
     def __init__(self, session: Session, provider: BaseMarketProvider):

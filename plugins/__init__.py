@@ -15,4 +15,3 @@ __all__ = [
     "scenario_variance",
     "tax_oecd_stub",
 ]
-

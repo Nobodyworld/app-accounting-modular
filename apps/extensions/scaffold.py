@@ -33,14 +33,12 @@ def normalise_package_name(key: str) -> str:
 
 def _validate_key(key: str) -> None:
     if not _KEY_PATTERN.match(key):
-        raise ValueError(
-            "Extension key must follow 'namespace:slug' using lowercase letters, numbers, and hyphens."
-        )
+        raise ValueError("Extension key must follow 'namespace:slug' using lowercase letters, numbers, and hyphens.")
 
 
 def _format_capabilities(capabilities: Iterable[str]) -> str:
     values = tuple(cap.strip() for cap in capabilities if cap.strip())
-    return "(" + ", ".join(f"\"{value}\"" for value in values) + ",)" if values else "()"
+    return "(" + ", ".join(f'"{value}"' for value in values) + ",)" if values else "()"
 
 
 def scaffold_extension(
@@ -85,15 +83,15 @@ def scaffold_extension(
     capabilities_literal = _format_capabilities(capabilities)
     manifest_lines = [
         "MANIFEST = ExtensionManifest(",
-        f"    key=\"{key}\",",
-        f"    name=\"{safe_name}\",",
-        f"    version=\"{version}\",",
+        f'    key="{key}",',
+        f'    name="{safe_name}",',
+        f'    version="{version}",',
     ]
     if description:
-        manifest_lines.append(f"    description=\"{description}\",")
+        manifest_lines.append(f'    description="{description}",')
     manifest_lines.append(f"    capabilities={capabilities_literal},")
     if author:
-        manifest_lines.append(f"    author=\"{author}\",")
+        manifest_lines.append(f'    author="{author}",')
     manifest_lines.append(")")
 
     extension_lines = [
@@ -148,7 +146,7 @@ def scaffold_extension(
             "def _health_probe() -> HealthReport:",
             "    return HealthReport(",
             '        name=f"extension:{MANIFEST.key}",',
-            '        healthy=True,',
+            "        healthy=True,",
             '        severity="info",',
             "        details={",
             '            "generated_at": datetime.now(tz=UTC).isoformat(),',
@@ -167,12 +165,8 @@ def scaffold_extension(
         "    registry.register(MANIFEST)",
     ]
     if observability_contract:
-        register_lines.append(
-            "    registry.register_contract(MANIFEST.key, PLAYBOOK_CONTRACT)"
-        )
-    register_lines.append(
-        '    registry.register_health_check(MANIFEST.key, _health_probe, severity="info")'
-    )
+        register_lines.append("    registry.register_contract(MANIFEST.key, PLAYBOOK_CONTRACT)")
+    register_lines.append('    registry.register_health_check(MANIFEST.key, _health_probe, severity="info")')
     extension_lines.extend(register_lines)
 
     extension_file = target / "extension.py"

@@ -37,6 +37,4 @@ def register(registry: ExtensionRegistry) -> None:
     registry.register(MANIFEST)
     registry.register_health_check(MANIFEST.key, _health_probe, severity="info")
     # Seed a gauge to advertise the number of declared extension capabilities.
-    metrics_registry.cache_entries.labels(cache="extension_capabilities").set(
-        float(len(MANIFEST.capabilities))
-    )
+    metrics_registry.cache_entries.labels(cache="extension_capabilities").set(float(len(MANIFEST.capabilities)))

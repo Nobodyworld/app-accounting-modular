@@ -68,9 +68,7 @@ def compute_snapshot_diagnostics(
     commodity_quote_count = len(snapshot.commodity_quotes)
     commodity_max_age_seconds = _max_age_seconds(snapshot.commodity_quotes, now_fn)
 
-    tax_jurisdictions = _unique_pairs(
-        rule.jurisdiction for rule in snapshot.tax_rules if rule.jurisdiction
-    )
+    tax_jurisdictions = _unique_pairs(rule.jurisdiction for rule in snapshot.tax_rules if rule.jurisdiction)
     tax_rule_count = len(snapshot.tax_rules)
     active_tax_rule_count = _count_active_rules(snapshot.tax_rules, today_fn)
 
@@ -108,9 +106,7 @@ def rate_strings(rates: Iterable) -> Iterable[str]:
         yield f"{base}/{quote}"
 
 
-def _resolve_base_currency(
-    snapshot: DataSnapshot, request: SnapshotRequest | None
-) -> str | None:
+def _resolve_base_currency(snapshot: DataSnapshot, request: SnapshotRequest | None) -> str | None:
     if request is not None:
         return request.base_currency
     if snapshot.fx_rates:

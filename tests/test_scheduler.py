@@ -14,6 +14,7 @@ from apps.api.models.models import ForecastPlan
 
 class StubBudgetService:
     """Instrumented budget service capturing scheduler-triggered calls."""
+
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -30,9 +31,7 @@ class StubBudgetService:
         )
         raise RuntimeError("boom")
 
-    def cashflow_forecast(
-        self, organization_id: int, *, horizon: int, refresh: bool
-    ) -> None:
+    def cashflow_forecast(self, organization_id: int, *, horizon: int, refresh: bool) -> None:
         self.calls.append(
             (
                 "cashflow",

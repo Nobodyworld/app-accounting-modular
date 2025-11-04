@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+
 from apps.extensions import ExtensionManifest, ExtensionRegistry
 from apps.observability.health import HealthReport
 from apps.observability.metrics import metrics_registry

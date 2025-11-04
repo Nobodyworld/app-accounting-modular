@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import warnings
-from datetime import datetime, timedelta, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Sequence, cast
+from typing import cast
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -118,9 +119,7 @@ def test_forecast_series_repeat_last_fallback() -> None:
     assert result.diagnostics["strategy"] == "fallback_repeat_last"
     assert len(result.points) == 2
     assert all(point[1] == pytest.approx(short_series[-1][1]) for point in result.points)
-    expected_label = (
-        pd.Timestamp(short_series[-1][0]).replace(tzinfo=timezone.utc).isoformat()
-    )
+    expected_label = pd.Timestamp(short_series[-1][0]).replace(tzinfo=UTC).isoformat()
     label_value = result.diagnostics["last_observation_label"]
     assert isinstance(label_value, str)
     assert label_value == expected_label

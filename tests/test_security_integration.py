@@ -80,9 +80,7 @@ def api_context():
 
         ledger1 = LedgerService(session, organization_id=org1.id)
         cash1 = ledger1.create_account(name="Org1 Cash", type="ASSET", code="ORG1CASH")
-        revenue1 = ledger1.create_account(
-            name="Org1 Revenue", type="REVENUE", code="ORG1REV"
-        )
+        revenue1 = ledger1.create_account(name="Org1 Revenue", type="REVENUE", code="ORG1REV")
         ledger1.post_transaction(
             date=date(2024, 1, 1),
             description="Org1 Sale",
@@ -94,9 +92,7 @@ def api_context():
 
         ledger2 = LedgerService(session, organization_id=org2.id)
         cash2 = ledger2.create_account(name="Org2 Cash", type="ASSET", code="ORG2CASH")
-        revenue2 = ledger2.create_account(
-            name="Org2 Revenue", type="REVENUE", code="ORG2REV"
-        )
+        revenue2 = ledger2.create_account(name="Org2 Revenue", type="REVENUE", code="ORG2REV")
         ledger2.post_transaction(
             date=date(2024, 1, 2),
             description="Org2 Sale",
@@ -121,9 +117,7 @@ def api_context():
 
 def test_requires_authentication(api_context):
     client, ctx, _ = api_context
-    response = client.get(
-        "/ledger/trial-balance", params={"organization_id": ctx["org1_id"]}
-    )
+    response = client.get("/ledger/trial-balance", params={"organization_id": ctx["org1_id"]})
     assert response.status_code == 401
 
 
@@ -186,9 +180,7 @@ def test_login_throttling_and_audit_logging(api_context):
     assert success.status_code == 200
 
     with Session(engine, expire_on_commit=False) as session:
-        entries = session.exec(
-            select(AuditLog).where(AuditLog.entity_name == "auth.login")
-        ).all()
+        entries = session.exec(select(AuditLog).where(AuditLog.entity_name == "auth.login")).all()
 
     assert len(entries) >= 6  # five failures + one success
     statuses = {entry.after_state["success"] for entry in entries}

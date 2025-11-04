@@ -45,8 +45,7 @@ def telemetry_provider() -> SnapshotTelemetry | None:
         return None
     except ImportError as exc:
         _logger.warning(
-            "Observability metrics module missing snapshot telemetry adapter; "
-            "disabling instrumentation.",
+            "Observability metrics module missing snapshot telemetry adapter; " "disabling instrumentation.",
             exc_info=exc,
         )
         return None

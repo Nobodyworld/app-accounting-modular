@@ -47,9 +47,7 @@ __all__ = [
 
 LogFormat = Literal["JSON", "TEXT"]
 
-_CONTEXT: ContextVar[Mapping[str, Any] | None] = ContextVar(
-    "modacct_logging_context", default=None
-)
+_CONTEXT: ContextVar[Mapping[str, Any] | None] = ContextVar("modacct_logging_context", default=None)
 _CONFIGURED = False
 
 _DEFAULT_INTEGRATED_LOGGERS = (
@@ -118,9 +116,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=UTC)
-            .isoformat()
-            .replace("+00:00", "Z"),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat().replace("+00:00", "Z"),
             "service": self.service_name,
             "logger": record.name,
             "level": record.levelname,
@@ -228,9 +224,7 @@ def configure_logging(
     global _CONFIGURED
     normalised_format = log_format.upper()
     if normalised_format not in {"JSON", "TEXT"}:
-        raise ValueError(
-            f"Unsupported log format '{log_format}'. Expected one of: JSON, TEXT."
-        )
+        raise ValueError(f"Unsupported log format '{log_format}'. Expected one of: JSON, TEXT.")
     if _CONFIGURED and not force:
         return
 
@@ -303,9 +297,7 @@ class RequestContextMiddleware:
         provided_corr = header_lookup.get(self._correlation_header)
         provided_request = header_lookup.get(self._header_name)
 
-        correlation_id = (
-            provided_corr or provided_request or str(uuid4()).encode("latin-1")
-        )
+        correlation_id = provided_corr or provided_request or str(uuid4()).encode("latin-1")
         if not isinstance(correlation_id, bytes):
             correlation_id = str(correlation_id).encode("latin-1")
         request_id = provided_request or correlation_id
@@ -341,8 +333,7 @@ class RequestContextMiddleware:
                 existing = [
                     (name, value)
                     for name, value in message.get("headers", [])
-                    if name.lower()
-                    not in {self._header_name, self._correlation_header}
+                    if name.lower() not in {self._header_name, self._correlation_header}
                 ]
                 existing.extend(
                     [

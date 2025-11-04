@@ -10,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 
 class DummyResponse:
     """Simple response stub to simulate ``requests`` interactions."""
+
     def __init__(self, payload: dict, status_code: int = 200):
         self._payload = payload
         self.status_code = status_code

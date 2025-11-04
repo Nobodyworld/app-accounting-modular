@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
@@ -15,7 +14,7 @@ from ..schemas import AuditLogSchema
 router = APIRouter(prefix="/audit", tags=["audit"])
 
 
-@router.get("/", response_model=List[AuditLogSchema])
+@router.get("/", response_model=list[AuditLogSchema])
 def list_audit_logs(
     s: Session = Depends(session_with_audit_context),
     entity: str | None = Query(default=None),

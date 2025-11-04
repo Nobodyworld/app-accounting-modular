@@ -61,5 +61,5 @@ def test_health_telemetry_adapter_updates_metrics() -> None:
     )
 
     payload = registry.render_latest().decode()
-    assert "modacct_health_checks_total{check=\"database\",severity=\"critical\",status=\"completed\"} 1.0" in payload
-    assert "modacct_health_check_status{check=\"database\",severity=\"critical\"} 1.0" in payload
+    assert 'modacct_health_checks_total{check="database",severity="critical",status="completed"} 1.0' in payload
+    assert 'modacct_health_check_status{check="database",severity="critical"} 1.0' in payload

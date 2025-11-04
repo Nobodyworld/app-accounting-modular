@@ -12,7 +12,5 @@ def test_list_contracts_exposes_variance_contract() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert any(
-        item["extension_key"] == "scenarios:variance"
-        and item["kind"] == "scenario-augmentation"
-        for item in payload
+        item["extension_key"] == "scenarios:variance" and item["kind"] == "scenario-augmentation" for item in payload
     )

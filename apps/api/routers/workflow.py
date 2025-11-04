@@ -32,9 +32,7 @@ def _posting_payload(posting: StagedPostingRead) -> dict[str, object]:
 
 
 @router.post("/ingest", response_model=WorkflowIngestResponse)
-def ingest_transactions(
-    payload: WorkflowIngestRequest, s: Session = Depends(get_session)
-) -> WorkflowIngestResponse:
+def ingest_transactions(payload: WorkflowIngestRequest, s: Session = Depends(get_session)) -> WorkflowIngestResponse:
     """Persist raw transactions to the staging tables and optionally process them."""
 
     svc = WorkflowService(s)
@@ -76,9 +74,7 @@ def process_transactions(
 
 
 @router.get("/{staged_id}", response_model=StagedTransactionRead)
-def get_staged_transaction(
-    staged_id: int, s: Session = Depends(get_session)
-) -> StagedTransactionRead:
+def get_staged_transaction(staged_id: int, s: Session = Depends(get_session)) -> StagedTransactionRead:
     """Return a staged transaction including its postings."""
 
     svc = WorkflowService(s)

@@ -1,15 +1,19 @@
-from datetime import date
-from typing import List
-from sqlmodel import Session
-from ..models.models import Rate
 import logging
+from datetime import date
+
+from sqlmodel import Session
+
+from ..models.models import Rate
 
 logger = logging.getLogger(__name__)
 
+
 class BaseFXProvider:
     name: str
-    def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> List[Rate]:
+
+    def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> list[Rate]:
         raise NotImplementedError
+
 
 class FXService:
     def __init__(self, session: Session, provider: BaseFXProvider):

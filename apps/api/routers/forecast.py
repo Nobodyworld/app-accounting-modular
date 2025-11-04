@@ -22,14 +22,10 @@ def forecast_series(
 ) -> ForecastResponse:
     """Generate a univariate time-series forecast."""
 
-    get_current_organization(
-        organization_id=payload.organization_id, session=s, current_user=current_user
-    )
+    get_current_organization(organization_id=payload.organization_id, session=s, current_user=current_user)
     fs = ForecastService()
     # TODO - Pool forecast service instances to reuse expensive model state.
     series = [(str(point[0]), float(point[1])) for point in payload.series]
     # TODO - Validate series length against horizon to prevent underfit models.
     result = fs.forecast_series(series, payload.horizon)
-    return ForecastResponse(
-        forecast=result.points, horizon=result.horizon, order=result.model_order
-    )
+    return ForecastResponse(forecast=result.points, horizon=result.horizon, order=result.model_order)

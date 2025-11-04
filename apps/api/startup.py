@@ -12,9 +12,10 @@ depending on global variables.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, MutableMapping, Sequence
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Callable, Literal, MutableMapping, Sequence
+from typing import Any, Literal
 
 __all__ = [
     "StartupContext",

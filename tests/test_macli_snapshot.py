@@ -138,8 +138,8 @@ def _stub_batch() -> ScenarioBatchResult:
 
 
 def test_macli_snapshot_json(monkeypatch) -> None:
-    from cli import macli as macli_module
     from apps.api.services.snapshot_service import SnapshotResult
+    from cli import macli as macli_module
 
     request, snapshot, diagnostics, cache_stats, providers = _stub_result()
     snapshot_result = SnapshotResult(
@@ -170,8 +170,8 @@ def test_macli_snapshot_json(monkeypatch) -> None:
 
 
 def test_macli_snapshot_table(monkeypatch) -> None:
-    from cli import macli as macli_module
     from apps.api.services.snapshot_service import SnapshotResult
+    from cli import macli as macli_module
 
     request, snapshot, diagnostics, cache_stats, providers = _stub_result()
     snapshot_result = SnapshotResult(

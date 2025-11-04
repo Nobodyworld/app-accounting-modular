@@ -91,7 +91,6 @@ class AuditLogSchema(BaseModel):
     context: dict[str, Any] | None = None
 
 
-
 class AccountCreate(BaseModel):
     """Payload for creating a ledger account."""
 
@@ -141,9 +140,7 @@ class TransactionCreate(BaseModel):
 
     @field_validator("postings")
     @classmethod
-    def ensure_balanced(
-        cls, postings: list[Posting]
-    ) -> list[Posting]:  # pragma: no cover - delegated validation
+    def ensure_balanced(cls, postings: list[Posting]) -> list[Posting]:  # pragma: no cover - delegated validation
         debit_total = sum((p.debit for p in postings), start=Decimal("0"))
         credit_total = sum((p.credit for p in postings), start=Decimal("0"))
         if debit_total != credit_total:
@@ -190,9 +187,7 @@ class TrialBalanceResponse(BaseModel):
     total_credit: Decimal
 
     @classmethod
-    def from_service(
-        cls, payload: dict[str, Any]
-    ) -> TrialBalanceResponse:
+    def from_service(cls, payload: dict[str, Any]) -> TrialBalanceResponse:
         rows = [TrialBalanceRowSchema.from_row(row) for row in payload["rows"]]
         return cls(
             rows=rows,
@@ -247,9 +242,7 @@ class WorkflowIngestRequest(BaseModel):
 
     @field_validator("transactions")
     @classmethod
-    def ensure_transactions(
-        cls, transactions: list[StagedTransactionIngest]
-    ) -> list[StagedTransactionIngest]:
+    def ensure_transactions(cls, transactions: list[StagedTransactionIngest]) -> list[StagedTransactionIngest]:
         if not transactions:
             raise ValueError("no transactions supplied")
         return transactions
@@ -470,9 +463,7 @@ class SnapshotDiagnosticsSchema(BaseModel):
     missing_sections: list[str]
 
     @classmethod
-    def from_diagnostics(
-        cls, diagnostics: SnapshotDiagnostics
-    ) -> SnapshotDiagnosticsSchema:
+    def from_diagnostics(cls, diagnostics: SnapshotDiagnostics) -> SnapshotDiagnosticsSchema:
         return cls(
             base_currency=diagnostics.base_currency,
             fx_rate_count=diagnostics.fx_rate_count,
@@ -514,10 +505,7 @@ class ScenarioBatchRequest(BaseModel):
     reset_cache_between_runs: bool = False
 
     def to_scenarios(self) -> list[SnapshotScenario]:
-        return [
-            SnapshotScenario.from_mapping(definition.to_mapping())
-            for definition in self.scenarios
-        ]
+        return [SnapshotScenario.from_mapping(definition.to_mapping()) for definition in self.scenarios]
 
 
 class ScenarioResultSchema(BaseModel):
@@ -538,11 +526,7 @@ class ScenarioResultSchema(BaseModel):
         request_schema = SnapshotRequestSchema(
             base_currency=result.scenario.base_currency,
             commodity_symbols=list(result.scenario.commodity_symbols),
-            jurisdictions=(
-                list(result.scenario.jurisdictions)
-                if result.scenario.jurisdictions is not None
-                else None
-            ),
+            jurisdictions=(list(result.scenario.jurisdictions) if result.scenario.jurisdictions is not None else None),
         )
         fx_rates = [
             FXRateSchema(
@@ -556,9 +540,7 @@ class ScenarioResultSchema(BaseModel):
         commodity_quotes = [
             CommodityQuoteSchema(
                 symbol=quote.symbol,
-                price=MoneySchema(
-                    amount=quote.price.amount, currency=quote.price.currency
-                ),
+                price=MoneySchema(amount=quote.price.amount, currency=quote.price.currency),
                 as_of=quote.as_of,
             )
             for quote in result.snapshot.commodity_quotes
@@ -573,22 +555,13 @@ class ScenarioResultSchema(BaseModel):
             )
             for rule in result.snapshot.tax_rules
         ]
-        cache_stats = {
-            name: CacheStatsSchema.from_cache_stats(stats)
-            for name, stats in result.cache_stats.items()
-        }
-        diagnostics = SnapshotDiagnosticsSchema.from_diagnostics(
-            result.diagnostics
-        )
+        cache_stats = {name: CacheStatsSchema.from_cache_stats(stats) for name, stats in result.cache_stats.items()}
+        diagnostics = SnapshotDiagnosticsSchema.from_diagnostics(result.diagnostics)
         return cls(
             name=result.scenario.name,
             tags=list(result.scenario.tags),
             request=request_schema,
-            providers=(
-                dict(result.providers)
-                if result.providers is not None
-                else None
-            ),
+            providers=(dict(result.providers) if result.providers is not None else None),
             fx_rates=fx_rates,
             commodity_quotes=commodity_quotes,
             tax_rules=tax_rules,
@@ -619,10 +592,7 @@ class ScenarioSummarySchema(BaseModel):
             base_currencies=list(summary.base_currencies),
             commodity_symbols=list(summary.commodity_symbols),
             jurisdictions=list(summary.jurisdictions),
-            missing_sections={
-                name: list(sections)
-                for name, sections in summary.missing_sections.items()
-            },
+            missing_sections={name: list(sections) for name, sections in summary.missing_sections.items()},
             total_fx_rates=summary.total_fx_rates,
             total_commodity_quotes=summary.total_commodity_quotes,
             total_tax_rules=summary.total_tax_rules,
@@ -642,9 +612,7 @@ class ScenarioBatchResponse(BaseModel):
     def from_batch(cls, batch: ScenarioBatchResult) -> ScenarioBatchResponse:
         return cls(
             summary=ScenarioSummarySchema.from_summary(batch.summary),
-            results=[
-                ScenarioResultSchema.from_result(result) for result in batch.results
-            ],
+            results=[ScenarioResultSchema.from_result(result) for result in batch.results],
         )
 
 
@@ -719,9 +687,7 @@ class ScenarioPlanSummarySchema(BaseModel):
     defaults_applied: list[str]
 
     @classmethod
-    def from_summary(
-        cls, summary: ScenarioPlanSummary
-    ) -> ScenarioPlanSummarySchema:
+    def from_summary(cls, summary: ScenarioPlanSummary) -> ScenarioPlanSummarySchema:
         return cls(
             scenario_count=summary.scenario_count,
             base_currencies=list(summary.base_currencies),
@@ -740,9 +706,7 @@ class ScenarioPlanPreviewResponse(BaseModel):
     summary: ScenarioPlanSummarySchema
 
     @classmethod
-    def from_plan(
-        cls, plan: ScenarioPlan, summary: ScenarioPlanSummary
-    ) -> ScenarioPlanPreviewResponse:
+    def from_plan(cls, plan: ScenarioPlan, summary: ScenarioPlanSummary) -> ScenarioPlanPreviewResponse:
         return cls(
             plan=plan.as_payload(),
             summary=ScenarioPlanSummarySchema.from_summary(summary),
@@ -765,11 +729,7 @@ class SnapshotResponse(BaseModel):
         request_schema = SnapshotRequestSchema(
             base_currency=result.request.base_currency,
             commodity_symbols=list(result.request.commodity_symbols),
-            jurisdictions=(
-                list(result.request.jurisdictions)
-                if result.request.jurisdictions is not None
-                else None
-            ),
+            jurisdictions=(list(result.request.jurisdictions) if result.request.jurisdictions is not None else None),
         )
         fx_rates = [
             FXRateSchema(
@@ -783,9 +743,7 @@ class SnapshotResponse(BaseModel):
         commodity_quotes = [
             CommodityQuoteSchema(
                 symbol=quote.symbol,
-                price=MoneySchema(
-                    amount=quote.price.amount, currency=quote.price.currency
-                ),
+                price=MoneySchema(amount=quote.price.amount, currency=quote.price.currency),
                 as_of=quote.as_of,
             )
             for quote in result.snapshot.commodity_quotes
@@ -800,13 +758,8 @@ class SnapshotResponse(BaseModel):
             )
             for rule in result.snapshot.tax_rules
         ]
-        cache_stats = {
-            name: CacheStatsSchema.from_cache_stats(stats)
-            for name, stats in result.cache_stats.items()
-        }
-        diagnostics = SnapshotDiagnosticsSchema.from_diagnostics(
-            result.diagnostics
-        )
+        cache_stats = {name: CacheStatsSchema.from_cache_stats(stats) for name, stats in result.cache_stats.items()}
+        diagnostics = SnapshotDiagnosticsSchema.from_diagnostics(result.diagnostics)
         return cls(
             request=request_schema,
             providers=dict(result.providers),

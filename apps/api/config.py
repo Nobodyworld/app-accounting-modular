@@ -28,11 +28,7 @@ LogFormat = Literal["JSON", "TEXT"]
 logger = logging.getLogger(__name__)
 
 
-VALID_LOG_LEVELS = frozenset(
-    name
-    for name, level in logging.getLevelNamesMapping().items()
-    if isinstance(level, int)
-)
+VALID_LOG_LEVELS = frozenset(name for name, level in logging.getLevelNamesMapping().items() if isinstance(level, int))
 
 DEFAULT_LOG_LEVEL = "INFO"
 
@@ -129,9 +125,7 @@ DEFAULT_ALLOWED_EXTENSIONS: dict[str, ExtensionInfo] = {
 _SECRET_PROVENANCE: dict[str, bool] = {}
 
 
-def _resolve_jwt_secret(
-    environ: Mapping[str, str] | None = None, prefix: str = "MODACCT_"
-) -> tuple[str, bool]:
+def _resolve_jwt_secret(environ: Mapping[str, str] | None = None, prefix: str = "MODACCT_") -> tuple[str, bool]:
     """Return a JWT secret and whether it was auto-generated."""
 
     env = environ or os.environ
@@ -163,50 +157,29 @@ class Settings(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     _jwt_secret_is_ephemeral: bool = PrivateAttr(default=False)
 
-    database_url: str = Field(
-        default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./modacct.db")
-    )
+    database_url: str = Field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./modacct.db"))
     log_level: str = Field(default_factory=lambda: os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL))
     log_format: LogFormat = Field(default=DEFAULT_LOG_FORMAT)
-    openex_app_id: str | None = Field(
-        default_factory=lambda: os.getenv("OPENEXCHANGERATES_APP_ID")
-    )
-    alphavantage_key: str | None = Field(
-        default_factory=lambda: os.getenv("ALPHAVANTAGE_API_KEY")
-    )
+    openex_app_id: str | None = Field(default_factory=lambda: os.getenv("OPENEXCHANGERATES_APP_ID"))
+    alphavantage_key: str | None = Field(default_factory=lambda: os.getenv("ALPHAVANTAGE_API_KEY"))
     newsapi_key: str | None = Field(default_factory=lambda: os.getenv("NEWSAPI_KEY"))
-    gdelt_user_agent: str | None = Field(
-        default_factory=lambda: os.getenv("GDELT_USER_AGENT")
-    )
+    gdelt_user_agent: str | None = Field(default_factory=lambda: os.getenv("GDELT_USER_AGENT"))
     tracing_exporter: str = Field(
         default_factory=lambda: (
-            os.getenv("MODACCT_TRACING_EXPORTER")
-            or os.getenv("TRACING_EXPORTER")
-            or DEFAULT_TRACING_EXPORTER
+            os.getenv("MODACCT_TRACING_EXPORTER") or os.getenv("TRACING_EXPORTER") or DEFAULT_TRACING_EXPORTER
         )
     )
     tracing_otlp_endpoint: str | None = Field(
-        default_factory=lambda: os.getenv("MODACCT_TRACING_OTLP_ENDPOINT")
-        or os.getenv("TRACING_OTLP_ENDPOINT")
+        default_factory=lambda: os.getenv("MODACCT_TRACING_OTLP_ENDPOINT") or os.getenv("TRACING_OTLP_ENDPOINT")
     )
     allowed_providers: dict[str, ProviderInfo] = Field(
-        default_factory=lambda: {
-            key: value.model_copy(deep=True)
-            for key, value in DEFAULT_ALLOWED_PROVIDERS.items()
-        }
+        default_factory=lambda: {key: value.model_copy(deep=True) for key, value in DEFAULT_ALLOWED_PROVIDERS.items()}
     )
     allowed_extensions: dict[str, ExtensionInfo] = Field(
-        default_factory=lambda: {
-            key: value.model_copy(deep=True)
-            for key, value in DEFAULT_ALLOWED_EXTENSIONS.items()
-        }
+        default_factory=lambda: {key: value.model_copy(deep=True) for key, value in DEFAULT_ALLOWED_EXTENSIONS.items()}
     )
-    jwt_secret_key: str = Field(
-        default_factory=_default_jwt_secret
-    )
-    jwt_algorithm: str = Field(
-        default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256")
-    )
+    jwt_secret_key: str = Field(default_factory=_default_jwt_secret)
+    jwt_algorithm: str = Field(default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
     access_token_expire_minutes: int = Field(
         default_factory=lambda: int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     )
@@ -235,10 +208,7 @@ class Settings(BaseModel):
     def _validate_log_level(cls, value: str) -> str:
         level = value.upper() or DEFAULT_LOG_LEVEL
         if level not in VALID_LOG_LEVELS:
-            msg = (
-                f"Unsupported log level '{value}'. "
-                f"Valid options: {sorted(VALID_LOG_LEVELS)}"
-            )
+            msg = f"Unsupported log level '{value}'. " f"Valid options: {sorted(VALID_LOG_LEVELS)}"
             raise ValueError(msg)
         return level
 
@@ -247,10 +217,7 @@ class Settings(BaseModel):
     def _validate_log_format(cls, value: str) -> LogFormat:
         format_normalized = value.upper() or DEFAULT_LOG_FORMAT
         if format_normalized not in VALID_LOG_FORMATS:
-            msg = (
-                f"Unsupported log format '{value}'. "
-                f"Valid options: {sorted(VALID_LOG_FORMATS)}"
-            )
+            msg = f"Unsupported log format '{value}'. " f"Valid options: {sorted(VALID_LOG_FORMATS)}"
             raise ValueError(msg)
         return cast(LogFormat, format_normalized)
 
@@ -259,10 +226,7 @@ class Settings(BaseModel):
     def _validate_tracing_exporter(cls, value: str) -> str:
         exporter = (value or DEFAULT_TRACING_EXPORTER).strip().lower()
         if exporter not in VALID_TRACING_EXPORTERS:
-            msg = (
-                f"Unsupported tracing exporter '{value}'. "
-                f"Valid options: {sorted(VALID_TRACING_EXPORTERS)}"
-            )
+            msg = f"Unsupported tracing exporter '{value}'. " f"Valid options: {sorted(VALID_TRACING_EXPORTERS)}"
             raise ValueError(msg)
         return exporter
 
@@ -307,10 +271,7 @@ class Settings(BaseModel):
     def _validate_jwt_algorithm(cls, value: str) -> str:
         algorithm = value.upper()
         if algorithm not in ALLOWED_JWT_ALGORITHMS:
-            msg = (
-                f"Unsupported JWT algorithm '{value}'. "
-                f"Valid options: {sorted(ALLOWED_JWT_ALGORITHMS)}"
-            )
+            msg = f"Unsupported JWT algorithm '{value}'. " f"Valid options: {sorted(ALLOWED_JWT_ALGORITHMS)}"
             raise ValueError(msg)
         return algorithm
 
@@ -321,9 +282,7 @@ class Settings(BaseModel):
             msg = "access_token_expire_minutes must be greater than zero"
             raise ValueError(msg)
         if value > MAX_ACCESS_TOKEN_MINUTES:
-            msg = (
-                f"access_token_expire_minutes must not exceed {MAX_ACCESS_TOKEN_MINUTES} minutes"
-            )
+            msg = f"access_token_expire_minutes must not exceed {MAX_ACCESS_TOKEN_MINUTES} minutes"
             raise ValueError(msg)
         return value
 

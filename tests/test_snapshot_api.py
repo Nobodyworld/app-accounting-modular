@@ -123,9 +123,7 @@ def test_snapshot_endpoint_returns_payload(monkeypatch) -> None:
             return _result()
 
     orchestrator = DummyOrchestrator()
-    app.dependency_overrides[
-        snapshot_router.get_snapshot_orchestrator
-    ] = lambda: orchestrator
+    app.dependency_overrides[snapshot_router.get_snapshot_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_current_user] = _stub_user
 
     client = TestClient(app)
@@ -162,17 +160,13 @@ def test_snapshot_scenarios_endpoint(monkeypatch) -> None:
             self.calls: list[SnapshotScenario] = []
             self.reset_cache = False
 
-        def run_scenarios(
-            self, scenarios, reset_cache_between_runs: bool = False
-        ) -> ScenarioBatchResult:
+        def run_scenarios(self, scenarios, reset_cache_between_runs: bool = False) -> ScenarioBatchResult:
             self.calls = list(scenarios)
             self.reset_cache = reset_cache_between_runs
             return _batch()
 
     orchestrator = DummyOrchestrator()
-    app.dependency_overrides[
-        snapshot_router.get_snapshot_orchestrator
-    ] = lambda: orchestrator
+    app.dependency_overrides[snapshot_router.get_snapshot_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_current_user] = _stub_user
 
     client = TestClient(app)

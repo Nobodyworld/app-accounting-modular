@@ -90,9 +90,7 @@ class BudgetService:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def budget_vs_actual(
-        self, budget_id: int, *, horizon: int | None = None, refresh: bool = False
-    ) -> BudgetReport:
+    def budget_vs_actual(self, budget_id: int, *, horizon: int | None = None, refresh: bool = False) -> BudgetReport:
         """Return a budget vs actual report, optionally refreshing persisted data."""
 
         plan = self._ensure_budget_plan(budget_id, horizon)
@@ -280,12 +278,8 @@ class BudgetService:
         if not asset_accounts:
             raise ValueError("Organization has no asset accounts to build cashflow report")
 
-        account_ids = {
-            row[0] if isinstance(row, tuple) else row.id for row in asset_accounts
-        }
-        currencies = {
-            row[1] if isinstance(row, tuple) else row.currency for row in asset_accounts
-        }
+        account_ids = {row[0] if isinstance(row, tuple) else row.id for row in asset_accounts}
+        currencies = {row[1] if isinstance(row, tuple) else row.currency for row in asset_accounts}
 
         stmt = (
             select(Transaction.date, JournalEntry.debit, JournalEntry.credit)
@@ -347,9 +341,7 @@ class BudgetService:
                 metadata["forecast_timezone"] = forecast_result.timezone
         elif forecast_error:
             forecast_status = "error"
-            merge_forecast_diagnostics(
-                metadata, {"status": "error", "detail": forecast_error}
-            )
+            merge_forecast_diagnostics(metadata, {"status": "error", "detail": forecast_error})
         metadata["forecast_status"] = forecast_status
 
         return CashflowReport(
@@ -361,9 +353,7 @@ class BudgetService:
             csv_export=csv_export,
         )
 
-    def _provision_plan(
-        self, stmt, candidate: ForecastPlan
-    ) -> ForecastPlan:
+    def _provision_plan(self, stmt, candidate: ForecastPlan) -> ForecastPlan:
         """Persist a new forecast plan guarding against concurrent creation."""
 
         self.session.add(candidate)
@@ -376,9 +366,7 @@ class BudgetService:
         self.session.refresh(candidate)
         return candidate
 
-    def _update_plan_horizon(
-        self, plan: ForecastPlan, horizon: int | None
-    ) -> ForecastPlan:
+    def _update_plan_horizon(self, plan: ForecastPlan, horizon: int | None) -> ForecastPlan:
         updated_horizon = horizon or plan.horizon
         if plan.horizon != updated_horizon:
             plan.horizon = updated_horizon
@@ -388,9 +376,7 @@ class BudgetService:
             self.session.refresh(plan)
         return plan
 
-    def _collect_actuals(
-        self, account_ids: Iterable[int], periods: Iterable[date]
-    ) -> dict[tuple[int, date], Decimal]:
+    def _collect_actuals(self, account_ids: Iterable[int], periods: Iterable[date]) -> dict[tuple[int, date], Decimal]:
         period_set = {self._period_key(p) for p in periods}
         if not period_set:
             return {}
@@ -438,9 +424,7 @@ class BudgetService:
             forecasts[account_id] = result.points
         return forecasts
 
-    def _load_latest_output(
-        self, plan_id: int, report_type: str
-    ) -> BudgetReport | None:
+    def _load_latest_output(self, plan_id: int, report_type: str) -> BudgetReport | None:
         stmt = (
             select(ForecastOutput)
             .where(ForecastOutput.plan_id == plan_id)
@@ -513,9 +497,7 @@ class BudgetService:
             csv_export=output.csv_data or "",
         )
 
-    def _persist_output(
-        self, plan: ForecastPlan, report_type: str, payload: BudgetReport | CashflowReport
-    ) -> None:
+    def _persist_output(self, plan: ForecastPlan, report_type: str, payload: BudgetReport | CashflowReport) -> None:
         if isinstance(payload, BudgetReport):
             summary = {
                 "lines": [
@@ -608,9 +590,7 @@ class BudgetService:
         return buffer.getvalue()
 
     @staticmethod
-    def _render_cashflow_csv(
-        historical: Iterable[tuple[date, float]], forecast: ForecastResult | None
-    ) -> str:
+    def _render_cashflow_csv(historical: Iterable[tuple[date, float]], forecast: ForecastResult | None) -> str:
         buffer = StringIO()
         writer = csv.writer(buffer)
         writer.writerow(["period", "amount", "type"])
@@ -640,4 +620,3 @@ class BudgetService:
             return value
 
         return {key: convert(value) for key, value in metadata.items()}
-

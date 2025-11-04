@@ -61,9 +61,7 @@ class ExtensionRegistry:
         bucket = self._contracts.setdefault(key, [])
         bucket.append(contract)
 
-    def register_health_check(
-        self, key: str, hook: HealthHook, *, severity: str = "info"
-    ) -> None:
+    def register_health_check(self, key: str, hook: HealthHook, *, severity: str = "info") -> None:
         """Expose an extension-defined health check via the global registry."""
 
         # Local import avoids circular dependency.
@@ -73,13 +71,9 @@ class ExtensionRegistry:
             result = hook()
             if isinstance(result, health_module.HealthReport):
                 return result
-            return health_module.HealthReport(
-                name=f"extension:{key}", healthy=bool(result), severity=severity
-            )
+            return health_module.HealthReport(name=f"extension:{key}", healthy=bool(result), severity=severity)
 
-        health_module.register_health_check(
-            f"extension:{key}", wrapper, severity=severity
-        )
+        health_module.register_health_check(f"extension:{key}", wrapper, severity=severity)
         self._health_hooks[key] = hook
 
     def manifests(self) -> list[ExtensionManifest]:

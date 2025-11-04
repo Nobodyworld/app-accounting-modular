@@ -60,9 +60,7 @@ def normalise_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
                 key = _normalise_key(str(raw_key))
                 normalised[key] = transform(value)
             return dict(normalised)
-        if isinstance(obj, Sequence) and not isinstance(
-            obj, str | bytes | bytearray
-        ):
+        if isinstance(obj, Sequence) and not isinstance(obj, str | bytes | bytearray):
             return [transform(item) for item in obj]
         return _normalise_scalar(obj)
 
@@ -102,9 +100,7 @@ def _ensure_serialised_mapping(values: Mapping[str, Any]) -> dict[str, JSONScala
             serialised[str(key)] = value
             continue
         if isinstance(value, float):
-            serialised[str(key)] = (
-                str(value) if math.isnan(value) or math.isinf(value) else value
-            )
+            serialised[str(key)] = str(value) if math.isnan(value) or math.isinf(value) else value
             continue
         serialised[str(key)] = _coerce_json_scalar(value)
     return serialised
@@ -183,4 +179,3 @@ __all__ = [
     "merge_forecast_diagnostics",
     "serialise_diagnostics",
 ]
-

@@ -1,7 +1,10 @@
-from sqlmodel import Session, select, func
-from ..models.models import Account, Transaction, JournalEntry, AccountType
-from typing import Iterable
+from collections.abc import Iterable
 from datetime import date
+
+from sqlmodel import Session, func, select
+
+from ..models.models import Account, AccountType, JournalEntry, Transaction
+
 
 class LedgerService:
     def __init__(self, session: Session):
@@ -30,13 +33,13 @@ class LedgerService:
         query = select(
             JournalEntry.account_id,
             func.sum(JournalEntry.debit).label("total_debit"),
-            func.sum(JournalEntry.credit).label("total_credit")
+            func.sum(JournalEntry.credit).label("total_credit"),
         ).group_by(JournalEntry.account_id)
         results = self.s.exec(query).all()
-        
+
         balance = {}
         for account_id, debit, credit in results:
             net = (debit or 0) - (credit or 0)
             balance[account_id] = {"debit": debit or 0, "credit": credit or 0, "net": net}
-        
+
         return balance

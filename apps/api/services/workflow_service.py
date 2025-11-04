@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
@@ -118,13 +118,11 @@ class WorkflowService:
 
             try:
                 payload = self._prepare_postings(postings)
-                normalised = self.ledger.validate_transaction(
-                    staged.date, staged.description, payload
-                )
+                normalised = self.ledger.validate_transaction(staged.date, staged.description, payload)
             except ValueError as exc:
                 staged.status = WorkflowStatus.FAILED
                 staged.validation_errors = [str(exc)]
-                staged.updated_at = datetime.now(timezone.utc)
+                staged.updated_at = datetime.now(UTC)
                 self.s.add(staged)
                 results.append(
                     WorkflowResult(
@@ -138,7 +136,7 @@ class WorkflowService:
 
             staged.validation_errors = None
             staged.status = WorkflowStatus.VALIDATED
-            staged.updated_at = datetime.now(timezone.utc)
+            staged.updated_at = datetime.now(UTC)
             self.s.add(staged)
 
             for posting, normalised_posting in zip(postings, normalised, strict=True):
@@ -165,7 +163,7 @@ class WorkflowService:
                 existing = self.s.get(Transaction, transaction_id)
                 if existing is not None:
                     staged.status = WorkflowStatus.POSTED
-                    staged.updated_at = datetime.now(timezone.utc)
+                    staged.updated_at = datetime.now(UTC)
                     self.s.add(staged)
                     results.append(
                         WorkflowResult(
@@ -177,12 +175,10 @@ class WorkflowService:
                     )
                     continue
 
-            transaction = self.ledger.post_transaction(
-                staged.date, staged.description, normalised
-            )
+            transaction = self.ledger.post_transaction(staged.date, staged.description, normalised)
             staged.transaction_id = transaction.id
             staged.status = WorkflowStatus.POSTED
-            staged.updated_at = datetime.now(timezone.utc)
+            staged.updated_at = datetime.now(UTC)
             self.s.add(staged)
 
             results.append(
@@ -200,9 +196,7 @@ class WorkflowService:
     # ------------------------------------------------------------------
     # Query helpers
     # ------------------------------------------------------------------
-    def get_transaction(
-        self, staged_id: int
-    ) -> tuple[StagedTransaction, list[StagedPosting]] | None:
+    def get_transaction(self, staged_id: int) -> tuple[StagedTransaction, list[StagedPosting]] | None:
         """Return a staged transaction and its postings."""
 
         staged = self.s.get(StagedTransaction, staged_id)
@@ -211,9 +205,7 @@ class WorkflowService:
         postings = self._load_postings(staged_id)
         return staged, postings
 
-    def list_transactions(
-        self, limit: int = 100
-    ) -> list[tuple[StagedTransaction, list[StagedPosting]]]:
+    def list_transactions(self, limit: int = 100) -> list[tuple[StagedTransaction, list[StagedPosting]]]:
         """Return staged transactions ordered by creation time."""
 
         stmt = select(StagedTransaction).order_by(StagedTransaction.id).limit(limit)
@@ -226,25 +218,17 @@ class WorkflowService:
     # Internal utilities
     # ------------------------------------------------------------------
     def _load_postings(self, staged_id: int) -> list[StagedPosting]:
-        stmt = (
-            select(StagedPosting)
-            .where(StagedPosting.staged_transaction_id == staged_id)
-            .order_by(StagedPosting.id)
-        )
+        stmt = select(StagedPosting).where(StagedPosting.staged_transaction_id == staged_id).order_by(StagedPosting.id)
         return list(self.s.exec(stmt))
 
-    def _prepare_postings(
-        self, postings: Sequence[StagedPosting]
-    ) -> list[dict[str, object]]:
+    def _prepare_postings(self, postings: Sequence[StagedPosting]) -> list[dict[str, object]]:
         payload: list[dict[str, object]] = []
         for idx, posting in enumerate(postings, start=1):
             account_id = posting.account_id
             if account_id is None:
                 identifier = posting.account_code or posting.account_name
                 if not identifier:
-                    raise ValueError(
-                        f"Posting {idx}: account reference (id or code/name) is required"
-                    )
+                    raise ValueError(f"Posting {idx}: account reference (id or code/name) is required")
                 try:
                     account = self.ledger.require_account(identifier)
                 except ValueError as exc:

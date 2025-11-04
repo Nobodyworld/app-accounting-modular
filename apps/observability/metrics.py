@@ -126,14 +126,12 @@ except Exception:  # pragma: no cover - fallback for air-gapped environments
         lines: list[str] = []
         for metric in registry.metrics:
             for key, value in metric._values.items():
-                labels = ",".join(
-                    f'{name}="{val}"'
-                    for name, val in zip(metric._labelnames, key, strict=False)
-                    if name
-                )
+                labels = ",".join(f'{name}="{val}"' for name, val in zip(metric._labelnames, key, strict=False) if name)
                 label_str = f"{{{labels}}}" if labels else ""
                 lines.append(f"{metric.name}{label_str} {value}")
         return ("\n".join(lines) + "\n").encode()
+
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -150,6 +148,7 @@ class CacheObserverProtocol(Protocol):
 
     def record_size(self, size: int) -> None:  # pragma: no cover - delegation
         """Record the current size of the cache."""
+
 
 __all__ = [
     "MetricsRegistry",
@@ -448,17 +447,13 @@ class ExtensionTelemetryAdapter:
         labels = {"module": module, "status": status}
         try:
             self._registry.extension_load_total.labels(**labels).inc()
-            self._registry.extension_load_latency_seconds.labels(**labels).observe(
-                duration
-            )
+            self._registry.extension_load_latency_seconds.labels(**labels).observe(duration)
         except Exception as exc:  # pragma: no cover - defensive
             _logger.debug("Unable to record extension load metrics", exc_info=exc)
 
     def set_enabled(self, *, module: str, enabled: bool) -> None:
         try:
-            self._registry.extension_enabled.labels(module=module).set(
-                1.0 if enabled else 0.0
-            )
+            self._registry.extension_enabled.labels(module=module).set(1.0 if enabled else 0.0)
         except Exception as exc:  # pragma: no cover - defensive
             _logger.debug("Unable to update extension enabled gauge", exc_info=exc)
 
@@ -565,14 +560,10 @@ class HealthTelemetryAdapter:
         status_labels = {**labels, "status": status}
         try:
             self._registry.health_checks_total.labels(**status_labels).inc()
-            self._registry.health_check_latency_seconds.labels(**labels).observe(
-                duration
-            )
+            self._registry.health_check_latency_seconds.labels(**labels).observe(duration)
             # Prime gauges so dashboards show an explicit unhealthy value instead of
             # missing series when checks start failing.
-            self._registry.health_check_status.labels(**labels).set(
-                1.0 if healthy else 0.0
-            )
+            self._registry.health_check_status.labels(**labels).set(1.0 if healthy else 0.0)
         except Exception as exc:  # pragma: no cover - defensive logging only
             _logger.debug("Unable to record health telemetry", exc_info=exc)
 
@@ -601,14 +592,10 @@ class RequestMetricsMiddleware(BaseHTTPMiddleware):
             except Exception:
                 status = 500
                 self._registry.request_total.labels(status=str(status), **labels).inc()
-                self._registry.request_latency_seconds.labels(**labels).observe(
-                    time.perf_counter() - start
-                )
+                self._registry.request_latency_seconds.labels(**labels).observe(time.perf_counter() - start)
                 raise
         self._registry.request_total.labels(status=str(status), **labels).inc()
-        self._registry.request_latency_seconds.labels(**labels).observe(
-            time.perf_counter() - start
-        )
+        self._registry.request_latency_seconds.labels(**labels).observe(time.perf_counter() - start)
         return response
 
 

@@ -9,6 +9,7 @@ from apps.api.audit import AuditActor, apply_creation_metadata, use_actor
 
 class DummyRecord(SQLModel):
     """Minimal record stub used to validate audit metadata wiring."""
+
     id: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

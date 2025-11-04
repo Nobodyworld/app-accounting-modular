@@ -19,10 +19,7 @@ def test_price_unique_constraint() -> None:
     try:
         inspector = inspect(engine)
         uniques = inspector.get_unique_constraints("price")
-        assert any(
-            set(constraint["column_names"]) == {"instrument_id", "date", "provider"}
-            for constraint in uniques
-        )
+        assert any(set(constraint["column_names"]) == {"instrument_id", "date", "provider"} for constraint in uniques)
     finally:
         engine.dispose()
 

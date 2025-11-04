@@ -46,9 +46,7 @@ def seed_data(session: Session) -> tuple[int, int]:
         code="5000",
         organization_id=org.id,
     )
-    shadow_expense = ledger.create_account(
-        "Backoffice", "EXPENSE", code="5100", organization_id=org.id
-    )
+    shadow_expense = ledger.create_account("Backoffice", "EXPENSE", code="5100", organization_id=org.id)
 
     ledger.post_transaction(
         date=date(2024, 1, 1),
@@ -128,11 +126,7 @@ def test_budget_vs_actual_endpoint() -> None:
     missing = response.metadata.accounts_without_actuals
     assert missing and missing[0].account_name == "Backoffice"
 
-    stored_row = session.exec(
-        select(ForecastOutput).where(
-            ForecastOutput.report_type == "budget_vs_actual"
-        )
-    ).first()
+    stored_row = session.exec(select(ForecastOutput).where(ForecastOutput.report_type == "budget_vs_actual")).first()
     assert stored_row is not None
     stored = stored_row if isinstance(stored_row, ForecastOutput) else stored_row[0]
     assert stored.plan_id is not None
@@ -274,4 +268,3 @@ def test_cashflow_forecast_returns_404_for_missing_org() -> None:
 
     assert excinfo.value.status_code == 404
     session.close()
-
