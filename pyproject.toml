@@ -1,14 +1,14 @@
 [tool.black]
 line-length = 120
 target-version = ["py311"]
-include = "(apps|cli|plugins|tests|docs)/.*\\.py$"
+include = "(src/apps|src/cli|src/plugins|tests|docs)/.*\\.py$"
 
 [tool.ruff]
 line-length = 120
 target-version = "py311"
 fix = false
 show-fixes = true
-src = ["apps", "cli", "plugins", "tests"]
+src = ["src/apps", "src/cli", "src/plugins", "tests"]
 respect-gitignore = true
 
 [tool.ruff.lint]
@@ -24,7 +24,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["apps", "plugins", "cli", "tests"]
+known-first-party = ["src.apps", "src.plugins", "src.cli", "tests"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -54,24 +54,24 @@ pretty = true
 color_output = true
 mypy_path = ["."]
 files = [
-  "apps/api/config.py",
-  "apps/api/services/forecast_service.py",
-  "apps/api/audit.py",
-  "apps/api/dependencies.py",
-  "apps/api/db.py",
-  "apps/api/routers/core.py",
-  "apps/api/security.py",
-  "apps/api/services/plugin_loader.py",
-  "apps/api/services/extension_loader.py",
-  "apps/api/services/health.py",
-  "apps/extensions/registry.py",
-  "apps/observability/health.py",
-  "apps/observability/metrics.py",
-  "apps/modular_accounting/application/cache.py",
-  "apps/modular_accounting/application/scenarios.py",
-  "apps/modular_accounting/application/snapshots.py",
-  "apps/modular_accounting/application/telemetry.py",
-  "cli/macli.py",
+  "src/apps/api/config.py",
+  "src/apps/api/services/forecast_service.py",
+  "src/apps/api/audit.py",
+  "src/apps/api/dependencies.py",
+  "src/apps/api/db.py",
+  "src/apps/api/routers/core.py",
+  "src/apps/api/security.py",
+  "src/apps/api/services/plugin_loader.py",
+  "src/apps/api/services/extension_loader.py",
+  "src/apps/api/services/health.py",
+  "src/apps/extensions/registry.py",
+  "src/apps/observability/health.py",
+  "src/apps/observability/metrics.py",
+  "src/apps/modular_accounting/application/cache.py",
+  "src/apps/modular_accounting/application/scenarios.py",
+  "src/apps/modular_accounting/application/snapshots.py",
+  "src/apps/modular_accounting/application/telemetry.py",
+  "src/cli/macli.py",
 ]
 
 [[tool.mypy.overrides]]
@@ -88,7 +88,7 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
-  "apps.api.config",
-  "apps.api.services.forecast_service",
+  "src.apps.api.config",
+  "src.apps.api.services.forecast_service",
 ]
 strict = true

@@ -13,10 +13,10 @@ format:
 	ruff format .
 
 typecheck:
-	mypy apps/modular_accounting/application apps/api apps/extensions cli tests
+	mypy src/apps/modular_accounting/application src/apps/api src/apps/extensions src/cli tests
 
 test:
-	pytest --cov=apps --cov=plugins --cov=cli --cov-report=term-missing --cov-fail-under=85
+	pytest --cov=src/apps --cov=src/plugins --cov=src/cli --cov-report=term-missing --cov-fail-under=85
 
 coverage: test
 
