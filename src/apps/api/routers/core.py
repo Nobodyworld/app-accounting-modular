@@ -13,19 +13,21 @@ from ..services.plugin_loader import provider_descriptors
 router = APIRouter(tags=["core"])
 
 
-def _provider_snapshot() -> list[dict[str, object]]:
+def _provider_snapshot() -> list[dict[str, Any]]:
     """Return provider metadata, including compatibility data."""
 
     return [descriptor.to_dict() for descriptor in provider_descriptors()]
 
 
-def _provider_compatibility_summary(providers: list[dict[str, object]]) -> dict[str, int]:
+def _provider_compatibility_summary(providers: list[dict[str, Any]]) -> dict[str, int]:
     """Summarise compatibility status counts for quick health inspection."""
 
     counts = {"compatible": 0, "incompatible": 0, "unknown": 0}
     for provider in providers:
-        compatibility = provider.get("compatibility") or {}
-        status = compatibility.get("status")
+        # provider dicts may contain arbitrary values; treat as Mapping-like
+        compatibility = provider.get("compatibility") if isinstance(provider, dict) else None
+        compatibility = compatibility or {}
+        status = compatibility.get("status") if isinstance(compatibility, dict) else None
         if status in counts:
             counts[status] += 1
         else:  # pragma: no cover - defensive catch-all
