@@ -85,6 +85,8 @@ def test_startup_manager_raises_on_fatal_failure() -> None:
         manager.run((StartupStep(name="fatal", action=fatal),), context={})
 
     assert excinfo.value.step_name == "fatal"
+    assert excinfo.value.records, "expected failure to expose executed records"
+    assert excinfo.value.records[0].status == "error"
 
 
 def test_startup_manager_logs_abort_summary(caplog: pytest.LogCaptureFixture) -> None:
@@ -102,6 +104,7 @@ def test_startup_manager_logs_abort_summary(caplog: pytest.LogCaptureFixture) ->
     summary = abort_logs[0].startup_steps
     assert summary[0]["status"] == "error"
     assert summary[0]["fatal"] is True
+    assert abort_logs[0].startup_error["step"] == "fatal"
 
 
 def test_startup_manager_records_skipped_steps(caplog: pytest.LogCaptureFixture) -> None:

@@ -11,6 +11,7 @@ from apps.api.config import ProviderInfo, settings
 from apps.api.services.plugin_loader import (
     available_providers,
     load_provider,
+    provider_descriptors,
     refresh_provider_cache,
 )
 
@@ -203,3 +204,31 @@ def test_load_provider_requires_name_attribute(monkeypatch) -> None:
     with pytest.raises(ValueError) as excinfo:
         load_provider("nameless")
     assert "name" in str(excinfo.value)
+
+
+def test_provider_descriptors_include_versions_and_compatibility(monkeypatch) -> None:
+    """Provider descriptors should expose compatibility summaries."""
+
+    module = types.ModuleType("plugins.versioned_provider")
+    module.__version__ = "2.0.0"
+    monkeypatch.setitem(sys.modules, "plugins.versioned_provider", module)
+    monkeypatch.setattr(
+        settings,
+        "allowed_providers",
+        {
+            "versioned": ProviderInfo(
+                module="plugins.versioned_provider",
+                name="Versioned",
+                capabilities=(),
+            )
+        },
+    )
+    monkeypatch.setattr("apps.api.services.plugin_loader.API_VERSION", "1.0.0")
+
+    refresh_provider_cache()
+    descriptors = provider_descriptors()
+    assert len(descriptors) == 1
+    payload = descriptors[0].to_dict()
+    assert payload["version"] == "2.0.0"
+    assert payload["compatibility"]["api_version"] == "1.0.0"
+    assert payload["compatibility"]["status"] == "incompatible"

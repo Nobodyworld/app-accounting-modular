@@ -32,11 +32,22 @@ StartupContext = MutableMapping[str, Any]
 class StartupFailure(RuntimeError):
     """Raised when a fatal startup step fails."""
 
-    def __init__(self, step_name: str, error: BaseException):
+    def __init__(self, step_name: str, error: BaseException, records: tuple["StartupRecord", ...] | None = None):
         self.step_name = step_name
         self.error = error
+        self.records: tuple[StartupRecord, ...] = records or tuple()
         message = f"Startup step '{step_name}' failed: {error!s}"
         super().__init__(message)
+
+    def as_dict(self) -> dict[str, object]:
+        """Structured representation of the failure for logs."""
+
+        return {
+            "step": self.step_name,
+            "error": type(self.error).__name__,
+            "message": str(self.error),
+            "records": [record.as_dict() for record in self.records],
+        }
 
 
 @dataclass(slots=True)
@@ -146,11 +157,15 @@ class StartupManager:
                 records.append(record)
                 if step.fatal:
                     summary = [startup_record.as_dict() for startup_record in records]
+                    failure = StartupFailure(step.name, exc, records=tuple(records))
                     self._logger.error(
                         "Startup sequence aborted",
-                        extra={"startup_steps": summary},
+                        extra={
+                            "startup_steps": summary,
+                            "startup_error": failure.as_dict(),
+                        },
                     )
-                    raise StartupFailure(step.name, exc) from exc
+                    raise failure from exc
                 continue
 
             duration = self._clock() - start

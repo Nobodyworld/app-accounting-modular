@@ -3,20 +3,28 @@
 from __future__ import annotations
 
 import importlib
+import logging
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
+from apps.api.version import API_VERSION
 from ..config import ProviderInfo, settings
 
 __all__ = [
     "ProviderHandle",
     "ProviderMetadata",
+    "ProviderCompatibility",
+    "ProviderDescriptor",
     "available_providers",
     "load_provider",
     "refresh_provider_cache",
+    "provider_descriptors",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -47,7 +55,51 @@ class ProviderHandle:
     metadata: ProviderMetadata
 
 
+@dataclass(frozen=True)
+class ProviderCompatibility:
+    """Compatibility status between a provider and the API."""
+
+    api_version: str
+    provider_version: str | None
+    status: Literal["compatible", "incompatible", "unknown"]
+    reason: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "api_version": self.api_version,
+            "provider_version": self.provider_version,
+            "status": self.status,
+        }
+        if self.reason:
+            payload["reason"] = self.reason
+        return payload
+
+
+@dataclass(frozen=True)
+class ProviderDescriptor:
+    """Extended view of provider metadata used in public endpoints."""
+
+    metadata: ProviderMetadata
+    module: str
+    version: str | None
+    compatibility: ProviderCompatibility
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a serialisable representation including compatibility data."""
+
+        payload = self.metadata.to_dict()
+        payload.update(
+            {
+                "module": self.module,
+                "version": self.version,
+                "compatibility": self.compatibility.to_dict(),
+            }
+        )
+        return payload
+
+
 CapabilitySignature = tuple[str, str, str | None, tuple[str, ...]]
+_VERSION_PATTERN = re.compile(r"^(?P<major>\d+)")
 
 
 def _provider_signature() -> tuple[CapabilitySignature, ...]:
@@ -101,6 +153,105 @@ def available_providers(capability: str | None = None) -> list[ProviderMetadata]
 
     signature = _provider_signature()
     return list(_cached_provider_metadata(signature, capability))
+
+
+def _provider_version(module_path: str) -> str | None:
+    """Extract a declared provider version if available."""
+
+    try:
+        module = importlib.import_module(module_path)
+    except Exception as exc:  # pragma: no cover - defensive log path
+        logger.debug(
+            "Unable to import provider module for version detection",
+            extra={"module": module_path, "error": str(exc)},
+        )
+        return None
+
+    for attr in ("__version__", "VERSION", "version"):
+        value = getattr(module, attr, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _major(version: str | None) -> int | None:
+    if not version:
+        return None
+    match = _VERSION_PATTERN.match(version)
+    if match is None:
+        return None
+    try:
+        return int(match.group("major"))
+    except ValueError:
+        return None
+
+
+def _compatibility(provider_version: str | None) -> ProviderCompatibility:
+    api_major = _major(API_VERSION)
+    provider_major = _major(provider_version)
+
+    if api_major is None:
+        return ProviderCompatibility(
+            api_version=API_VERSION,
+            provider_version=provider_version,
+            status="unknown",
+            reason="api version is not parseable",
+        )
+    if provider_major is None:
+        return ProviderCompatibility(
+            api_version=API_VERSION,
+            provider_version=provider_version,
+            status="unknown",
+            reason="provider version is not declared or parseable",
+        )
+    if provider_major != api_major:
+        return ProviderCompatibility(
+            api_version=API_VERSION,
+            provider_version=provider_version,
+            status="incompatible",
+            reason=f"provider major {provider_major} differs from api major {api_major}",
+        )
+    return ProviderCompatibility(
+        api_version=API_VERSION,
+        provider_version=provider_version,
+        status="compatible",
+    )
+
+
+@lru_cache(maxsize=32)
+def _cached_provider_descriptors(
+    signature: tuple[CapabilitySignature, ...],
+    capability: str | None,
+) -> tuple[ProviderDescriptor, ...]:
+    """Build provider descriptors, caching the expensive version lookups."""
+
+    descriptors: list[ProviderDescriptor] = []
+    for key, module, _, _capabilities in signature:
+        info = settings.allowed_providers.get(key)
+        if info is None:
+            continue
+        metadata = _metadata_from_info(key, info)
+        if capability and capability not in metadata.capabilities:
+            continue
+        version = _provider_version(module)
+        descriptors.append(
+            ProviderDescriptor(
+                metadata=metadata,
+                module=module,
+                version=version,
+                compatibility=_compatibility(version),
+            )
+        )
+
+    descriptors.sort(key=lambda item: item.metadata.key)
+    return tuple(descriptors)
+
+
+def provider_descriptors(capability: str | None = None) -> list[ProviderDescriptor]:
+    """Return provider descriptors including compatibility summaries."""
+
+    signature = _provider_signature()
+    return list(_cached_provider_descriptors(signature, capability))
 
 
 CAPABILITY_METHODS: dict[str, tuple[str, ...]] = {
@@ -172,3 +323,4 @@ def refresh_provider_cache() -> None:
     """Invalidate cached provider metadata snapshots."""
 
     _cached_provider_metadata.cache_clear()
+    _cached_provider_descriptors.cache_clear()

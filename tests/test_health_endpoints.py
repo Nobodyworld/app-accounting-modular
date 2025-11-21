@@ -49,6 +49,8 @@ def test_core_health_endpoint_includes_database_and_scheduler() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] in {"ok", "degraded", "critical", "unknown"}
+    assert isinstance(payload["providers"], list)
+    assert "provider_compatibility" in payload
     assert isinstance(payload["checks"], list)
     checks = {entry["name"]: entry for entry in payload["checks"]}
     assert "database" in checks
@@ -90,3 +92,16 @@ def test_telemetry_endpoint() -> None:
     assert payload["metrics"]["lines"] >= 1
     assert any(report["name"] == "extensions" for report in payload["health"])
     assert isinstance(payload["extensions"], list)
+
+
+def test_providers_endpoint_exposes_compatibility() -> None:
+    response = client.get("/providers")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "providers" in payload
+    providers = payload["providers"]
+    assert isinstance(providers, list)
+    if providers:
+        compat = providers[0]["compatibility"]
+        assert "api_version" in compat
+        assert "status" in compat

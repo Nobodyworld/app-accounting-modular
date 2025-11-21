@@ -8,15 +8,37 @@ from fastapi import APIRouter
 
 from apps.observability.health import health_registry
 
-from ..services.plugin_loader import available_providers
+from ..services.plugin_loader import provider_descriptors
 
 router = APIRouter(tags=["core"])
+
+
+def _provider_snapshot() -> list[dict[str, object]]:
+    """Return provider metadata, including compatibility data."""
+
+    return [descriptor.to_dict() for descriptor in provider_descriptors()]
+
+
+def _provider_compatibility_summary(providers: list[dict[str, object]]) -> dict[str, int]:
+    """Summarise compatibility status counts for quick health inspection."""
+
+    counts = {"compatible": 0, "incompatible": 0, "unknown": 0}
+    for provider in providers:
+        compatibility = provider.get("compatibility") or {}
+        status = compatibility.get("status")
+        if status in counts:
+            counts[status] += 1
+        else:  # pragma: no cover - defensive catch-all
+            counts["unknown"] += 1
+    counts["total"] = len(providers)
+    return counts
 
 
 @router.get("/health")
 async def health() -> dict[str, Any]:
     """Return aggregated health information for core subsystems."""
 
+    providers = _provider_snapshot()
     reports = await health_registry.evaluate()
     checks: list[dict[str, Any]] = [
         {
@@ -66,6 +88,8 @@ async def health() -> dict[str, Any]:
 
     return {
         "status": status,
+        "providers": providers,
+        "provider_compatibility": _provider_compatibility_summary(providers),
         "checks": checks,
         "database": database,
         "scheduler": scheduler,
@@ -76,5 +100,4 @@ async def health() -> dict[str, Any]:
 def providers() -> dict[str, list[dict[str, object]]]:
     """List provider plugins exposed via the configuration allowlist."""
 
-    # TODO - Cache provider metadata and include version compatibility info.
-    return {"providers": [meta.to_dict() for meta in available_providers()]}
+    return {"providers": list(_provider_snapshot())}

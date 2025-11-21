@@ -28,12 +28,12 @@ Completion note (indented, one line):
 - [ ] Re-run the dependency version audit once external package indexes are reachable (Source: TODO.md) - TASK-0004 - When completed: _
 - [ ] Resolve mypy errors in `apps.observability` to satisfy strict configuration requirements (Source: TODO.md) - TASK-0005 - When completed: _
 - [ ] Integrate `make audit` into CI and publish `docs/reports/audit-latest.md` artifacts (Source: TODO.md) - TASK-0006 - When completed: _
-- [ ] Add strong typing for tax rule expressions, e.g., JSONLogic schemas (Source: docs/TAX_MODEL.md) - TASK-0007 - When completed: _
-- [ ] Define a precedence and override strategy for layered tax rules (Source: docs/TAX_MODEL.md) - TASK-0008 - When completed: _
-- [ ] Capture source provenance metadata for tax rules (Source: docs/TAX_MODEL.md) - TASK-0009 - When completed: _
-- [ ] Build automated tax rule updaters for each jurisdiction (Source: docs/TAX_MODEL.md) - TASK-0010 - When completed: _
-- [ ] Refine ARIMA auto-order selection for the forecasting service (Source: docs/FORECASTING.md & apps/api/services/forecast_service.py) - TASK-0011 - When completed: _
-- [ ] Add exogenous regressors for events, FX, and commodities in forecasts (Source: docs/FORECASTING.md & apps/api/services/forecast_service.py) - TASK-0012 - When completed: _
+- [ ] Add strong typing for tax rule expressions, e.g., JSONLogic schemas (Source: docs/TAX_MODEL.md) - TASK-0007 - When completed:_
+- [ ] Define a precedence and override strategy for layered tax rules (Source: docs/TAX_MODEL.md) - TASK-0008 - When completed:_
+- [ ] Capture source provenance metadata for tax rules (Source: docs/TAX_MODEL.md) - TASK-0009 - When completed:_
+- [ ] Build automated tax rule updaters for each jurisdiction (Source: docs/TAX_MODEL.md) - TASK-0010 - When completed:_
+- [ ] Refine ARIMA auto-order selection for the forecasting service (Source: docs/FORECASTING.md & apps/api/services/forecast_service.py) - TASK-0011 - When completed:_
+- [ ] Add exogenous regressors for events, FX, and commodities in forecasts (Source: docs/FORECASTING.md & apps/api/services/forecast_service.py) - TASK-0012 - When completed:_
 - [ ] Introduce Prophet or other advanced ML regressors to forecasting (Source: docs/FORECASTING.md) - TASK-0013 - When completed: _
 - [ ] Implement causal impact analysis with event interventions (Source: docs/FORECASTING.md) - TASK-0014 - When completed: _
 - [ ] Build a backtesting harness and model registry for forecasting (Source: docs/FORECASTING.md) - TASK-0015 - When completed: _
@@ -59,19 +59,19 @@ Completion note (indented, one line):
 - [ ] Add multi-currency budget scenarios to reports API regression tests (Source: tests/test_reports_api.py) - TASK-0035 - When completed: _
 - [ ] Exercise Streamlit interactions against a live API client abstraction (Source: tests/test_streamlit_app.py) - TASK-0036 - When completed: _
 - [ ] Test metadata utilities with deeply nested array payloads (Source: tests/test_metadata_utils.py) - TASK-0037 - When completed: _
-- [ ] Cover settings overrides for per-environment log destinations (Source: tests/test_config.py) - TASK-0038 - When completed: _
+- [ ] Cover settings overrides for per-environment log destinations (Source: tests/test_config.py) - TASK-0038 - When completed:_
 - [ ] Extend model schema constraint checks to workflow and audit tables (Source: tests/test_model_schema.py) - TASK-0039 - When completed: _
 - [ ] Promote the workflow service helper to a shared fixture for reuse (Source: tests/test_workflow_service.py) - TASK-0040 - When completed: _
-- [ ] Simulate distributed scheduler job runners once queue integration lands (Source: tests/test_scheduler.py) - TASK-0041 - When completed: _
+- [ ] Simulate distributed scheduler job runners once queue integration lands (Source: tests/test_scheduler.py) - TASK-0041 - When completed:_
 - [ ] Remove the legacy alias from the OECD tax plugin stub after downstream migrations (Source: plugins/tax_oecd_stub/__init__.py) - TASK-0042 - When completed: _
-- [ ] Introduce chunked commits for large workflow ingestion batches (Source: apps/api/services/workflow_service.py) - TASK-0043 - When completed: _
-- [ ] Persist validation diagnostics from workflow ingestion for audit review (Source: apps/api/services/workflow_service.py) - TASK-0044 - When completed: _
-- [ ] Validate currency consistency across postings before workflow commit (Source: apps/api/services/workflow_service.py) - TASK-0045 - When completed: _
-- [ ] Surface accounts missing actuals within budget report metadata (Source: apps/api/services/budget_service.py) - TASK-0046 - When completed: _
-- [ ] Apply currency conversion when aggregating multi-currency ledger data (Source: apps/api/services/budget_service.py) - TASK-0047 - When completed: _
-- [ ] Stream large actual datasets instead of loading all rows into memory in budget services (Source: apps/api/services/budget_service.py) - TASK-0048 - When completed: _
-- [ ] Implement provider-specific tax rule upsert logic (Source: apps/api/services/tax_service.py) - TASK-0049 - When completed: _
-- [ ] Remove stale tax rules that no longer appear in provider syncs (Source: apps/api/services/tax_service.py) - TASK-0050 - When completed: _
+- [ ] Introduce chunked commits for large workflow ingestion batches (Source: apps/api/services/workflow_service.py) - TASK-0043 - When completed:_
+- [ ] Persist validation diagnostics from workflow ingestion for audit review (Source: apps/api/services/workflow_service.py) - TASK-0044 - When completed:_
+- [ ] Validate currency consistency across postings before workflow commit (Source: apps/api/services/workflow_service.py) - TASK-0045 - When completed:_
+- [ ] Surface accounts missing actuals within budget report metadata (Source: apps/api/services/budget_service.py) - TASK-0046 - When completed:_
+- [ ] Apply currency conversion when aggregating multi-currency ledger data (Source: apps/api/services/budget_service.py) - TASK-0047 - When completed:_
+- [ ] Stream large actual datasets instead of loading all rows into memory in budget services (Source: apps/api/services/budget_service.py) - TASK-0048 - When completed:_
+- [ ] Implement provider-specific tax rule upsert logic (Source: apps/api/services/tax_service.py) - TASK-0049 - When completed:_
+- [ ] Remove stale tax rules that no longer appear in provider syncs (Source: apps/api/services/tax_service.py) - TASK-0050 - When completed:_
 - [ ] Issue refresh tokens with rotation for long-lived sessions (Source: apps/api/security.py & apps/api/routers/auth.py) - TASK-0051 - When completed: _
 - [ ] Cache organisation membership lookups for high-traffic permission checks (Source: apps/api/security.py) - TASK-0052 - When completed: _
 - [ ] Implement retry and backoff for transient scheduler database connectivity issues (Source: apps/api/scheduler.py) - TASK-0053 - When completed: _
@@ -80,10 +80,11 @@ Completion note (indented, one line):
 - [ ] Revisit audit log context reset handling for cross-thread usage (Source: apps/api/audit.py) - TASK-0056 - When completed: _
 - [ ] Support asynchronous audit log flushing to reduce hot path latency (Source: apps/api/audit.py) - TASK-0057 - When completed: _
 - [ ] Load the provider catalog from persistence so admin edits survive restarts (Source: apps/api/config.py) - TASK-0058 - When completed: _
-- [ ] Replace runtime `create_all` calls with Alembic-managed migrations (Source: apps/api/db.py & docs/reports/001_DIAGNOSIS.md) - TASK-0059 - When completed: _
+- [ ] Replace runtime `create_all` calls with Alembic-managed migrations (Source: apps/api/db.py & docs/reports/001_DIAGNOSIS.md) - TASK-0059 - When completed:_
 - [ ] Swap eager schema creation for idempotent migration bootstrapping (Source: apps/api/db.py) - TASK-0060 - When completed: _
 - [x] Incorporate database and scheduler checks into the health response payload (Source: apps/api/routers/core.py) - TASK-0061 - When completed: 2025-10-30, see docs/reports/README.md
-- [ ] Cache provider metadata and expose version compatibility information in health endpoints (Source: apps/api/routers/core.py) - TASK-0062 - When completed: _
+- [x] Cache provider metadata and expose version compatibility information in health endpoints (Source: apps/api/routers/core.py) - TASK-0062 - When completed: 2025-11-20
+  - Completed: 2025-11-20 — PR: N/A (local) — Providers endpoint now reuses cached descriptors and surfaces version compatibility status in health responses.
 - [ ] Add pagination controls to workflow router staging table endpoints (Source: apps/api/routers/workflow.py) - TASK-0063 - When completed: _
 - [ ] Cache report refresh results to avoid repeated model executions (Source: apps/api/routers/reports.py) - TASK-0064 - When completed: _
 - [ ] Stream large forecast CSV exports to mitigate memory pressure (Source: apps/api/routers/reports.py) - TASK-0065 - When completed: _
@@ -99,11 +100,12 @@ Completion note (indented, one line):
 - [ ] Bind actor context to authentication session identifiers for replay protection (Source: apps/api/dependencies.py) - TASK-0075 - When completed: _
 - [ ] Dispatch background FX sync jobs for longer historical windows (Source: apps/api/routers/fx.py) - TASK-0076 - When completed: _
 - [ ] Capture FX provider latency metrics to tune retry policies (Source: apps/api/routers/fx.py) - TASK-0077 - When completed: _
-- [ ] Implement rate limiting for authentication flows alongside refresh tokens (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0078 - When completed: _
-- [ ] Enforce organisation scoping and pagination safeguards across reports and workflow routers (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0079 - When completed: _
-- [ ] Enhance plugin loader validation, cache invalidation, and health checks (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0080 - When completed: _
-- [ ] Expand strict typing coverage to the remaining services and routers (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0081 - When completed: _
-- [ ] Broaden observability metrics instrumentation per stewardship notes (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0082 - When completed: _
-- [ ] Add structured failure logging hooks during API startup (Source: docs/reports/003_CODEX_STEP1.md) - TASK-0083 - When completed: _
+- [ ] Implement rate limiting for authentication flows alongside refresh tokens (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0078 - When completed:_
+- [ ] Enforce organisation scoping and pagination safeguards across reports and workflow routers (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0079 - When completed:_
+- [ ] Enhance plugin loader validation, cache invalidation, and health checks (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0080 - When completed:_
+- [ ] Expand strict typing coverage to the remaining services and routers (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0081 - When completed:_
+- [ ] Broaden observability metrics instrumentation per stewardship notes (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0082 - When completed:_
+- [x] Add structured failure logging hooks during API startup (Source: docs/reports/003_CODEX_STEP1.md) - TASK-0083 - When completed: 2025-11-20
+  - Completed: 2025-11-20 — PR: N/A (local) — Startup failures now carry structured context and emit detailed abort logs.
 - [ ] Automate plugin cache invalidation when provider configuration changes (Source: docs/reports/003_CODEX_STEP1.md) - TASK-0084 - When completed: _
-- [ ] Implement multi-factor authentication support for secure sign-ins (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0085 - When completed: _
+- [ ] Implement multi-factor authentication support for secure sign-ins (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0085 - When completed:_
