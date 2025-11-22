@@ -26,12 +26,19 @@ class CommandResult:
     duration: float
 
 
-def _run_command(*args: str) -> CommandResult:
+def _run_command(*args: str, raise_on_error: bool = True) -> CommandResult:
     start = time.perf_counter()
-    completed = subprocess.run(args, check=True)
+    try:
+        completed = subprocess.run(args, check=raise_on_error)
+        returncode = completed.returncode
+    except subprocess.CalledProcessError as exc:
+        if raise_on_error:
+            raise
+        completed = exc
+        returncode = exc.returncode
     duration = time.perf_counter() - start
     return CommandResult(
-        command=tuple(args), returncode=completed.returncode, duration=duration
+        command=tuple(args), returncode=returncode, duration=duration
     )
 
 
@@ -56,6 +63,7 @@ def _collect_trace(trace_dir: Path, skip: bool) -> CommandResult | None:
         str(trace_dir),
         "--module",
         "pytest",
+        raise_on_error=False,
     )
 
 
@@ -256,10 +264,10 @@ def main(argv: list[str] | None = None) -> int:
             metrics["coverage"] = {}
 
     target_modules = [
-        Path("cli/macli.py"),
-        Path("apps/modular_accounting/services/snapshot.py"),
-        Path("apps/observability/tracing.py"),
-        Path("apps/extensions/scaffold.py"),
+        Path("src/cli/macli.py"),
+        Path("src/apps/modular_accounting/application/snapshots.py"),
+        Path("src/apps/observability/tracing.py"),
+        Path("src/apps/extensions/scaffold.py"),
     ]
     metrics["complexity"] = _compute_complexity(target_modules)
     metrics["dependencies"] = _dependency_profile(target_modules)

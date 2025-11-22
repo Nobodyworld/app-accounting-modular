@@ -36,4 +36,23 @@ def test_apply_creation_metadata_sets_timezone_aware_fields():
     assert record.created_by_id == 42
     assert record.updated_by_id == 42
     assert record.organization_id == 7
-    # TODO[P2][2d]: Add coverage for update metadata transitions once implemented.
+
+
+def test_apply_creation_metadata_preserves_existing_on_update():
+    """Ensure update flows do not clobber created_at/by when already set."""
+    actor = AuditActor(
+        request_id="r2",
+        user_id=99,
+        organization_id=8,
+        source="test",
+        user_label="other",
+    )
+    existing_created = datetime.now().astimezone()
+    record = DummyRecord(created_at=existing_created, created_by_id=1, organization_id=5)
+    with use_actor(actor):
+        apply_creation_metadata(record)
+
+    assert record.created_at == existing_created
+    assert record.created_by_id == 1
+    assert record.updated_by_id == 99
+    assert record.organization_id == 5

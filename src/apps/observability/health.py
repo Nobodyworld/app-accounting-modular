@@ -27,7 +27,7 @@ class HealthReport:
     severity: str = "critical"
 
 
-HealthCheck = Callable[[], Awaitable[HealthReport] | HealthReport]
+HealthCheck = Callable[[], Awaitable[HealthReport | bool] | HealthReport | bool]
 
 
 class HealthRegistry:
@@ -88,8 +88,6 @@ class HealthRegistry:
                     details={"error": str(exc)},
                 )
             else:
-                if not isinstance(report, HealthReport):  # pragma: no cover - guard
-                    report = HealthReport(name=name, healthy=bool(report))
                 if report.name != name:
                     report = HealthReport(
                         name=name,

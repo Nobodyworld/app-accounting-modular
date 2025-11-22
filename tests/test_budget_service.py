@@ -119,6 +119,25 @@ def test_cashflow_forecast_handles_history() -> None:
         assert cashflow_outputs == 1
 
     # TODO - (budget) Extend coverage to include stress tests for seasonal projections.
+    def test_budget_vs_actual_handles_seasonal_projection_stress(monkeypatch) -> None:
+        with create_session() as session:
+            org_id, budget_id = seed_basic_ledger(session)
+
+        class SlowForecast:
+            def __init__(self):
+                self.calls = 0
+
+            def forecast_series(self, series, horizon, **kwargs):
+                self.calls += 1
+                return type("Result", (), {"points": [(f"2024-0{i+3}-01", 100.0) for i in range(horizon)], "horizon": horizon, "model_order": (0, 0, 0), "diagnostics": {"strategy": "stub"}, "timezone": "UTC"})
+
+        stub = SlowForecast()
+        service = BudgetService(session, forecast_service=stub)  # type: ignore[arg-type]
+        report = service.budget_vs_actual(budget_id, horizon=60, refresh=True)
+
+        assert report.lines
+        assert stub.calls >= 1
+        assert report.metadata.get("forecast_status") in ("success", None)
 
 
 def test_budget_vs_actual_requires_budget() -> None:

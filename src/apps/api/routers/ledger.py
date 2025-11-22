@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
@@ -15,8 +17,10 @@ router = APIRouter(prefix="/ledger", tags=["ledger"])
 
 
 def _service_for_org(session: Session, organization_id: int) -> LedgerService:
-    # TODO - Reuse a per-request service cache to avoid redundant instantiations.
-    return LedgerService(session, organization_id=organization_id)
+    cache = session.info.setdefault("ledger_service_cache", {})
+    if organization_id not in cache:
+        cache[organization_id] = LedgerService(session, organization_id=organization_id)
+    return cache[organization_id]
 
 
 @router.post("/account", response_model=Account)
@@ -35,7 +39,18 @@ def create_account(
     if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_ledger):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    service = _service_for_org(session, org_ctx.organization.id)
+    if payload.code:
+        existing = session.exec(
+            select(Account).where(
+                Account.organization_id == org_ctx.organization.id,
+                Account.code == payload.code,
+            )
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Account code already exists")
+
+    org_id = int(org_ctx.organization.id)  # org IDs are persisted, guard for typing
+    service = _service_for_org(session, org_id)
     data = payload.model_dump(exclude={"organization_id"})
     # TODO - Validate account code uniqueness before delegating to the service layer.
     return service.create_account(**data)
@@ -57,18 +72,23 @@ def post_transaction(
     if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_ledger):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    service = _service_for_org(session, org_ctx.organization.id)
-    # TODO - Capture posting source metadata for reconciliation dashboards.
+    org_id = int(org_ctx.organization.id)
+    service = _service_for_org(session, org_id)
     return service.post_transaction(
         payload.date,
         payload.description,
         list(payload.ledger_payload()),
+        source=payload.source,
+        source_reference=payload.source_reference,
     )
 
 
 @router.get("/trial-balance", response_model=TrialBalanceResponse)
 def trial_balance(
     organization_id: int,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    currency: str | None = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> TrialBalanceResponse:
@@ -82,9 +102,11 @@ def trial_balance(
     if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_ledger or org_ctx.membership.can_manage_tax):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    service = _service_for_org(session, org_ctx.organization.id)
-    # TODO - Support comparative periods and currency filters in trial balance responses.
-    return TrialBalanceResponse.from_service(service.trial_balance())
+    org_id = int(org_ctx.organization.id)
+    service = _service_for_org(session, org_id)
+    return TrialBalanceResponse.from_service(
+        service.trial_balance(start_date=start_date, end_date=end_date, currency=currency)
+    )
 
 
 __all__ = ["router"]

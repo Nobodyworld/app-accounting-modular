@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import logging
+from queue import Empty, Queue
+from threading import Event, Thread
 from typing import Any
 from uuid import uuid4
 
 from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session
 
-from .models.models import AuditAction, AuditLog
+# Import audit models
+from .models import AuditAction, AuditLog
 
 __all__ = [
     "AuditAction",
@@ -61,10 +65,9 @@ def pop_actor(token: Token[AuditActor | None]) -> None:
     except ValueError:
         # When dependencies run in a separate thread (e.g. TestClient thread pool)
         # the context in which the token was created may differ from the context
-        # used during teardown. Ignore the reset in this scenario – the worker
-        # thread already discarded its context.
-        # TODO - Revisit context reset handling for cross-thread usage.
-        pass
+        # used during teardown. Fall back to clearing the actor to avoid leaking
+        # context between requests.
+        _actor_ctx.set(None)
 
 
 @contextmanager
@@ -110,6 +113,11 @@ class AuditLogger:
 
     def __init__(self, session: Session):
         self.session = session
+        self._logger = logging.getLogger(__name__)
+        self._queue: Queue[dict[str, Any]] | None = None
+        self._worker: Thread | None = None
+        self._stop_event: Event | None = None
+        self._session_factory: Callable[[], Session] | None = None
 
     def log(
         self,
@@ -119,37 +127,114 @@ class AuditLogger:
         before: Any = None,
         after: Any = None,
         metadata: Mapping[str, Any] | None = None,
+        asynchronous: bool = False,
     ) -> None:
         """Persist an audit record capturing state transitions."""
 
         actor = get_current_actor()
         before_json = _jsonify(before)
         after_json = _jsonify(after)
-        if isinstance(entity_id, int | float):
+        if isinstance(entity_id, (int, float)):
             entity_id_value: str | None = str(entity_id)
         else:
             entity_id_value = entity_id if entity_id is None else str(entity_id)
 
-        log_entry = AuditLog(
-            ts=datetime.now(UTC),
-            action=action,
-            entity_name=entity_name,
-            entity_id=entity_id_value,
-            before_state=before_json,
-            after_state=after_json,
-            payload_diff=_compute_diff(before_json, after_json),
-            request_id=(actor.request_id if actor else str(uuid4())),
-            actor_user_id=(actor.user_id if actor else None),
-            actor_org_id=(actor.organization_id if actor else None),
-            actor_label=(actor.user_label if actor else None),
-            source=(actor.source if actor else None),
-            context=_jsonify(metadata),
-        )
+        diff = _compute_diff(before_json, after_json)
+        payload: dict[str, Any] = {
+            "ts": datetime.now(UTC),
+            "action": action,
+            "entity_name": entity_name,
+            "entity_id": entity_id_value,
+            "before_state": before_json,
+            "after_state": after_json,
+            "payload_diff": diff,
+            "request_id": (actor.request_id if actor else str(uuid4())),
+            "actor_user_id": (actor.user_id if actor else None),
+            "actor_org_id": (actor.organization_id if actor else None),
+            "actor_label": (actor.user_label if actor else None),
+            "source": (actor.source if actor else None),
+            "context": _jsonify(metadata),
+        }
+
+        if asynchronous:
+            self._enqueue(payload)
+            return
+
+        log_entry = AuditLog(**payload)
         self.session.add(log_entry)
-        # Persist immediately to ensure audit entries are durable even if
-        # subsequent operations fail.
         self.session.commit()
-        # TODO - Support asynchronous flushing to reduce latency on hot paths.
+
+    def _ensure_async_worker(self) -> None:
+        """Initialise the background worker if asynchronous logging is requested."""
+
+        if self._queue is not None:
+            return
+
+        bind = self.session.get_bind()
+        if bind is None:  # pragma: no cover - defensive guard for misconfigured sessions
+            msg = "AuditLogger requires a bound session or session_factory for async flushing"
+            raise RuntimeError(msg)
+        engine = getattr(bind, "engine", bind)
+
+        self._queue = Queue()
+        self._stop_event = Event()
+        self._session_factory = lambda: Session(engine)  # type: ignore[arg-type]
+        self._worker = Thread(target=self._worker_loop, name="audit-flusher", daemon=True)
+        self._worker.start()
+
+    def _enqueue(self, payload: dict[str, Any]) -> None:
+        """Queue audit payloads for background persistence."""
+
+        self._ensure_async_worker()
+        assert self._queue is not None  # for mypy
+        self._queue.put(payload)
+
+    def _worker_loop(self) -> None:
+        """Continuously flush audit records from the queue."""
+
+        assert self._queue is not None
+        assert self._session_factory is not None
+        assert self._stop_event is not None
+
+        while not self._stop_event.is_set() or not self._queue.empty():
+            try:
+                payload = self._queue.get(timeout=0.25)
+            except Empty:
+                continue
+
+            try:
+                with self._session_factory() as session:
+                    session.add(AuditLog(**payload))
+                    session.commit()
+            except Exception as exc:  # pragma: no cover - defensive logging path
+                self._logger.warning("Failed to flush audit log entry", exc_info=exc)
+            finally:
+                self._queue.task_done()
+
+    def flush(self, *, wait: bool = True, timeout: float | None = None) -> None:
+        """Flush buffered audit entries when asynchronous logging is used."""
+
+        if self._queue is None:
+            return
+        if not wait:
+            return
+        self._queue.join()
+
+    def close(self) -> None:
+        """Terminate the background worker after flushing outstanding entries."""
+
+        if self._stop_event is None or self._queue is None:
+            return
+        self._stop_event.set()
+        self._queue.join()
+        if self._worker is not None:
+            self._worker.join(timeout=1)
+
+    def __del__(self) -> None:  # pragma: no cover - best-effort cleanup
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 def apply_creation_metadata(record: Any) -> None:
@@ -160,18 +245,18 @@ def apply_creation_metadata(record: Any) -> None:
 
     if hasattr(record, "created_at"):
         if getattr(record, "created_at", None) is None:
-            record.created_at = now  # type: ignore[attr-defined]
+            record.created_at = now
     if hasattr(record, "updated_at"):
-        record.updated_at = now  # type: ignore[attr-defined]
+        record.updated_at = now
 
     if actor is None:
         return
 
     if hasattr(record, "created_by_id"):
         if getattr(record, "created_by_id", None) is None:
-            record.created_by_id = actor.user_id  # type: ignore[attr-defined]
+            record.created_by_id = actor.user_id
     if hasattr(record, "updated_by_id"):
-        record.updated_by_id = actor.user_id  # type: ignore[attr-defined]
+        record.updated_by_id = actor.user_id
     if hasattr(record, "organization_id"):
         if getattr(record, "organization_id", None) is None:
-            record.organization_id = actor.organization_id  # type: ignore[attr-defined]
+            record.organization_id = actor.organization_id

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from decimal import Decimal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from ..db import get_session
 from ..schemas import (
+    StagedPostingIngest,
     StagedPostingRead,
     StagedTransactionRead,
     WorkflowIngestRequest,
@@ -19,7 +22,13 @@ from ..services.workflow_service import WorkflowService
 router = APIRouter(prefix="/workflow", tags=["workflow"])
 
 
-def _posting_payload(posting: StagedPostingRead) -> dict[str, object]:
+def _require_id(value: int | None, *, label: str) -> int:
+    if value is None:
+        raise HTTPException(status_code=500, detail=f"{label} missing identifier")
+    return value
+
+
+def _posting_payload(posting: StagedPostingRead | StagedPostingIngest) -> dict[str, object]:
     return {
         "account_id": posting.account_id,
         "account_code": posting.account_code,
@@ -27,7 +36,7 @@ def _posting_payload(posting: StagedPostingRead) -> dict[str, object]:
         "debit": float(posting.debit),
         "credit": float(posting.credit),
         "currency": posting.currency,
-        "metadata": posting.metadata,
+        "metadata": getattr(posting, "metadata", {}),
     }
 
 
@@ -54,10 +63,11 @@ def ingest_transactions(payload: WorkflowIngestRequest, s: Session = Depends(get
 
     results = []
     if payload.auto_process:
-        results = svc.process_transactions([item.id for item in staged])
+        staged_ids: list[int] = [_require_id(item.id, label="staged transaction") for item in staged]
+        results = svc.process_transactions(staged_ids)
 
     return WorkflowIngestResponse(
-        staged_ids=[item.id for item in staged],
+        staged_ids=[_require_id(item.id, label="staged transaction") for item in staged],
         results=[WorkflowResultSchema.from_result(result) for result in results],
     )
 
@@ -69,7 +79,8 @@ def process_transactions(
     """Trigger validation/posting for staged transactions."""
 
     svc = WorkflowService(s)
-    results = svc.process_transactions(payload.staged_ids, auto_post=payload.auto_post)
+    staged_ids = list(payload.staged_ids or [])
+    results = svc.process_transactions(staged_ids, auto_post=payload.auto_post)
     return [WorkflowResultSchema.from_result(result) for result in results]
 
 
@@ -83,21 +94,22 @@ def get_staged_transaction(staged_id: int, s: Session = Depends(get_session)) ->
         raise HTTPException(status_code=404, detail="Staged transaction not found")
 
     staged, postings = record
+    staged_id = _require_id(staged.id, label="staged transaction")
     posting_models = [
         StagedPostingRead(
-            id=post.id,
+            id=_require_id(post.id, label="staged posting"),
             account_id=post.account_id,
             account_code=post.account_code,
             account_name=post.account_name,
-            debit=post.debit,
-            credit=post.credit,
+            debit=Decimal(str(post.debit)),
+            credit=Decimal(str(post.credit)),
             currency=post.currency,
             metadata=post.context,
         )
         for post in postings
     ]
     return StagedTransactionRead(
-        id=staged.id,
+        id=staged_id,
         date=staged.date,
         description=staged.description,
         status=staged.status,
@@ -114,21 +126,25 @@ def get_staged_transaction(staged_id: int, s: Session = Depends(get_session)) ->
 
 @router.get("", response_model=list[StagedTransactionRead])
 @router.get("/", response_model=list[StagedTransactionRead], include_in_schema=False)
-def list_staged_transactions(s: Session = Depends(get_session)) -> list[StagedTransactionRead]:
+def list_staged_transactions(
+    s: Session = Depends(get_session),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[StagedTransactionRead]:
     """List staged transactions ordered by creation time."""
 
     svc = WorkflowService(s)
     items: list[StagedTransactionRead] = []
-    # TODO - Add pagination parameters to avoid loading entire staging tables.
-    for staged, postings in svc.list_transactions():
+    for staged, postings in svc.list_transactions(limit=limit, offset=offset):
+        staged_id = _require_id(staged.id, label="staged transaction")
         posting_models = [
             StagedPostingRead(
-                id=post.id,
+                id=_require_id(post.id, label="staged posting"),
                 account_id=post.account_id,
                 account_code=post.account_code,
                 account_name=post.account_name,
-                debit=post.debit,
-                credit=post.credit,
+                debit=Decimal(str(post.debit)),
+                credit=Decimal(str(post.credit)),
                 currency=post.currency,
                 metadata=post.context,
             )
@@ -136,7 +152,7 @@ def list_staged_transactions(s: Session = Depends(get_session)) -> list[StagedTr
         ]
         items.append(
             StagedTransactionRead(
-                id=staged.id,
+                id=staged_id,
                 date=staged.date,
                 description=staged.description,
                 status=staged.status,

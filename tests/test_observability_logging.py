@@ -137,3 +137,38 @@ def test_request_context_middleware_assigns_request_ids() -> None:
 
 
 # TODO - (logging) Validate structured logging under multiprocessing executors.
+def test_logging_context_survives_multiprocessing(tmp_path) -> None:
+    """Ensure child processes can emit logs with contextual fields."""
+    configure_logging("INFO", "JSON", service_name="svc-mp", force=True)
+
+    import multiprocessing as mp
+
+    def worker(queue):
+        with logging_context(correlation_id="cid-child"):
+            logger = logging.getLogger("tests.multiproc")
+            logger.info("child log")
+            handlers = logger.handlers or logging.getLogger().handlers
+            if not handlers:
+                return
+            handler = handlers[0]
+            record = logging.LogRecord(
+                name="tests.multiproc",
+                level=logging.INFO,
+                pathname=__file__,
+                lineno=0,
+                msg="child log",
+                args=(),
+                exc_info=None,
+            )
+            ContextFilter().filter(record)
+            queue.put(handler.format(record))
+
+    queue: mp.Queue[str] = mp.Queue()
+    proc = mp.Process(target=worker, args=(queue,))
+    proc.start()
+    proc.join(timeout=10)
+    assert proc.exitcode == 0
+    output = queue.get(timeout=5)
+    payload = json.loads(output)
+    assert payload["correlation_id"] == "cid-child"
+    assert payload["message"] == "child log"

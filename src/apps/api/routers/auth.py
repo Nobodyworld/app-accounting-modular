@@ -5,13 +5,14 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
 from threading import Lock
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 
 from ..db import get_session
-from ..security import authenticate_user, create_access_token
+from ..security import authenticate_user, create_access_token, create_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -74,6 +75,12 @@ def login(
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     with _lock:
         _clear_failures(identifier)
-    token = create_access_token({"sub": str(user.id)})
-    # TODO - Issue refresh tokens to support longer-lived sessions securely.
-    return {"access_token": token, "token_type": "bearer"}
+    session_id = str(uuid4())
+    access_token = create_access_token({"sub": str(user.id), "sid": session_id})
+    refresh_token = create_refresh_token(user.id, session_id=session_id)
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "session_id": session_id,
+        "token_type": "bearer",
+    }

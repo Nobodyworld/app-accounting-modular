@@ -36,6 +36,30 @@ def _provider_compatibility_summary(providers: list[dict[str, Any]]) -> dict[str
     return counts
 
 
+def _provider_compatibility_alerts(providers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a list of provider compatibility alerts for surfaced diagnostics."""
+
+    alerts: list[dict[str, Any]] = []
+    for provider in providers:
+        if not isinstance(provider, dict):
+            continue
+        compatibility = provider.get("compatibility")
+        if not isinstance(compatibility, dict):
+            continue
+        status = compatibility.get("status")
+        if status == "incompatible":
+            alerts.append(
+                {
+                    "provider": provider.get("key") or provider.get("name"),
+                    "status": status,
+                    "reason": compatibility.get("reason"),
+                    "provider_version": compatibility.get("provider_version"),
+                    "api_version": compatibility.get("api_version"),
+                }
+            )
+    return alerts
+
+
 @router.get("/health")
 async def health() -> dict[str, Any]:
     """Return aggregated health information for core subsystems."""
@@ -92,6 +116,7 @@ async def health() -> dict[str, Any]:
         "status": status,
         "providers": providers,
         "provider_compatibility": _provider_compatibility_summary(providers),
+        "provider_alerts": _provider_compatibility_alerts(providers),
         "checks": checks,
         "database": database,
         "scheduler": scheduler,

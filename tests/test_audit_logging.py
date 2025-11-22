@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from apps.api.audit import AuditActor, use_actor
+from apps.api.audit import AuditActor, AuditLogger, use_actor
 from apps.api.models.models import (
     AuditAction,
     AuditLog,
@@ -27,7 +28,7 @@ from apps.api.services.tax_service import BaseTaxProvider, TaxService
 
 def _create_session() -> Session:
     """Initialise an isolated in-memory database session for audit tests."""
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
     return Session(engine, expire_on_commit=False)
 
@@ -80,6 +81,29 @@ class _StubTaxProvider(BaseTaxProvider):
 
 
 # TODO - (audit) Simulate concurrent writes to verify audit log race condition handling.
+def test_concurrent_async_audit_logs() -> None:
+    with _create_session() as session:
+        logger = AuditLogger(session)
+        count = 20
+
+        def _worker(idx: int) -> None:
+            logger.log(
+                AuditAction.CREATE,
+                "Concurrent",
+                idx,
+                after={"index": idx},
+                asynchronous=True,
+            )
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            for i in range(count):
+                pool.submit(_worker, i)
+
+        logger.flush()
+        rows = session.exec(select(AuditLog).where(AuditLog.entity_name == "Concurrent")).all()
+        assert len(rows) == count
 
 
 def test_ledger_post_transaction_creates_audit_entry() -> None:
@@ -238,3 +262,43 @@ def test_tax_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) 
 
         assert rollback_called is True
         assert session.exec(select(TaxRule)).all() == []
+
+
+def test_async_audit_logging_flushes_background_entries() -> None:
+    with _create_session() as session:
+        logger = AuditLogger(session)
+        logger.log(
+            AuditAction.CREATE,
+            "Entity",
+            1,
+            after={"field": "value"},
+            asynchronous=True,
+        )
+        logger.flush()
+        stmt = select(AuditLog).where(AuditLog.entity_name == "Entity")
+        log = session.exec(stmt).first()
+        assert log is not None
+        assert log.after_state == {"field": "value"}
+
+
+def test_async_audit_logging_handles_flush_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    with _create_session() as session:
+        logger = AuditLogger(session)
+
+        class FailingSession:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+            def add(self, _: object) -> None:
+                return None
+
+            def commit(self) -> None:
+                raise RuntimeError("boom")
+
+        logger.log(AuditAction.CREATE, "Entity", 1, asynchronous=True)
+        logger._session_factory = lambda: FailingSession()  # type: ignore[assignment]
+        logger.flush()
+        logger.close()

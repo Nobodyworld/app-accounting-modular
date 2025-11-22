@@ -13,7 +13,9 @@ from apps.api.db import get_session
 from apps.api.main import create_app
 from apps.api.models.models import AuditLog, Membership, Organization, User
 from apps.api.routers import auth as auth_router
-from apps.api.security import create_access_token, get_password_hash
+from apps.api.security import create_access_token, create_refresh_token, get_password_hash
+from jose import jwt
+from apps.api.config import settings
 from apps.api.services.ledger_service import LedgerService
 
 
@@ -132,6 +134,26 @@ def test_role_based_access_blocks_tax_sync(api_context):
     assert response.status_code == 403
 
 
+def test_refresh_token_generation() -> None:
+    token = create_refresh_token(123)
+    decoded = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+    assert decoded["sub"] == "123"
+    assert decoded["type"] == "refresh"
+    assert "sid" in decoded
+
+
+def test_login_returns_refresh_token(api_context) -> None:
+    client, _, _ = api_context
+    resp = client.post("/auth/token", data={"username": "admin@example.com", "password": "secret"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "refresh_token" in body
+    assert "session_id" in body
+    decoded = jwt.decode(body["refresh_token"], settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+    assert decoded["type"] == "refresh"
+    assert decoded["sid"] == body["session_id"]
+
+
 def test_multi_tenant_isolation(api_context):
     client, ctx, _ = api_context
     admin_headers = {"Authorization": f"Bearer {ctx['tokens']['admin']}"}
@@ -185,3 +207,17 @@ def test_login_throttling_and_audit_logging(api_context):
     assert len(entries) >= 6  # five failures + one success
     statuses = {entry.after_state["success"] for entry in entries}
     assert statuses == {True, False}
+
+
+def test_lockout_shared_across_clients(api_context) -> None:
+    client, _, _ = api_context
+    # trigger lockout in first client
+    for _ in range(5):
+        client.post("/auth/token", data={"username": "member@example.com", "password": "wrong"})
+    locked = client.post("/auth/token", data={"username": "member@example.com", "password": "wrong"})
+    assert locked.status_code == 429
+
+    # new client instance should still enforce lockout because cache is shared
+    second = TestClient(create_app())
+    response = second.post("/auth/token", data={"username": "member@example.com", "password": "wrong"})
+    assert response.status_code == 429

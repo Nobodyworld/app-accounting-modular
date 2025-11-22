@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from time import sleep
 from threading import Lock
-from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -18,10 +18,7 @@ from apps.observability.logging import logging_context
 from .db import engine
 from .services.budget_service import BudgetService
 
-if TYPE_CHECKING:  # pragma: no cover - import for typing only
-    from .models.models import ForecastPlan
-else:  # pragma: no cover - runtime placeholder for optional models
-    ForecastPlan = Any
+from .models.models import ForecastPlan
 
 __all__ = [
     "start_scheduler",
@@ -31,14 +28,27 @@ __all__ = [
 
 _scheduler: BackgroundScheduler | None = None
 _scheduler_lock = Lock()
-_SCHEDULE_INTERVAL = timedelta(hours=6)
+_SCHEDULE_INTERVAL = timedelta(minutes=15)
+_RETRY_DELAY_SECONDS = (1, 2, 4)
+_last_run_at: datetime | None = None
 logger = logging.getLogger(__name__)
 
 
 @contextmanager
 def _session_scope() -> Iterator[Session]:
-    session = Session(engine)
-    # TODO[P2][3d]: Implement retry/backoff for transient database connectivity issues.
+    attempt = 0
+    while True:
+        try:
+            session = Session(engine)
+            break
+        except Exception:
+            if attempt >= len(_RETRY_DELAY_SECONDS):
+                raise
+            delay = _RETRY_DELAY_SECONDS[attempt]
+            attempt += 1
+            logger.warning("Failed to create DB session; retrying", extra={"attempt": attempt, "delay": delay})
+            sleep(delay)
+
     try:
         yield session
     finally:
@@ -50,10 +60,25 @@ def _refresh_plan(service: BudgetService, plan: ForecastPlan) -> None:
         service.budget_vs_actual(plan.budget_id, horizon=plan.horizon, refresh=True)
     else:
         service.cashflow_forecast(plan.organization_id, horizon=plan.horizon, refresh=True)
+    plan.last_refreshed_at = datetime.now(UTC)
 
 
 def _run_scheduled_refresh() -> None:
     correlation = f"scheduler-{uuid4()}"
+    global _last_run_at
+    now = datetime.now(UTC)
+    if _last_run_at is not None:
+        delay = (now - _last_run_at) - _SCHEDULE_INTERVAL
+        if delay.total_seconds() > 0:
+            logger.warning(
+                "Scheduler refresh cadence behind schedule",
+                extra={
+                    "delay_seconds": int(delay.total_seconds()),
+                    "last_run_at": _last_run_at.isoformat(),
+                    "expected_interval_seconds": int(_SCHEDULE_INTERVAL.total_seconds()),
+                },
+            )
+    _last_run_at = now
     with logging_context(
         correlation_id=correlation,
         request_id=correlation,
@@ -63,11 +88,18 @@ def _run_scheduled_refresh() -> None:
         # TODO[P2][2d]: Emit metrics or alerts when refresh cadence falls behind schedule.
         with _session_scope() as session:
             service = BudgetService(session)
-            plans = session.exec(select(ForecastPlan).where(ForecastPlan.is_active.is_(True))).all()
+            plans = session.exec(select(ForecastPlan).where(ForecastPlan.is_active == True)).all()  # noqa: E712
             if not plans:
                 logger.info("No active forecast plans available for refresh")
                 return
             for plan in plans:
+                interval = timedelta(minutes=plan.refresh_interval_minutes or int(_SCHEDULE_INTERVAL.total_seconds() / 60))
+                if plan.last_refreshed_at is not None:
+                    refreshed = plan.last_refreshed_at
+                    if refreshed.tzinfo is None:
+                        refreshed = refreshed.replace(tzinfo=UTC)
+                    if (now - refreshed) < interval:
+                        continue
                 with logging_context(
                     plan_id=plan.id,
                     organization_id=plan.organization_id,
@@ -77,7 +109,15 @@ def _run_scheduled_refresh() -> None:
                         _refresh_plan(service, plan)
                         logger.info("Refreshed forecast plan")
                     except Exception:
-                        logger.exception("Failed to refresh forecast plan")
+                        logger.exception(
+                            "Failed to refresh forecast plan",
+                            extra={
+                                "plan_id": plan.id,
+                                "organization_id": plan.organization_id,
+                                "budget_id": plan.budget_id,
+                            },
+                        )
+            session.commit()
 
 
 def start_scheduler() -> None:

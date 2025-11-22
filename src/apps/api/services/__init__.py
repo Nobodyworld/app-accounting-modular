@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 __all__ = [
     "BudgetService",
@@ -39,6 +39,21 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     ),
     "load_provider": ("apps.api.services.plugin_loader", "load_provider"),
 }
+
+if TYPE_CHECKING:  # pragma: no cover - for static analyzers
+    from .budget_service import BudgetService
+    from .forecast_service import ForecastService
+    from .fx_service import FXService
+    from .ledger_service import LedgerService
+    from .market_service import MarketService
+    from .plugin_loader import ProviderHandle, ProviderMetadata, available_providers, load_provider
+    from .extension_loader import active_extensions, load_configured_extensions
+    from .tax_service import TaxService
+    from .workflow_service import WorkflowService
+else:
+    BudgetService = ForecastService = FXService = LedgerService = MarketService = None  # type: ignore[assignment]
+    ProviderHandle = ProviderMetadata = available_providers = load_provider = None  # type: ignore[assignment]
+    active_extensions = load_configured_extensions = TaxService = WorkflowService = None  # type: ignore[assignment]
 
 
 def __getattr__(name: str) -> Any:

@@ -36,3 +36,13 @@ jobs:
       - name: Run tests
         run: |
           pytest -q
+
+      - name: Run audit report
+        run: |
+          make audit
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-latest
+          path: docs/reports/audit-latest.md

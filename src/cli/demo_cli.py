@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
+import json
 
 import click
 

@@ -23,10 +23,12 @@ def list_audit_logs(
     end: datetime | None = Query(default=None),
     request_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
+    after_id: int | None = Query(default=None, description="Fetch entries older than this id for pagination"),
 ) -> list[AuditLogSchema]:
     """Return audit entries filtered by optional parameters."""
-
     stmt = select(AuditLog).order_by(AuditLog.ts.desc()).limit(limit)
+    if after_id is not None:
+        stmt = stmt.where(AuditLog.id < after_id)
     if entity:
         stmt = stmt.where(AuditLog.entity_name == entity)
     if user_id is not None:
@@ -39,5 +41,4 @@ def list_audit_logs(
         stmt = stmt.where(AuditLog.ts <= end)
 
     logs = s.exec(stmt).all()
-    # TODO - Add cursor-based pagination to support browsing long audit histories.
     return [AuditLogSchema.model_validate(log) for log in logs]

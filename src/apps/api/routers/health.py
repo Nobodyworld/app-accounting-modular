@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from starlette.responses import Response
 
 from apps.api.services.extension_loader import active_extensions
 from apps.observability.health import health_registry
@@ -40,7 +41,7 @@ async def ready() -> dict[str, object]:
 
 
 @router.get("/metrics", summary="Prometheus metrics")
-def metrics():
+def metrics() -> Response:
     """Expose metrics in Prometheus text format."""
 
     return metrics_response(metrics_registry)

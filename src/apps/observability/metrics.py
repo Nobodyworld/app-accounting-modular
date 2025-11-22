@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Protocol
+from typing import Any, Protocol, TYPE_CHECKING, cast
 
-try:  # pragma: no cover - prefer real library when available
-    from prometheus_client import (  # type: ignore[import]
+if TYPE_CHECKING:  # pragma: no cover - type checking only imports
+    from prometheus_client import (  # type: ignore[import-not-found]
         CONTENT_TYPE_LATEST,
         CollectorRegistry,
         Counter,
@@ -19,19 +19,29 @@ try:  # pragma: no cover - prefer real library when available
         Histogram,
         generate_latest,
     )
-except Exception:  # pragma: no cover - fallback for air-gapped environments
-    CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
+else:  # pragma: no cover - runtime import with fallback
+    try:
+        from prometheus_client import (
+            CONTENT_TYPE_LATEST,
+            CollectorRegistry,
+            Counter,
+            Gauge,
+            Histogram,
+            generate_latest,
+        )
+    except Exception:
+        CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
 
-    class CollectorRegistry:  # type: ignore[override]
-        def __init__(self) -> None:
-            self._metrics: list[_BaseMetric] = []
+        class CollectorRegistry:
+            def __init__(self) -> None:
+                self._metrics: list[_BaseMetric] = []
 
-        def register(self, metric: _BaseMetric) -> None:
-            self._metrics.append(metric)
+            def register(self, metric: "_BaseMetric") -> None:
+                self._metrics.append(metric)
 
-        @property
-        def metrics(self) -> list[_BaseMetric]:
-            return self._metrics
+            @property
+            def metrics(self) -> list["_BaseMetric"]:
+                return self._metrics
 
     class _MetricHandle:
         def __init__(self, metric: _BaseMetric, key: tuple[str, ...]) -> None:
@@ -84,10 +94,15 @@ except Exception:  # pragma: no cover - fallback for air-gapped environments
         def __enter__(self) -> None:
             self._metric._add(self._key, 1.0)
 
-        def __exit__(self, exc_type, exc, tb) -> None:
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: TracebackType | None,
+        ) -> None:
             self._metric._add(self._key, -1.0)
 
-    class Counter(_BaseMetric):  # type: ignore[override]
+    class Counter(_BaseMetric):
         def __init__(
             self,
             name: str,
@@ -98,7 +113,7 @@ except Exception:  # pragma: no cover - fallback for air-gapped environments
         ) -> None:
             super().__init__(name, documentation, labelnames, registry)
 
-    class Gauge(_BaseMetric):  # type: ignore[override]
+    class Gauge(_BaseMetric):
         def __init__(
             self,
             name: str,
@@ -109,7 +124,7 @@ except Exception:  # pragma: no cover - fallback for air-gapped environments
         ) -> None:
             super().__init__(name, documentation, labelnames, registry)
 
-    class Histogram(_BaseMetric):  # type: ignore[override]
+    class Histogram(_BaseMetric):
         def __init__(
             self,
             name: str,
@@ -122,17 +137,19 @@ except Exception:  # pragma: no cover - fallback for air-gapped environments
             super().__init__(name, documentation, labelnames, registry)
             self._buckets = buckets or ()
 
-    def generate_latest(registry: CollectorRegistry) -> bytes:  # type: ignore[override]
+    def generate_latest(registry: CollectorRegistry) -> bytes:
         lines: list[str] = []
         for metric in registry.metrics:
             for key, value in metric._values.items():
-                labels = ",".join(f'{name}="{val}"' for name, val in zip(metric._labelnames, key, strict=False) if name)
+                labels = ",".join(
+                    f'{name}="{val}"' for name, val in zip(metric._labelnames, key, strict=False) if name
+                )
                 label_str = f"{{{labels}}}" if labels else ""
                 lines.append(f"{metric.name}{label_str} {value}")
         return ("\n".join(lines) + "\n").encode()
 
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -168,11 +185,13 @@ __all__ = [
 ]
 
 
-def _normalise_route(scope: dict[str, Any]) -> str:
+def _normalise_route(scope: Mapping[str, Any]) -> str:
     route = scope.get("route")
     if route is None:
-        return scope.get("path", "<unrouted>")
-    return getattr(route, "path", getattr(route, "name", "<unknown>"))
+        path = scope.get("path")
+        return path if isinstance(path, str) else "<unrouted>"
+    path = getattr(route, "path", None) or getattr(route, "name", None)
+    return path if isinstance(path, str) else "<unknown>"
 
 
 @dataclass(slots=True)
@@ -197,6 +216,7 @@ class MetricsRegistry:
     scenario_runs_total: Counter
     scenario_latency_seconds: Histogram
     scenario_inflight: Gauge
+    header_malformed_total: Counter
 
     @classmethod
     def create(cls) -> MetricsRegistry:
@@ -365,6 +385,12 @@ class MetricsRegistry:
             labelnames=("scenario", "tags"),
             registry=registry,
         )
+        header_malformed_total = Counter(
+            "modacct_header_malformed_total",
+            "Count of malformed identifier headers received.",
+            labelnames=("header",),
+            registry=registry,
+        )
         return cls(
             registry=registry,
             request_total=request_total,
@@ -384,12 +410,13 @@ class MetricsRegistry:
             scenario_runs_total=scenario_runs_total,
             scenario_latency_seconds=scenario_latency,
             scenario_inflight=scenario_inflight,
+            header_malformed_total=header_malformed_total,
         )
 
     def render_latest(self) -> bytes:
         """Return the Prometheus exposition for the registry."""
 
-        return generate_latest(self.registry)
+        return cast(bytes, generate_latest(self.registry))
 
 
 metrics_registry = MetricsRegistry.create()
@@ -578,8 +605,8 @@ class RequestMetricsMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._registry = registry
 
-    async def dispatch(  # type: ignore[override]
-        self, request: Request, call_next: Callable[[Request], Any]
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         route = _normalise_route(request.scope)
         method = request.method

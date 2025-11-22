@@ -121,5 +121,18 @@ def test_prepare_metadata_for_response_combines_normalisation_steps() -> None:
     assert prepared["generated_at"].tzinfo == UTC
     assert prepared["forecast_diagnostics"] == {"observations": 5, "flag": True}
 
+def test_prepare_metadata_handles_deeply_nested_arrays() -> None:
+    metadata = {
+        "forecastDiagnostics": {
+            "observations": 2,
+            "nested": [["a", {"value": Decimal("1.5")}], [{"value": date(2024, 1, 1)}]],
+        }
+    }
 
-# TODO - (metadata) Test resilience when metadata contains deeply nested arrays.
+    prepared = prepare_metadata_for_response(metadata)
+    diagnostics = prepared["forecast_diagnostics"]
+    assert diagnostics["observations"] == 2
+    # Nested arrays should be coerced to string representations without errors.
+    nested = diagnostics["nested"]
+    assert isinstance(nested, str)
+    assert "datetime.date(2024, 1, 1)" in nested

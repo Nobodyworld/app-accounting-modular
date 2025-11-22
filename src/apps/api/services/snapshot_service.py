@@ -91,11 +91,12 @@ class ProviderCommodityPort(CommodityDataPort):
         self._lookback_days = lookback_days
         self._today = today or date.today
 
-    def get_quotes(self, symbols: Sequence[str]) -> Iterable[CommodityQuote]:
+    def get_quotes(self, symbols: Sequence[str]) -> list[CommodityQuote]:
         if not symbols:
             return []
         end = self._today()
         start = end - timedelta(days=self._lookback_days - 1)
+        quotes: list[CommodityQuote] = []
         for symbol in symbols:
             prices = list(self._provider.fetch_prices(symbol, start, end))
             if not prices:
@@ -115,11 +116,14 @@ class ProviderCommodityPort(CommodityDataPort):
                 if isinstance(price_date, date)
                 else datetime.now(tz=UTC)
             )
-            yield CommodityQuote(
-                symbol=symbol,
-                price=Money(amount=Decimal(str(closing)), currency=self._currency),
-                as_of=as_of,
+            quotes.append(
+                CommodityQuote(
+                    symbol=symbol,
+                    price=Money(amount=Decimal(str(closing)), currency=self._currency),
+                    as_of=as_of,
+                )
             )
+        return quotes
 
 
 class ProviderTaxPort(TaxDataPort):
@@ -274,7 +278,7 @@ class SnapshotOrchestrator:
 def snapshot_to_payload(snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None) -> dict[str, object]:
     """Return a dictionary representation of :class:`DataSnapshot`."""
 
-    payload = {
+    payload: dict[str, object] = {
         "fx_rates": [
             {
                 "base_currency": rate.base_currency,
@@ -332,7 +336,7 @@ def scenario_batch_to_payload(batch: ScenarioBatchResult) -> dict[str, object]:
         results_payload.append(scenario_payload)
 
     summary = batch.summary
-    summary_payload = {
+    summary_payload: dict[str, object] = {
         "scenario_count": summary.scenario_count,
         "base_currencies": list(summary.base_currencies),
         "commodity_symbols": list(summary.commodity_symbols),

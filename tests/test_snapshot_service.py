@@ -1,5 +1,6 @@
 from datetime import date
 
+import pytest
 from apps.api.models.models import Price, Rate
 from apps.api.models.models import TaxRule as DBTaxRule
 from apps.api.services.plugin_loader import ProviderHandle, ProviderMetadata
@@ -156,3 +157,34 @@ def test_snapshot_orchestrator_runs_scenarios() -> None:
     assert payload["summary"]["scenario_count"] == 2
     assert payload["results"][0]["name"] == "metals"
     assert payload["results"][1]["providers"]["tax"] == "tax:stub"
+
+
+def test_snapshot_orchestrator_marks_missing_sections() -> None:
+    load, catalog = _resolver()
+    orchestrator = SnapshotOrchestrator(
+        provider_loader=load,
+        provider_catalog=catalog,
+        commodity_lookback_days=1,
+    )
+
+    result = orchestrator.build_snapshot(
+        base_currency="USD",
+        commodity_symbols=(),
+        jurisdictions=(),
+    )
+
+    assert result.diagnostics.fx_rate_count == 2
+    assert "commodities" in result.diagnostics.missing_sections
+    assert "tax" in result.diagnostics.missing_sections
+
+
+def test_snapshot_orchestrator_rejects_empty_scenarios() -> None:
+    load, catalog = _resolver()
+    orchestrator = SnapshotOrchestrator(
+        provider_loader=load,
+        provider_catalog=catalog,
+        commodity_lookback_days=1,
+    )
+
+    with pytest.raises(ValueError):
+        orchestrator.run_scenarios([])

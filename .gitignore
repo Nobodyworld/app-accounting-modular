@@ -100,6 +100,9 @@ ipython_config.py
 .venv
 env/
 venv/
+.venv313
+.venv313/
+venv313
 ENV/
 env.bak/
 venv.bak/

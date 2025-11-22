@@ -29,6 +29,7 @@ from ..models.models import (
     ForecastPlan,
     JournalEntry,
     Organization,
+    Rate,
     Transaction,
 )
 from ..utils.metadata import merge_forecast_diagnostics
@@ -195,7 +196,7 @@ class BudgetService:
         if not budget_lines:
             raise ValueError("Budget contains no lines to analyse")
 
-        actuals = self._collect_actuals(account_ids, period_keys)
+        actuals = self._collect_actuals(accounts_by_id, period_keys, budget.currency)
         forecast_series = self._forecast_by_account(actuals, plan.horizon)
         # TODO - Surface accounts missing actuals in report metadata for diagnostics.
 
@@ -376,7 +377,31 @@ class BudgetService:
             self.session.refresh(plan)
         return plan
 
-    def _collect_actuals(self, account_ids: Iterable[int], periods: Iterable[date]) -> dict[tuple[int, date], Decimal]:
+    def _convert_currency(self, amount: Decimal, from_ccy: str, to_ccy: str, as_of: date) -> Decimal | None:
+        if from_ccy == to_ccy:
+            return amount
+        rate_stmt = (
+            select(Rate.value)
+            .where(Rate.base == from_ccy)
+            .where(Rate.quote == to_ccy)
+            .where(Rate.date <= as_of)
+            .order_by(Rate.date.desc())
+        )
+        rate = self.session.exec(rate_stmt).first()
+        if rate is None:
+            logger.warning(
+                "Missing FX rate for conversion",
+                extra={"base": from_ccy, "quote": to_ccy, "as_of": as_of.isoformat()},
+            )
+            return None
+        return amount * Decimal(str(rate))
+
+    def _collect_actuals(
+        self,
+        accounts_by_id: dict[int, Account],
+        periods: Iterable[date],
+        budget_currency: str,
+    ) -> dict[tuple[int, date], Decimal]:
         period_set = {self._period_key(p) for p in periods}
         if not period_set:
             return {}
@@ -387,21 +412,24 @@ class BudgetService:
         stmt = (
             select(JournalEntry.account_id, Transaction.date, JournalEntry.debit, JournalEntry.credit)
             .join(Transaction, Transaction.id == JournalEntry.transaction_id)
-            .where(JournalEntry.account_id.in_(set(account_ids)))
+            .where(JournalEntry.account_id.in_(set(accounts_by_id.keys())))
             .where(Transaction.date >= min_period)
             .where(Transaction.date <= self._period_month_end(max_period))
         )
 
-        rows = self.session.exec(stmt).all()
         actuals: dict[tuple[int, date], Decimal] = defaultdict(lambda: Decimal("0"))
-        for account_id, txn_date, debit, credit in rows:
+        result = self.session.exec(stmt)
+        for account_id, txn_date, debit, credit in result.yield_per(1000):
             if txn_date is None:
                 continue
             period = self._period_key(txn_date)
             key = (account_id, period)
-            actuals[key] += Decimal(str(debit)) - Decimal(str(credit))
-        # TODO - Apply currency conversion when aggregating multi-currency ledgers.
-        # TODO - Stream large actual datasets instead of loading all rows into memory.
+            raw_amount = Decimal(str(debit)) - Decimal(str(credit))
+            account_currency = accounts_by_id.get(account_id).currency if accounts_by_id.get(account_id) else budget_currency
+            converted = self._convert_currency(raw_amount, account_currency, budget_currency, txn_date)
+            if converted is None:
+                continue
+            actuals[key] += converted
 
         return actuals
 
@@ -482,6 +510,7 @@ class BudgetService:
                 model_order=tuple(output.summary.get("model_order", (0, 0, 0))),
                 diagnostics=output.summary.get("diagnostics"),
                 timezone=output.summary.get("timezone"),
+                model=output.summary.get("model", "arima"),
             )
 
         metadata = output.context or {}
@@ -527,6 +556,7 @@ class BudgetService:
                 "forecast": payload.forecast.points if payload.forecast else [],
                 "horizon": payload.forecast.horizon if payload.forecast else 0,
                 "model_order": payload.forecast.model_order if payload.forecast else (0, 0, 0),
+                "model": payload.forecast.model if payload.forecast else "arima",
                 "diagnostics": payload.forecast.diagnostics if payload.forecast else None,
                 "timezone": payload.forecast.timezone if payload.forecast else None,
                 "status": payload.metadata.get("forecast_status"),

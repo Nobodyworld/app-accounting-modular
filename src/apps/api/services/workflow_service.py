@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -34,6 +35,12 @@ class WorkflowService:
         self.s = session
         self.ledger = LedgerService(session)
 
+    @staticmethod
+    def _require_int(value: int | None, context: str) -> int:
+        if value is None:
+            raise ValueError(f"{context} missing identifier")
+        return int(value)
+
     # ------------------------------------------------------------------
     # Ingestion
     # ------------------------------------------------------------------
@@ -44,6 +51,7 @@ class WorkflowService:
         source: str,
         source_reference: str | None = None,
         metadata: Mapping[str, object] | None = None,
+        chunk_size: int = 500,
     ) -> list[StagedTransaction]:
         """Persist raw transaction payloads into the staging tables."""
 
@@ -52,32 +60,57 @@ class WorkflowService:
 
         for payload in transactions:
             txn_metadata = base_metadata.copy()
-            txn_metadata.update(payload.get("metadata") or {})
+            meta_obj = payload.get("metadata")
+            if isinstance(meta_obj, Mapping):
+                txn_metadata.update(meta_obj)
+
+            raw_date = payload.get("date")
+            txn_date: date
+            if isinstance(raw_date, date):
+                txn_date = raw_date
+            elif isinstance(raw_date, str):
+                txn_date = date.fromisoformat(raw_date)
+            else:
+                raise ValueError("transaction date is required")
+
+            raw_description = payload.get("description")
+            description = str(raw_description or "")
             staged = StagedTransaction(
-                date=payload["date"],
-                description=str(payload["description"]),
+                date=txn_date,
+                description=description,
                 source=source,
-                source_reference=payload.get("source_reference") or source_reference,
+                source_reference=payload.get("source_reference") if isinstance(payload.get("source_reference"), str) else source_reference,
                 source_metadata=txn_metadata,
             )
             self.s.add(staged)
             self.s.flush()
+            staged_id = self._require_int(staged.id, "staged transaction")
 
             postings = payload.get("postings") or []
+            if not isinstance(postings, Iterable):
+                raise ValueError("postings must be iterable")
             for posting in postings:
+                if not isinstance(posting, Mapping):
+                    raise ValueError("posting must be a mapping")
+                account_id_value = posting.get("account_id")
+                account_id = int(account_id_value) if isinstance(account_id_value, int) else None
+                debit_value = posting.get("debit", 0.0)
+                credit_value = posting.get("credit", 0.0)
                 staged_posting = StagedPosting(
-                    staged_transaction_id=staged.id,
-                    account_id=posting.get("account_id"),
+                    staged_transaction_id=staged_id,
+                    account_id=account_id,
                     account_code=posting.get("account_code"),
                     account_name=posting.get("account_name"),
-                    debit=float(posting.get("debit", 0.0) or 0.0),
-                    credit=float(posting.get("credit", 0.0) or 0.0),
+                    debit=float(debit_value or 0.0),
+                    credit=float(credit_value or 0.0),
                     currency=posting.get("currency"),
                     context=dict(posting.get("metadata") or {}),
                 )
                 self.s.add(staged_posting)
 
             staged_records.append(staged)
+            if chunk_size > 0 and len(staged_records) % chunk_size == 0:
+                self.s.commit()
 
         self.s.commit()
         # TODO - Introduce chunked commits for very large ingestion batches.
@@ -96,17 +129,18 @@ class WorkflowService:
 
         stmt = select(StagedTransaction)
         if staged_ids:
-            stmt = stmt.where(StagedTransaction.id.in_(staged_ids))
-        stmt = stmt.order_by(StagedTransaction.id)
+            stmt = stmt.where(StagedTransaction.id.in_(staged_ids))  # type: ignore[arg-type]
+        stmt = stmt.order_by(StagedTransaction.id)  # type: ignore[arg-type]
 
         staged_items = list(self.s.exec(stmt))
         results: list[WorkflowResult] = []
 
         for staged in staged_items:
+            staged_id = self._require_int(staged.id, "staged transaction")
             if staged.status == WorkflowStatus.POSTED and staged.transaction_id and auto_post:
                 results.append(
                     WorkflowResult(
-                        staged_transaction_id=staged.id,
+                        staged_transaction_id=staged_id,
                         status=WorkflowStatus.POSTED,
                         transaction_id=staged.transaction_id,
                         validation_errors=None,
@@ -114,7 +148,7 @@ class WorkflowService:
                 )
                 continue
 
-            postings = self._load_postings(staged.id)
+            postings = self._load_postings(staged_id)
 
             try:
                 payload = self._prepare_postings(postings)
@@ -122,11 +156,15 @@ class WorkflowService:
             except ValueError as exc:
                 staged.status = WorkflowStatus.FAILED
                 staged.validation_errors = [str(exc)]
+                staged.ingest_diagnostics = {
+                    "error": str(exc),
+                    "postings": [posting.context for posting in postings],
+                }
                 staged.updated_at = datetime.now(UTC)
                 self.s.add(staged)
                 results.append(
                     WorkflowResult(
-                        staged_transaction_id=staged.id,
+                        staged_transaction_id=staged_id,
                         status=WorkflowStatus.FAILED,
                         transaction_id=staged.transaction_id,
                         validation_errors=staged.validation_errors,
@@ -135,6 +173,7 @@ class WorkflowService:
                 continue
 
             staged.validation_errors = None
+            staged.ingest_diagnostics = {}
             staged.status = WorkflowStatus.VALIDATED
             staged.updated_at = datetime.now(UTC)
             self.s.add(staged)
@@ -150,7 +189,7 @@ class WorkflowService:
             if not auto_post:
                 results.append(
                     WorkflowResult(
-                        staged_transaction_id=staged.id,
+                        staged_transaction_id=staged_id,
                         status=staged.status,
                         transaction_id=staged.transaction_id,
                         validation_errors=None,
@@ -167,7 +206,7 @@ class WorkflowService:
                     self.s.add(staged)
                     results.append(
                         WorkflowResult(
-                            staged_transaction_id=staged.id,
+                            staged_transaction_id=staged_id,
                             status=WorkflowStatus.POSTED,
                             transaction_id=transaction_id,
                             validation_errors=None,
@@ -183,7 +222,7 @@ class WorkflowService:
 
             results.append(
                 WorkflowResult(
-                    staged_transaction_id=staged.id,
+                    staged_transaction_id=staged_id,
                     status=WorkflowStatus.POSTED,
                     transaction_id=transaction.id,
                     validation_errors=None,
@@ -205,24 +244,35 @@ class WorkflowService:
         postings = self._load_postings(staged_id)
         return staged, postings
 
-    def list_transactions(self, limit: int = 100) -> list[tuple[StagedTransaction, list[StagedPosting]]]:
+    def list_transactions(self, limit: int = 100, offset: int = 0) -> list[tuple[StagedTransaction, list[StagedPosting]]]:
         """Return staged transactions ordered by creation time."""
 
-        stmt = select(StagedTransaction).order_by(StagedTransaction.id).limit(limit)
+        stmt = (
+            select(StagedTransaction)
+            .order_by(StagedTransaction.id)  # type: ignore[arg-type]
+            .offset(offset)
+            .limit(limit)
+        )
         items = []
         for staged in self.s.exec(stmt):
-            items.append((staged, self._load_postings(staged.id)))
+            staged_id = self._require_int(staged.id, "staged transaction")
+            items.append((staged, self._load_postings(staged_id)))
         return items
 
     # ------------------------------------------------------------------
     # Internal utilities
     # ------------------------------------------------------------------
     def _load_postings(self, staged_id: int) -> list[StagedPosting]:
-        stmt = select(StagedPosting).where(StagedPosting.staged_transaction_id == staged_id).order_by(StagedPosting.id)
+        stmt = (
+            select(StagedPosting)
+            .where(StagedPosting.staged_transaction_id == staged_id)
+            .order_by(StagedPosting.id)  # type: ignore[arg-type]
+        )
         return list(self.s.exec(stmt))
 
     def _prepare_postings(self, postings: Sequence[StagedPosting]) -> list[dict[str, object]]:
         payload: list[dict[str, object]] = []
+        currencies: set[str] = set()
         for idx, posting in enumerate(postings, start=1):
             account_id = posting.account_id
             if account_id is None:
@@ -236,13 +286,17 @@ class WorkflowService:
                 account_id = account.id
                 posting.account_id = account_id
 
+            if posting.currency:
+                currencies.add(posting.currency)
+
             payload.append(
                 {
-                    "account_id": account_id,
-                    "debit": posting.debit,
-                    "credit": posting.credit,
+                    "account_id": self._require_int(account_id, "posting account"),
+                    "debit": float(posting.debit),
+                    "credit": float(posting.credit),
                     "currency": posting.currency,
                 }
             )
-        # TODO - Validate currency consistency across postings before posting.
+        if len(currencies) > 1:
+            raise ValueError("Currency mismatch across postings")
         return payload

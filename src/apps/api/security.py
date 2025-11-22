@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, cast
+from functools import lru_cache
+from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import Depends, HTTPException, status
@@ -15,7 +16,7 @@ from passlib.context import CryptContext
 from sqlmodel import Session, select
 
 from .audit import AuditAction, AuditActor, AuditLogger, use_actor
-from .config import settings
+from .config import MAX_ACCESS_TOKEN_MINUTES, settings
 from .db import get_session
 from .models.models import Membership, Organization, User
 
@@ -89,13 +90,13 @@ class OrganizationContext:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Return ``True`` if ``plain_password`` matches ``hashed_password``."""
 
-    return cast(bool, pwd_context.verify(plain_password, hashed_password))
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
     """Return a salted hash for ``password`` using the configured scheme."""
 
-    return cast(str, pwd_context.hash(password))
+    return pwd_context.hash(password)
 
 
 def authenticate_user(session: Session, email: str, password: str) -> User | None:
@@ -129,19 +130,29 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     """Create a signed JWT access token embedding ``data``."""
 
     to_encode = data.copy()
+    session_id = to_encode.setdefault("sid", str(uuid4()))
+    to_encode["type"] = "access"
     expire = datetime.now(UTC) + (
         expires_delta if expires_delta is not None else timedelta(minutes=settings.access_token_expire_minutes)
     )
     to_encode.update({"exp": expire})
-    # TODO - Issue refresh tokens to allow long-lived sessions with rotation.
     token = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-    return cast(str, token)
+    return token
+
+
+def create_refresh_token(sub: int, *, expiry_minutes: int | None = None, session_id: str | None = None) -> str:
+    """Create a long-lived refresh token with rotation-friendly claims."""
+
+    ttl = expiry_minutes or min(settings.access_token_expire_minutes * 24, MAX_ACCESS_TOKEN_MINUTES)
+    expire = datetime.now(UTC) + timedelta(minutes=ttl)
+    payload = {"sub": str(sub), "type": "refresh", "sid": session_id or str(uuid4()), "exp": expire}
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def _decode_token(token: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        return cast(dict[str, Any], payload)
+        return payload
     except JWTError as exc:  # pragma: no cover - library raises numerous subclasses
         logger.warning("Failed to decode access token", exc_info=exc)
         raise HTTPException(
@@ -205,5 +216,37 @@ def get_current_organization(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized for this organization",
         )
-    # TODO - Cache organization membership lookups for high-traffic permission checks.
     return OrganizationContext(organization=organization, membership=membership)
+
+
+# Lightweight in-process cache to reduce DB round trips for membership checks within the same worker.
+@lru_cache(maxsize=1024)
+def _membership_cache_key(user_id: int, organization_id: int) -> tuple[int, int]:
+    return (user_id, organization_id)
+
+
+def get_current_organization_cached(
+    organization_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> OrganizationContext:
+    """Cached variant of ``get_current_organization`` for high-traffic checks."""
+
+    key = _membership_cache_key(current_user.id, organization_id)
+    membership = None
+    org: Organization | None = None
+    try:
+        membership = get_current_organization_cached._cache[key]  # type: ignore[attr-defined]
+        org_id, mem = membership
+        org = session.get(Organization, org_id)
+        membership = mem
+    except Exception:
+        membership = None
+
+    if membership is None or org is None:
+        ctx = get_current_organization(organization_id, session, current_user)
+        get_current_organization_cached._cache = getattr(get_current_organization_cached, "_cache", {})  # type: ignore[attr-defined]
+        get_current_organization_cached._cache[key] = (ctx.organization.id, ctx.membership)  # type: ignore[attr-defined]
+        return ctx
+
+    return OrganizationContext(organization=org, membership=membership)  # type: ignore[arg-type]

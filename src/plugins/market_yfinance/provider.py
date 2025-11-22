@@ -9,10 +9,10 @@ import yfinance as yf
 
 from apps.api.models.models import Price
 
-__all__ = ["YFinanceProvider", "provider"]
+__all__ = ["YFinanceMarketProvider", "provider"]
 
 
-class YFinanceProvider:
+class YFinanceMarketProvider:
     """Fetch historical prices using the `yfinance` package."""
 
     name = "yfinance"
@@ -41,7 +41,7 @@ class YFinanceProvider:
         return prices
 
 
-def provider() -> YFinanceProvider:
+def provider() -> YFinanceMarketProvider:
     """Entry point for the plugin loader."""
 
-    return YFinanceProvider()
+    return YFinanceMarketProvider()

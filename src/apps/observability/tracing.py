@@ -14,6 +14,8 @@ from uuid import uuid4
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.types import ASGIApp
 
 __all__ = [
     "TracingConfig",
@@ -135,10 +137,10 @@ def configure_tracing(
     otel_endpoint: str | None = endpoint
 
     try:  # pragma: no cover - exercised when OpenTelemetry is installed
-        from opentelemetry import trace  # type: ignore[import]
-        from opentelemetry.sdk.resources import Resource  # type: ignore[import]
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import]
-        from opentelemetry.sdk.trace.export import (  # type: ignore[import]
+        from opentelemetry import trace  # type: ignore[import-not-found]
+        from opentelemetry.sdk.resources import Resource  # type: ignore[import-not-found]
+        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
+        from opentelemetry.sdk.trace.export import (  # type: ignore[import-not-found]
             BatchSpanProcessor,
             ConsoleSpanExporter,
         )
@@ -146,7 +148,7 @@ def configure_tracing(
         provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
         if exporter == "otlp":
             try:
-                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore[import]
+                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore[import-not-found]
                     OTLPSpanExporter,
                 )
 
@@ -312,12 +314,12 @@ async def atraced(
 class RequestTraceMiddleware(BaseHTTPMiddleware):
     """ASGI middleware that wraps requests in tracing spans."""
 
-    def __init__(self, app, *, operation_name: str | None = None) -> None:
+    def __init__(self, app: ASGIApp, *, operation_name: str | None = None) -> None:
         super().__init__(app)
         self._operation_name = operation_name
 
-    async def dispatch(  # type: ignore[override]
-        self, request: Request, call_next: Callable[[Request], Any]
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         if not is_tracing_enabled():
             return await call_next(request)

@@ -93,8 +93,6 @@ def test_settings_rejects_invalid_expiry(monkeypatch) -> None:
 
     assert "greater than zero" in str(exc.value)
 
-    # TODO - (config) Cover settings overrides for per-environment log destinations.
-
     monkeypatch.setenv(
         "MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES",
         str(MAX_ACCESS_TOKEN_MINUTES + 1),
@@ -163,3 +161,20 @@ def test_settings_trims_tracing_endpoint(monkeypatch) -> None:
     cfg = Settings.load()
 
     assert cfg.tracing_otlp_endpoint == "http://collector.example"
+
+
+def test_settings_supports_log_destination_overrides(monkeypatch) -> None:
+    """Log destinations should be configurable per environment."""
+
+    monkeypatch.setenv("MODACCT_LOG_DESTINATION", "stderr")
+    cfg = Settings.load()
+    assert cfg.log_destination == "stderr"
+
+    monkeypatch.delenv("MODACCT_LOG_DESTINATION", raising=False)
+    monkeypatch.setenv("LOG_DESTINATION", "stdout")
+    cfg = Settings.load()
+    assert cfg.log_destination == "stdout"
+
+    monkeypatch.setenv("MODACCT_LOG_DESTINATION", "invalid-dest")
+    with pytest.raises(ValueError):
+        Settings.load()

@@ -63,3 +63,26 @@ def test_snapshot_command_emits_diagnostics_table() -> None:
     assert result.exit_code == 0
     assert "Diagnostics" in result.output
     assert "Missing sections" in result.output
+
+
+def test_snapshot_command_reports_missing_sections_for_unknown_commodities() -> None:
+    """Diagnostics should flag missing commodities when symbols are unknown."""
+
+    runner = CliRunner()
+    result = runner.invoke(
+        demo,
+        [
+            "snapshot",
+            "--format",
+            "json",
+            "--include-diagnostics",
+            "--commodity",
+            "XYZ",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["commodity_quote_count"] == 0
+    assert "commodities" in diagnostics["missing_sections"]

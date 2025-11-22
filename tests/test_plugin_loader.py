@@ -232,3 +232,61 @@ def test_provider_descriptors_include_versions_and_compatibility(monkeypatch) ->
     assert payload["version"] == "2.0.0"
     assert payload["compatibility"]["api_version"] == "1.0.0"
     assert payload["compatibility"]["status"] == "incompatible"
+
+
+def test_provider_descriptors_emit_warning_on_incompatible(monkeypatch, caplog) -> None:
+    """Incompatible providers should trigger an alert log for observability."""
+
+    module = types.ModuleType("plugins.incompatible_provider")
+    module.__version__ = "3.0.0"
+    monkeypatch.setitem(sys.modules, "plugins.incompatible_provider", module)
+    monkeypatch.setattr(
+        settings,
+        "allowed_providers",
+        {
+            "incompatible": ProviderInfo(
+                module="plugins.incompatible_provider",
+                name="Incompatible",
+                capabilities=(),
+            )
+        },
+    )
+    monkeypatch.setattr("apps.api.services.plugin_loader.API_VERSION", "0.0.0")
+
+    refresh_provider_cache()
+    caplog.set_level("WARNING", logger="apps.api.services.plugin_loader")
+
+    descriptors = provider_descriptors()
+    assert descriptors
+
+    records = [record for record in caplog.records if record.message == "Incompatible providers detected"]
+    assert records
+    providers = records[0].providers
+    assert providers[0]["key"] == "incompatible"
+
+
+def test_load_provider_handles_async_factory(monkeypatch) -> None:
+    """Async provider factories should raise a clear error until supported."""
+
+    refresh_provider_cache()
+    module = types.ModuleType("plugins.async_factory")
+
+    async def factory():
+        return object()
+
+    module.provider = factory
+    monkeypatch.setitem(sys.modules, "plugins.async_factory", module)
+    monkeypatch.setattr(
+        settings,
+        "allowed_providers",
+        {
+            "async": ProviderInfo(
+                module="plugins.async_factory",
+                name="AsyncProvider",
+                capabilities=("fx",),
+            )
+        },
+    )
+
+    with pytest.raises(ValueError):
+        load_provider("async")

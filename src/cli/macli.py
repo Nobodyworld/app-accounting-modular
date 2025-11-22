@@ -9,14 +9,16 @@ import logging
 import sys
 from collections.abc import Iterable, Sequence
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import click
+import tomllib
 from sqlmodel import Session, select
 
 from apps.api.config import settings
 from apps.api.db import engine, init_db
-from apps.api.models.models import Account
+from apps.api.models.models import Account, AccountType
 from apps.api.services.extension_loader import (
     ExtensionStatus,
     active_extensions,
@@ -27,6 +29,10 @@ from apps.api.services.fx_service import FXService
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import MarketService
 from apps.api.services.plugin_loader import load_provider
+from apps.api.services.snapshot_service import SnapshotOrchestrator, scenario_batch_to_payload
+from apps.api.services.health import register_default_health_checks as _register_health_checks
+from apps.extensions.scaffold import scaffold_extension
+from apps.modular_accounting.application import SnapshotScenario
 from apps.observability.diagnostics import collect_observability_snapshot
 from apps.observability.health import health_registry
 from apps.observability.logging import configure_logging, logging_context
@@ -128,9 +134,81 @@ def _json_dump(data: Any) -> str:
 
 
 def _register_default_health_checks() -> None:
-    from apps.api.services.health import register_default_health_checks as _register
+    _register_health_checks()
 
-    _register()
+
+def _parse_amount(value: str | None) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _load_transactions_from_csv(ledger: LedgerService, file_path: str | Path) -> list[dict[str, object]]:
+    """Parse a CSV file into validated transaction payloads.
+
+    Unknown accounts are created using provided metadata. Raises ``ClickException``
+    for unbalanced transactions to prevent partial imports.
+    """
+
+    path = Path(file_path)
+    if not path.exists():
+        raise click.ClickException(f"CSV file not found: {path}")
+
+    session = ledger.s  # reuse existing session for lookups/creates
+    grouped: dict[tuple[date, str], list[dict[str, object]]] = {}
+
+    with path.open(encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            try:
+                txn_date = date.fromisoformat((row.get("date") or "").strip())
+            except ValueError as exc:
+                raise click.ClickException(f"Invalid date in row: {row.get('date')}") from exc
+            description = (row.get("description") or "").strip()
+            if not description:
+                raise click.ClickException("Description is required for each row")
+            account_code = (row.get("account_code") or "").strip()
+            if not account_code:
+                raise click.ClickException("Account code is required for each row")
+            account_name = (row.get("account_name") or account_code).strip()
+            account_type = (row.get("account_type") or "ASSET").strip() or "ASSET"
+            currency = (row.get("currency") or "USD").strip() or "USD"
+            debit = _parse_amount(row.get("debit"))
+            credit = _parse_amount(row.get("credit"))
+
+            try:
+                account = ledger.require_account(account_code)
+            except ValueError:
+                account = ledger.create_account(
+                    name=account_name,
+                    type=AccountType(account_type) if account_type else AccountType.ASSET,
+                    code=account_code,
+                    currency=currency,
+                )
+            key = (txn_date, description)
+            postings = grouped.setdefault(key, [])
+            postings.append(
+                {
+                    "account_id": account.id,
+                    "debit": debit,
+                    "credit": credit,
+                    "currency": currency,
+                }
+            )
+
+    transactions: list[dict[str, object]] = []
+    for (txn_date, description), postings in grouped.items():
+        total_debit = sum(p["debit"] for p in postings)
+        total_credit = sum(p["credit"] for p in postings)
+        if round(total_debit - total_credit, 4) != 0:
+            raise click.ClickException(
+                f"Unbalanced transaction '{description}' on {txn_date}: "
+                f"debits={total_debit:.2f} credits={total_credit:.2f}"
+            )
+        transactions.append({"date": txn_date, "description": description, "postings": postings})
+
+    return transactions
 
 
 @click.group()
@@ -296,7 +374,7 @@ def observe(format_: str) -> None:
             snapshot = asyncio.run(collect_observability_snapshot(extension_status_provider=lambda: statuses))
 
             if format_.lower() == "json":
-                click.echo(_json_dump(snapshot.as_dict()))
+                click.echo(json.dumps(snapshot.as_dict()), nl=False)
                 return
 
             metrics = snapshot.metrics
@@ -375,6 +453,134 @@ def sync_prices(symbol: str, start: str, end: str, provider: str) -> None:
                 service = MarketService(session, prov)
                 count = service.sync_prices(symbol, start_date, end_date)
                 click.echo(f"Synced {count} prices for {symbol} from {start_date} to {end_date} via {prov.name}")
+
+
+@cli.command("snapshot")
+@click.option("--base", "base_currency", default="USD", show_default=True)
+@click.option("--commodity", "commodity_symbols", multiple=True, default=(), help="Commodity symbols to include")
+@click.option("--jurisdiction", "jurisdictions", multiple=True, help="Jurisdictions to include")
+@click.option(
+    "--format",
+    "format_",
+    type=click.Choice(["json", "table"], case_sensitive=False),
+    default="json",
+    show_default=True,
+)
+def snapshot_command(
+    base_currency: str,
+    commodity_symbols: tuple[str, ...],
+    jurisdictions: tuple[str, ...],
+    format_: str,
+) -> None:
+    """Generate a data snapshot using configured providers."""
+
+    orchestrator = SnapshotOrchestrator()
+    result = orchestrator.build_snapshot(
+        base_currency=base_currency,
+        commodity_symbols=commodity_symbols or None,
+        jurisdictions=jurisdictions or None,
+    )
+
+    if format_.lower() == "json":
+        click.echo(json.dumps(result.as_payload(), default=str))
+        return
+
+    payload = result.as_payload()
+    click.echo("Snapshot")
+    click.echo(_render_table(("Section", "Count"), [("fx_rates", str(len(payload["fx_rates"]))), ("tax_rules", str(len(payload["tax_rules"])))]))
+    click.echo("\nProviders:")
+    click.echo(_json_dump(payload["providers"]))
+    click.echo("\nDiagnostics")
+    click.echo(_json_dump(payload["diagnostics"]))
+
+
+@cli.command("snapshot-scenarios")
+@click.option("--plan", required=True, type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "format_",
+    type=click.Choice(["json", "table"], case_sensitive=False),
+    default="json",
+    show_default=True,
+)
+@click.option("--reset-cache", is_flag=True, default=False, help="Reset cache between scenario runs")
+def snapshot_scenarios(plan: str, format_: str, reset_cache: bool) -> None:
+    """Run snapshot scenarios defined in a JSON plan file."""
+
+    orchestrator = SnapshotOrchestrator()
+    plan_path = Path(plan)
+    if plan_path.suffix.lower() in {".toml", ".tml"}:
+        with plan_path.open("rb") as handle:
+            plan_payload = tomllib.load(handle)
+    else:
+        with plan_path.open(encoding="utf-8") as handle:
+            plan_payload = json.load(handle)
+    scenarios_raw = plan_payload.get("scenarios") or []
+    scenarios = [SnapshotScenario.from_mapping(item) for item in scenarios_raw]
+    batch = orchestrator.run_scenarios(scenarios, reset_cache_between_runs=reset_cache)
+    payload = scenario_batch_to_payload(batch)
+
+    if format_.lower() == "json":
+        click.echo(json.dumps(payload, default=str))
+        return
+
+    click.echo("Scenarios")
+    for result in payload["results"]:
+        click.echo(f"- {result['name']}: providers={result.get('providers')}")
+    click.echo("\nScenario Summary")
+    click.echo(_json_dump(payload["summary"]))
+
+
+@cli.command("inspect-plan")
+@click.option("--plan", required=True, type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "format_",
+    type=click.Choice(["json", "table"], case_sensitive=False),
+    default="json",
+)
+def inspect_plan(plan: str, format_: str) -> None:
+    """Inspect a scenario plan file and output a summary."""
+
+    plan_path = Path(plan)
+    if plan_path.suffix.lower() in {".toml", ".tml"}:
+        with plan_path.open("rb") as handle:
+            payload = tomllib.load(handle)
+    else:
+        with plan_path.open(encoding="utf-8") as handle:
+            payload = json.load(handle)
+
+    scenarios_raw = payload.get("scenarios") or []
+    defaults = payload.get("defaults") or {}
+    default_base = defaults.get("base_currency")
+    scenarios = []
+    for item in scenarios_raw:
+        item_with_defaults = dict(item)
+        if not item_with_defaults.get("base_currency") and default_base:
+            item_with_defaults["base_currency"] = default_base
+        scenarios.append(SnapshotScenario.from_mapping(item_with_defaults))
+    summary = {
+        "scenario_count": len(scenarios),
+        "base_currencies": sorted({scenario.base_currency for scenario in scenarios}),
+        "commodity_symbols": sorted({symbol for s in scenarios for symbol in s.commodity_symbols}),
+    }
+    output = {"plan": payload, "summary": summary}
+    if format_.lower() == "json":
+        click.echo(json.dumps(output, default=str))
+    else:
+        click.echo(_json_dump(output))
+
+
+@cli.command("scaffold-extension")
+@click.argument("key")
+@click.option("--directory", default=".", type=click.Path())
+@click.option("--capability", "capabilities", multiple=True, help="Capabilities to advertise")
+def scaffold_extension_command(key: str, directory: str, capabilities: tuple[str, ...]) -> None:
+    """Generate an extension package skeleton."""
+
+    target_dir = Path(directory)
+    scaffold_extension(target_dir, key=key, capabilities=capabilities)
+    click.echo(f"Scaffolded extension '{key}' in {target_dir}")
 
 
 @cli.command("import-csv")

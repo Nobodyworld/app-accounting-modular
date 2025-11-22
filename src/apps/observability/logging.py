@@ -33,7 +33,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 __all__ = [
     "LogFormat",
@@ -153,7 +153,7 @@ class TextFormatter(logging.Formatter):
         super().__init__(template, datefmt="%Y-%m-%dT%H:%M:%SZ")
         # Always format in UTC so that local developer settings do not influence
         # production log output or JSON formatting.
-        self.converter = time.gmtime  # type: ignore[assignment]
+        self.converter = time.gmtime
 
 
 def get_context() -> dict[str, Any]:
@@ -218,6 +218,7 @@ def configure_logging(
     force: bool = False,
     integrate_uvicorn: bool = True,
     extra_loggers: Iterable[str] | None = None,
+    log_destination: str = "stdout",
 ) -> None:
     """Initialise application logging with context propagation."""
 
@@ -225,6 +226,9 @@ def configure_logging(
     normalised_format = log_format.upper()
     if normalised_format not in {"JSON", "TEXT"}:
         raise ValueError(f"Unsupported log format '{log_format}'. Expected one of: JSON, TEXT.")
+    destination = log_destination.strip().lower()
+    if destination not in {"stdout", "stderr", "null"}:
+        raise ValueError("log_destination must be one of: stdout, stderr, null")
     if _CONFIGURED and not force:
         return
 
@@ -240,12 +244,19 @@ def configure_logging(
         },
     }
 
-    handler_definition = {
-        "class": "logging.StreamHandler",
-        "filters": ["context"],
-        "formatter": formatter_key,
-        "stream": "ext://sys.stdout",
-    }
+    handler_definition: dict[str, object]
+    if destination == "null":
+        handler_definition = {
+            "class": "logging.NullHandler",
+        }
+    else:
+        stream_ref = "ext://sys.stderr" if destination == "stderr" else "ext://sys.stdout"
+        handler_definition = {
+            "class": "logging.StreamHandler",
+            "filters": ["context"],
+            "formatter": formatter_key,
+            "stream": stream_ref,
+        }
 
     logger_names: tuple[str, ...]
     if integrate_uvicorn:
@@ -287,7 +298,7 @@ class RequestContextMiddleware:
         self._header_name = header_name.lower().encode("latin-1")
         self._correlation_header = b"x-correlation-id"
 
-    async def __call__(self, scope: dict[str, Any], receive, send) -> None:  # type: ignore[override]
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
@@ -298,8 +309,6 @@ class RequestContextMiddleware:
         provided_request = header_lookup.get(self._header_name)
 
         correlation_id = provided_corr or provided_request or str(uuid4()).encode("latin-1")
-        if not isinstance(correlation_id, bytes):
-            correlation_id = str(correlation_id).encode("latin-1")
         request_id = provided_request or correlation_id
 
         correlation_str = correlation_id.decode("latin-1")
@@ -328,7 +337,7 @@ class RequestContextMiddleware:
             request_method=scope.get("method"),
         )
 
-        async def send_wrapper(message: dict[str, Any]) -> None:
+        async def send_wrapper(message: Message) -> None:
             if message.get("type") == "http.response.start":
                 existing = [
                     (name, value)

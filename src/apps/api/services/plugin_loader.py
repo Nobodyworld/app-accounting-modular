@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import logging
 import re
 from collections.abc import Iterable
@@ -244,6 +245,28 @@ def _cached_provider_descriptors(
         )
 
     descriptors.sort(key=lambda item: item.metadata.key)
+
+    incompatible = [
+        descriptor
+        for descriptor in descriptors
+        if descriptor.compatibility.status == "incompatible"
+    ]
+    if incompatible:
+        logger.warning(
+            "Incompatible providers detected",
+            extra={
+                "providers": [
+                    {
+                        "key": d.metadata.key,
+                        "module": d.module,
+                        "provider_version": d.version,
+                        "reason": d.compatibility.reason,
+                    }
+                    for d in incompatible
+                ]
+            },
+        )
+
     return tuple(descriptors)
 
 
@@ -311,6 +334,12 @@ def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
         raise ValueError(f"Factory '{factory}' in {module_path} is not callable")
 
     provider = factory_fn()
+    if inspect.iscoroutine(provider):  # type: ignore[arg-type]
+        try:
+            provider.close()  # type: ignore[call-arg]
+        except Exception:
+            pass
+        raise ValueError("Async provider factories are not supported; use synchronous factories")
     if provider is None:
         raise ValueError(f"Factory '{factory}' in {module_path} returned None")
 

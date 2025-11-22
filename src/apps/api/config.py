@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import secrets
@@ -10,8 +11,20 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
+
+
+def _fallback_load_dotenv(*args: object, **kwargs: object) -> bool:
+    # python-dotenv is not installed in this environment (type stubs may be missing);
+    # provide a no-op fallback so code can run and tests can control env loading differently.
+    return False
+
+
+try:
+    _dotenv = importlib.import_module("dotenv")
+    load_dotenv = _dotenv.load_dotenv  # type: ignore[attr-defined]
+except Exception:
+    load_dotenv = _fallback_load_dotenv
 
 __all__ = [
     "LogFormat",
@@ -34,6 +47,8 @@ DEFAULT_LOG_LEVEL = "INFO"
 
 VALID_LOG_FORMATS = frozenset({"JSON", "TEXT"})
 DEFAULT_LOG_FORMAT: LogFormat = "JSON"
+VALID_LOG_DESTINATIONS = frozenset({"stdout", "stderr", "null"})
+DEFAULT_LOG_DESTINATION = "stdout"
 VALID_TRACING_EXPORTERS = frozenset({"disabled", "console", "otlp"})
 DEFAULT_TRACING_EXPORTER = "console"
 
@@ -79,16 +94,52 @@ DEFAULT_ALLOWED_PROVIDERS: dict[str, ProviderInfo] = {
         description="Reference rates sourced via exchangerate.host",
         capabilities=("fx",),
     ),
+    "fx:openexchangerates": ProviderInfo(
+        module="plugins.fx_openexchangerates.provider",
+        name="OpenExchangeRates FX",
+        description="Production FX rates backed by OpenExchangeRates API",
+        capabilities=("fx",),
+    ),
+    "market:commodities_stub": ProviderInfo(
+        module="plugins.market_commodities.provider",
+        name="Commodity & Futures Stub",
+        description="Synthetic commodity/futures prices for testing",
+        capabilities=("market",),
+    ),
     "market:yfinance": ProviderInfo(
         module="plugins.market_yfinance.provider",
         name="Yahoo Finance Market Data",
         description="Historical price data from Yahoo Finance",
         capabilities=("market",),
     ),
+    "macro:fred_stub": ProviderInfo(
+        module="plugins.macro_fred.provider",
+        name="FRED Macroeconomic Stub",
+        description="Synthetic macro series for GDP/inflation style indicators",
+        capabilities=("macro",),
+    ),
+    "bank:plaid_stub": ProviderInfo(
+        module="plugins.bank_plaid.provider",
+        name="Plaid Bank Feeds (Stub)",
+        description="Stubbed Plaid-like bank feed provider",
+        capabilities=("bank",),
+    ),
     "tax:oecd_stub": ProviderInfo(
         module="plugins.tax_oecd_stub.provider",
         name="OECD Tax Rules (Stub)",
         description="Demonstration tax rules sourced from an OECD stub",
+        capabilities=("tax",),
+    ),
+    "tax:oecd_vat": ProviderInfo(
+        module="plugins.tax_oecd_vat.provider",
+        name="OECD VAT Rules (Stub)",
+        description="VAT rates across selected OECD members",
+        capabilities=("tax",),
+    ),
+    "tax:us_tables": ProviderInfo(
+        module="plugins.tax_us_tables.provider",
+        name="US Federal and State Tax Tables (Stub)",
+        description="Baseline corporate income tax rates for US federal/state",
         capabilities=("tax",),
     ),
 }
@@ -160,6 +211,11 @@ class Settings(BaseModel):
     database_url: str = Field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./modacct.db"))
     log_level: str = Field(default_factory=lambda: os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL))
     log_format: LogFormat = Field(default=DEFAULT_LOG_FORMAT)
+    log_destination: str = Field(
+        default_factory=lambda: (
+            os.getenv("MODACCT_LOG_DESTINATION") or os.getenv("LOG_DESTINATION") or DEFAULT_LOG_DESTINATION
+        )
+    )
     openex_app_id: str | None = Field(default_factory=lambda: os.getenv("OPENEXCHANGERATES_APP_ID"))
     alphavantage_key: str | None = Field(default_factory=lambda: os.getenv("ALPHAVANTAGE_API_KEY"))
     newsapi_key: str | None = Field(default_factory=lambda: os.getenv("NEWSAPI_KEY"))
@@ -211,6 +267,15 @@ class Settings(BaseModel):
             msg = f"Unsupported log level '{value}'. " f"Valid options: {sorted(VALID_LOG_LEVELS)}"
             raise ValueError(msg)
         return level
+
+    @field_validator("log_destination")
+    @classmethod
+    def _validate_log_destination(cls, value: str) -> str:
+        destination = value.strip().lower() or DEFAULT_LOG_DESTINATION
+        if destination not in VALID_LOG_DESTINATIONS:
+            msg = f"Unsupported log destination '{value}'. " f"Valid options: {sorted(VALID_LOG_DESTINATIONS)}"
+            raise ValueError(msg)
+        return destination
 
     @field_validator("log_format")
     @classmethod
@@ -325,6 +390,10 @@ class Settings(BaseModel):
         if log_format is not None:
             settings_data["log_format"] = log_format
 
+        log_destination = lookup("log_destination", "LOG_DESTINATION")
+        if log_destination is not None:
+            settings_data["log_destination"] = log_destination
+
         optional_keys = {
             "openex_app_id": ("OPENEXCHANGERATES_APP_ID",),
             "alphavantage_key": ("ALPHAVANTAGE_API_KEY",),
@@ -359,7 +428,14 @@ class Settings(BaseModel):
         if expire_minutes is not None:
             settings_data["access_token_expire_minutes"] = int(expire_minutes)
 
-        return cls(**cast("dict[str, Any]", settings_data))
+        cfg = cls(**cast("dict[str, Any]", settings_data))
+        try:
+            from apps.api.services.plugin_loader import refresh_provider_cache
+
+            refresh_provider_cache()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Provider cache refresh failed during settings load", exc_info=True)
+        return cfg
 
     @property
     def jwt_secret_is_ephemeral(self) -> bool:

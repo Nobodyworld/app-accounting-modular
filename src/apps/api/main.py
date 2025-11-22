@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI
@@ -53,6 +53,7 @@ def create_app() -> FastAPI:
             settings.log_format,
             service_name="modular-accounting-api",
             force=True,
+            log_destination=settings.log_destination,
         )
 
     def _configure_tracing(_: StartupContext) -> None:
@@ -96,11 +97,12 @@ def create_app() -> FastAPI:
     startup_records = startup_manager.run(startup_steps, context=startup_context)
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):  # pragma: no cover - exercised via tests
+    async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:  # pragma: no cover - exercised via tests
         start_scheduler()
         try:
             yield
         finally:
+            shutdown_scheduler()
             shutdown_scheduler()
 
     app = FastAPI(title="Modular Accounting API", version=API_VERSION, lifespan=lifespan)

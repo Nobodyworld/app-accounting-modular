@@ -35,6 +35,13 @@ __all__ = [
     "CashflowForecastResponse",
     "ForecastRequest",
     "ForecastResponse",
+    "ForecastModelInfo",
+    "BacktestRequest",
+    "BacktestResponse",
+    "BacktestFoldSchema",
+    "CausalImpactRequest",
+    "CausalImpactResponse",
+    "ImpactPointSchema",
     "AuditLogSchema",
     "ReportMetadata",
     "Posting",
@@ -137,6 +144,8 @@ class TransactionCreate(BaseModel):
     description: str = Field(min_length=1, max_length=255)
     postings: list[Posting]
     organization_id: int
+    source: str | None = None
+    source_reference: str | None = None
 
     @field_validator("postings")
     @classmethod
@@ -319,6 +328,8 @@ class ForecastRequest(BaseModel):
 
     series: list[tuple[str | date, float]] = Field(default_factory=list)
     horizon: int = Field(default=30, ge=1)
+    model: str = Field(default="arima")
+    regressors: dict[str, list[tuple[str | date, float]]] | None = None
     organization_id: int
 
 
@@ -327,7 +338,94 @@ class ForecastResponse(BaseModel):
 
     forecast: list[tuple[str, float]]
     horizon: int
-    order: tuple[int, int, int]
+    order: tuple[int, int, int] | None = None
+    diagnostics: dict[str, Any] | None = None
+    model: str = "arima"
+    timezone: str | None = None
+
+
+class ForecastModelInfo(BaseModel):
+    """Metadata describing an available forecasting model."""
+
+    key: str
+    name: str
+    family: str
+    description: str
+    supports_exogenous: bool = False
+    available: bool = True
+    requirements: tuple[str, ...] = Field(default_factory=tuple)
+    notes: str | None = None
+
+
+class BacktestFoldSchema(BaseModel):
+    """Single fold metrics used in backtesting."""
+
+    start: str
+    end: str
+    horizon: int
+    actual: list[tuple[str, float]]
+    forecast: list[tuple[str, float]]
+    mae: float
+    rmse: float
+    mape: float | None
+
+
+class BacktestResponse(BaseModel):
+    """Aggregated backtest metrics for a model."""
+
+    model: str
+    folds: list[BacktestFoldSchema]
+    metrics: dict[str, float | None]
+    tested_points: int
+    available: bool = True
+    reason: str | None = None
+    timezone: str | None = None
+
+
+class BacktestRequest(BaseModel):
+    """Rolling-origin backtest parameters."""
+
+    series: list[tuple[str | date, float]] = Field(default_factory=list)
+    horizon: int = Field(default=7, ge=1)
+    models: list[str] | None = None
+    regressors: dict[str, list[tuple[str | date, float]]] | None = None
+    initial_window: int | None = Field(default=None, ge=1)
+    step: int | None = Field(default=None, ge=1)
+    organization_id: int
+
+
+class ImpactPointSchema(BaseModel):
+    """Point-level causal impact summary."""
+
+    timestamp: str
+    actual: float
+    predicted: float
+    impact: float
+
+
+class CausalImpactRequest(BaseModel):
+    """Payload describing an intervention window to analyse."""
+
+    series: list[tuple[str | date, float]] = Field(default_factory=list)
+    event_start: date | datetime | str
+    event_end: date | datetime | str | None = None
+    interventions: dict[str, list[tuple[str | date, float]]] | None = None
+    model: str = "arima"
+    organization_id: int
+
+
+class CausalImpactResponse(BaseModel):
+    """Causal impact API response."""
+
+    model: str
+    event_start: str
+    event_end: str
+    average_impact: float
+    cumulative_impact: float
+    p_value: float | None
+    points: list[ImpactPointSchema]
+    diagnostics: dict[str, Any]
+    timezone: str | None = None
 
 
 class AccountReference(BaseModel):

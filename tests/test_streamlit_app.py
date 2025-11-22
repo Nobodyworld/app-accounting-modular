@@ -5,7 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from streamlit.testing.v1 import AppTest
+
+pytest.importorskip("streamlit", reason="streamlit dependencies not available")
+from streamlit.testing.v1 import AppTest  # type: ignore[import-not-found]
 
 
 class DummyResponse:
@@ -28,6 +30,7 @@ def fake_requests(monkeypatch):
     """Override requests layer to provide deterministic dashboard responses."""
     from apps.web import app as streamlit_app
 
+    calls: dict[str, int] = {"get": 0, "post": 0}
     budget_payload = {
         "lines": [
             {
@@ -78,6 +81,7 @@ def fake_requests(monkeypatch):
     }
 
     def fake_get(url: str, timeout: int = 5, params: dict | None = None):
+        calls["get"] += 1
         if url.endswith("/health"):
             return DummyResponse({"status": "ok"})
         if url.endswith("/providers"):
@@ -96,6 +100,7 @@ def fake_requests(monkeypatch):
         json: dict | None = None,
         timeout: int = 5,
     ):
+        calls["post"] += 1
         return DummyResponse({"ok": True})
 
     monkeypatch.setattr(
@@ -107,7 +112,7 @@ def fake_requests(monkeypatch):
     monkeypatch.setattr("requests.post", fake_post)
     monkeypatch.setenv("API_BASE", "http://fake")
     monkeypatch.setenv("STREAMLIT_TESTING", "1")
-    return budget_payload, cashflow_payload
+    return budget_payload, cashflow_payload, calls
 
 
 def test_budget_report_flow(fake_requests):
@@ -144,6 +149,7 @@ def test_budget_upload_preview(fake_requests):
 
 
 def test_cashflow_flow(fake_requests):
+    budget_payload, cashflow_payload, calls = fake_requests
     at = AppTest.from_file("apps/web/app.py")
     at.run()
 
@@ -159,6 +165,7 @@ def test_cashflow_flow(fake_requests):
     assert "cashflow_report_payload" in at.session_state
     payload = at.session_state["cashflow_report_payload"]
     assert payload["current_cash"] == pytest.approx(-180.0)
+    assert calls["get"] > 0
 
 
 # TODO - (web) Exercise real HTTP interactions once API client abstraction lands.

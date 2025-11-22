@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlmodel import Session, SQLModel, create_engine
 
 from apps.api import db
-from apps.api.models.models import Budget, BudgetLine, ForecastOutput, Organization
+from apps.api.models.models import Budget, BudgetLine, ForecastOutput, Organization, Rate
 from apps.api.routers.reports import (
     _response_from_cashflow,
     budget_vs_actual,
@@ -101,8 +101,59 @@ def seed_data(session: Session) -> tuple[int, int]:
     return org.id, budget.id
 
 
-# TODO[P3][1d]: (reports) Add scenarios with multi-currency budgets to
-# validate conversions.
+def test_budget_vs_actual_multicurrency_conversion() -> None:
+    session = setup_database()
+    org = Organization(name="FX Org")
+    session.add(org)
+    session.commit()
+    session.refresh(org)
+
+    ledger = LedgerService(session)
+    cash = ledger.create_account("Cash", "ASSET", code="1000", organization_id=org.id, currency="USD")
+    expense = ledger.create_account("Ops EUR", "EXPENSE", code="5000", organization_id=org.id, currency="EUR")
+
+    ledger.post_transaction(
+        date=date(2024, 1, 1),
+        description="EUR spend",
+        postings=[
+            {"account_id": expense.id, "debit": 100.0, "credit": 0.0, "currency": "EUR"},
+            {"account_id": cash.id, "debit": 0.0, "credit": 100.0, "currency": "USD"},
+        ],
+    )
+
+    budget = Budget(
+        organization_id=org.id,
+        name="FX Budget",
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 12, 31),
+        currency="USD",
+    )
+    session.add(budget)
+    session.commit()
+    session.refresh(budget)
+    session.add(
+        BudgetLine(
+            budget_id=budget.id,
+            account_id=expense.id,
+            period_start=date(2024, 1, 1),
+            amount=110.0,
+        )
+    )
+    session.commit()
+    session.add(Rate(base="EUR", quote="USD", date=date(2024, 1, 1), value=1.1, provider="stub"))
+    session.commit()
+
+    # run endpoint
+    response = budget_vs_actual(
+        budget_id=budget.id,
+        organization_id=org.id,
+        horizon=15,
+        refresh=True,
+        session=session,
+    )
+    assert response.metadata.reporting_currency == "USD"
+    assert response.summary["total_actual"] >= 100.0
+    session.close()
 
 
 def test_budget_vs_actual_endpoint() -> None:

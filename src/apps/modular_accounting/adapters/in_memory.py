@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from ..domain import CommodityQuote, FXRate, Money, TaxRule
@@ -20,7 +20,7 @@ class InMemoryFXAdapter:
 
     def __init__(self, rates: dict[str, Decimal], *, timestamp: datetime | None = None) -> None:
         self._rates = rates
-        self._timestamp = timestamp or datetime.utcnow()
+        self._timestamp = timestamp or datetime.now(UTC)
 
     def get_rates(self, base_currency: str) -> Iterable[FXRate]:
         """Return FX rates for the configured base currency.
@@ -51,7 +51,7 @@ class InMemoryCommodityAdapter:
     def __init__(self, quotes: dict[str, Decimal], currency: str = "USD") -> None:
         self._quotes = quotes
         self._currency = currency
-        self._timestamp = datetime.utcnow()
+        self._timestamp = datetime.now(UTC)
 
     def get_quotes(self, symbols: Sequence[str]) -> Iterable[CommodityQuote]:
         """Return quotes for the requested commodity symbols.

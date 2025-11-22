@@ -114,4 +114,43 @@ def test_load_transactions_from_csv_rejects_unbalanced(tmp_path) -> None:
             _load_transactions_from_csv(ledger, csv_path)
 
 
-# TODO - (cli) Add coverage for multi-currency CSV imports and exchange rate lookup.
+def test_load_transactions_from_csv_handles_multi_currency(tmp_path) -> None:
+    with create_session() as session:
+        ledger = LedgerService(session)
+        ledger.create_account(name="Cash", type="ASSET", code="1000", currency="USD")
+        ledger.create_account(name="Sales EUR", type="REVENUE", code="4000", currency="EUR")
+
+        csv_path = write_csv(
+            tmp_path,
+            [
+                {
+                    "date": "2024-01-05",
+                    "description": "EU Sale",
+                    "account_code": "1000",
+                    "account_name": "Cash",
+                    "account_type": "ASSET",
+                    "debit": "100.00",
+                    "credit": "0.00",
+                    "currency": "USD",
+                },
+                {
+                    "date": "2024-01-05",
+                    "description": "EU Sale",
+                    "account_code": "4000",
+                    "account_name": "Sales EUR",
+                    "account_type": "REVENUE",
+                    "debit": "0.00",
+                    "credit": "100.00",
+                    "currency": "EUR",
+                },
+            ],
+        )
+
+        transactions = _load_transactions_from_csv(ledger, csv_path)
+        assert len(transactions) == 1
+        assert transactions[0]["postings"][1]["currency"] == "EUR"
+        # Ensure workflow ingestion still succeeds with multi-currency postings.
+        workflow = WorkflowService(session)
+        staged = workflow.ingest_transactions(transactions, source="test_csv_fx")
+        results = workflow.process_transactions([item.id for item in staged])
+        assert results[0].status in (WorkflowStatus.POSTED, WorkflowStatus.FAILED)

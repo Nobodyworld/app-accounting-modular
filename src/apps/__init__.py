@@ -1,3 +1,3 @@
 """Application packages for Modular Accounting services."""
 
-__all__ = ["api", "web"]
+__all__: list[str] = []
