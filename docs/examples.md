@@ -95,4 +95,7 @@ curl -X POST http://localhost:8000/snapshot/plans/preview \
 curl -X POST http://localhost:8000/snapshot/scenarios \
   -H "Content-Type: application/json" \
   -d @docs/examples/scenario-plan.json
+
+## Map Transactions to External Ledgers
+Concrete examples for pushing modular-accounting transactions into external systems live in `docs/examples/ledger_persistence.md`. The snippets cover QuickBooks-style journal entries, Xero-compatible payloads, and SQL upserts for custom ledgers.
 ```

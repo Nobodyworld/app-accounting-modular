@@ -7,44 +7,78 @@ Modular Accounting includes forecasting capabilities for time series prediction,
 The forecasting system provides:
 
 - **Baseline Models**: ARIMA with automatic order selection
-- **Advanced Models**: Support for exogenous regressors (events, FX rates, commodities)
-- **API Integration**: REST endpoints for forecast generation
+- **Advanced Models**: Prophet (optional dependency) and gradient boosting regressors with engineered seasonality
+- **Event Awareness**: Exogenous regressors, intervention dummies, and causal impact analysis
+- **Evaluation**: Rolling backtests with MAE/RMSE/MAPE diagnostics
+- **API Integration**: REST endpoints for forecasts, causal impact, backtesting, and model discovery
 - **Extensibility**: Plugin architecture for custom forecasting models
 
 ## ForecastService
 
-The core forecasting service supports multiple algorithms:
+The core forecasting service now supports multiple algorithms from a single entrypoint:
 
 ### ARIMA Baseline
 
-Automatic ARIMA model selection with seasonal decomposition:
-
 ```python
-from apps.api.services.forecast import ForecastService
+from apps.api.services.forecast_service import ForecastService
 
 service = ForecastService()
-forecast = service.forecast_arima(
+forecast = service.forecast_series(
     series=historical_data,
     horizon=30,
-    seasonal=True
+    model="arima",
 )
 ```
 
-### Exogenous Regressors
+### Prophet and Advanced Regressors
 
-Incorporate external factors like market events or economic indicators:
+Prophet is treated as an optional dependency; when installed it is available via the same dispatcher:
 
 ```python
-forecast = service.forecast_with_regressors(
+forecast = service.forecast_series(
     series=historical_data,
-    regressors={
-        'fx_rate': fx_series,
-        'commodity_price': commodity_series,
-        'events': event_dummies
+    horizon=30,
+    model="prophet",
+    exogenous={
+        "fx_rate": fx_series,
+        "commodity_price": commodity_series,
+        "events": event_dummies,
     },
-    horizon=30
 )
 ```
+
+### Gradient Boosting Regressor
+
+A tree-based regressor with engineered seasonality and lagged features:
+
+```python
+forecast = service.forecast_series(
+    series=historical_data,
+    horizon=14,
+    model="gradient_boosting",
+    exogenous={"promo": promo_flags},
+)
+```
+
+### Causal Impact Analysis
+
+Estimate the lift or drag of an intervention window using a counterfactual baseline:
+
+```python
+impact = service.causal_impact(
+    series=historical_data,
+    event_start="2024-07-01",
+    event_end="2024-07-14",
+    interventions={"campaign": campaign_dummy_series},
+    model="arima",
+)
+```
+
+### Event NLP Helpers
+
+Use `ForecastService.build_event_regressors` to convert event titles into
+simple keyword-driven intensity scores that can be passed as exogenous
+regressors for event-informed forecasts.
 
 ## API Endpoints
 
@@ -61,7 +95,8 @@ Request body:
   "regressors": {
     "fx_usd_eur": [[timestamp, rate], ...],
     "event_impact": [[timestamp, dummy], ...]
-  }
+  },
+  "organization_id": 1
 }
 ```
 
@@ -69,12 +104,15 @@ Response:
 ```json
 {
   "forecast": [[timestamp, predicted_value], ...],
-  "model_info": {
-    "type": "arima",
-    "order": [1, 1, 1],
-    "seasonal_order": [0, 1, 1, 12]
+  "horizon": 30,
+  "order": [1, 1, 1],
+  "diagnostics": {
+    "model": "arima",
+    "mae": 0.1,
+    "rmse": 0.2
   },
-  "confidence_intervals": [[timestamp, lower, upper], ...]
+  "model": "arima",
+  "timezone": "UTC"
 }
 ```
 
@@ -82,7 +120,87 @@ Response:
 
 **GET** `/forecast/models`
 
-Returns available forecasting models and their capabilities.
+Returns available forecasting models and their capabilities, including whether optional dependencies (like Prophet) are installed.
+
+### Backtesting Harness
+
+**POST** `/forecast/backtest`
+
+Request:
+```json
+{
+  "series": [[timestamp, value], ...],
+  "horizon": 7,
+  "models": ["arima", "gradient_boosting"],
+  "regressors": {
+    "fx_usd_eur": [[timestamp, rate], ...]
+  },
+  "initial_window": 30,
+  "step": 7,
+  "organization_id": 1
+}
+```
+
+Response:
+```json
+[
+  {
+    "model": "arima",
+    "metrics": {"mae": 0.2, "rmse": 0.3, "mape": 1.5},
+    "tested_points": 21,
+    "folds": [
+      {
+        "start": "2024-01-01T00:00:00",
+        "end": "2024-01-21T00:00:00",
+        "horizon": 7,
+        "mae": 0.21,
+        "rmse": 0.32,
+        "mape": 1.6,
+        "actual": [[timestamp, value], ...],
+        "forecast": [[timestamp, predicted], ...]
+      }
+    ]
+  }
+]
+```
+
+### Causal Impact Analysis
+
+**POST** `/forecast/impact`
+
+Request:
+```json
+{
+  "series": [[timestamp, value], ...],
+  "event_start": "2024-07-01",
+  "event_end": "2024-07-14",
+  "interventions": {
+    "campaign": [[timestamp, 0], [timestamp, 1], ...]
+  },
+  "model": "arima",
+  "organization_id": 1
+}
+```
+
+Response (counterfactual vs observed):
+```json
+{
+  "model": "arima",
+  "event_start": "2024-07-01T00:00:00",
+  "event_end": "2024-07-14T00:00:00",
+  "average_impact": 4.2,
+  "cumulative_impact": 58.8,
+  "p_value": 0.03,
+  "points": [
+    {
+      "timestamp": "2024-07-03T00:00:00",
+      "actual": 120.0,
+      "predicted": 115.0,
+      "impact": 5.0
+    }
+  ]
+}
+```
 
 ## Model Types
 
@@ -91,6 +209,18 @@ Returns available forecasting models and their capabilities.
 - **Use Case**: Baseline forecasting for stationary or seasonally adjusted series
 - **Parameters**: Automatically selected p, d, q orders
 - **Seasonal Support**: SARIMA for seasonal patterns
+
+### Prophet (Optional)
+
+- **Use Case**: Seasonality-rich business series with holiday or event regressors
+- **Parameters**: Automatic trend and seasonality detection; add regressors via `regressors` payload
+- **Dependency**: Install `prophet>=1.0`; the API reports availability via `/forecast/models`.
+
+### Gradient Boosting Regressor
+
+- **Use Case**: Non-linear relationships with lagged effects and engineered seasonality
+- **Parameters**: Lagged features (1/7/14 days) plus calendar sine/cosine terms
+- **Dependency**: `scikit-learn` (shipped in base requirements)
 
 ### Regression with Exogenous Variables
 
@@ -123,18 +253,17 @@ python -m cli.macli forecast --series data.csv --horizon 30 --output forecast.js
 
 ## Evaluation and Backtesting
 
-The forecasting system includes evaluation metrics:
+Use `/forecast/backtest` to run rolling-origin validation across one or more models. Metrics returned:
 
 - **MAE**: Mean Absolute Error
 - **RMSE**: Root Mean Square Error
-- **MAPE**: Mean Absolute Percentage Error
-- **Backtesting**: Rolling window validation
+- **MAPE**: Mean Absolute Percentage Error (ignored when actuals contain zeroes)
+- **Fold Diagnostics**: Per-fold error metrics plus the forecast/actual pairs for inspection
 
 ## Future Enhancements
 
-- Advanced models (Prophet, LSTM)
-- Causal impact analysis
-- Automated model selection
+- Deep learning models (e.g., temporal convolution or LSTM variants)
+- Automated model selection and blending
 - Forecast combination techniques
 - Real-time forecast updates
 

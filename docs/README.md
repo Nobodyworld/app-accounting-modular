@@ -17,9 +17,16 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 
 - **Backend**: FastAPI application with SQLModel and SQLite
 - **UI**: Streamlit web interface
+- **React UI**: Placeholder React/Vite skeleton under `apps/react-ui/` for teams standardising on React
 - **Plugins**: Drop-in provider modules for data sources
 - **CLI**: Operational commands for snapshots and health checks
 - **Extensions**: Optional automation packs with observability
+
+## API Keys & Secrets
+
+- FX providers that call OpenExchangeRates expect `OPENEXCHANGERATES_APP_ID` to be present in the environment. The provider refuses to start without it and never logs the credential.
+- Bank feeds (Plaid stub) and macro data providers do not require credentials in this repo; wire real keys via env variables when replacing stubs.
+- Prefer `.env` files kept out of version control or a secrets manager in production; avoid baking credentials into CLI flags or config files.
 
 ## Documentation Sections
 
