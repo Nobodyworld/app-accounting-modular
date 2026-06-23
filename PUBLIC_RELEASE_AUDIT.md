@@ -115,17 +115,21 @@ Potential P0/P1 blockers to confirm in next phases:
 ## Next-Phase Remediation Plan
 
 1. Phase 2 (CI/build truth)
+
 - Validate and harden quality/security gates under local-validation policy.
 - Confirm tests fail fast and coverage thresholds match documented claims.
 
-2. Phase 3 (critical fixes)
+1. Phase 3 (critical fixes)
+
 - Correct any incorrect source/documentation paths.
 - Add or tighten accounting control tests (journal balancing, currency handling, data integrity paths).
 
-3. Phase 4 (employer-facing docs)
+1. Phase 4 (employer-facing docs)
+
 - Update README and docs to only claim behavior that is actually validated.
 
-4. Phase 5 (clean-clone validation)
+1. Phase 5 (clean-clone validation)
+
 - Run full documented workflow in a clean clone and record pass/fail truth.
 
 ## Commands Executed During Audit
