@@ -44,6 +44,24 @@ class SnapshotScenario:
     def from_mapping(cls, payload: Mapping[str, object]) -> SnapshotScenario:
         """Construct a scenario from a mapping, typically loaded from JSON."""
 
+        def _scope_values(value: object) -> Iterable[str] | None:
+            if value is None:
+                return None
+            if isinstance(value, str | bytes):
+                token = value.decode() if isinstance(value, bytes) else value
+                normalized = token.strip()
+                return (normalized,) if normalized else ()
+            if isinstance(value, Iterable):
+                scoped: list[str] = []
+                for item in value:
+                    if isinstance(item, str | bytes):
+                        token = item.decode() if isinstance(item, bytes) else item
+                        normalized = token.strip()
+                        if normalized:
+                            scoped.append(normalized)
+                return tuple(scoped)
+            return ()
+
         raw_name = str(payload.get("name", "") or "").strip()
         if not raw_name:
             raise ValueError("Scenario name must be provided")
@@ -58,10 +76,13 @@ class SnapshotScenario:
 
         tags = tuple(dict.fromkeys(tag.strip() for tag in tag_iterable if tag and tag.strip()))
 
+        commodity_symbols = _scope_values(payload.get("commodity_symbols"))
+        jurisdictions = _scope_values(payload.get("jurisdictions"))
+
         request = SnapshotRequest.from_primitives(
             base_currency=str(payload.get("base_currency", "")),
-            commodity_symbols=payload.get("commodity_symbols"),
-            jurisdictions=payload.get("jurisdictions"),
+            commodity_symbols=commodity_symbols,
+            jurisdictions=jurisdictions,
         )
 
         return cls(name=raw_name, request=request, tags=tags)

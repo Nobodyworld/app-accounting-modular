@@ -6,6 +6,12 @@ This directory contains comprehensive documentation for the Modular Accounting p
 
 Modular Accounting is a portable, modular accounting toolkit with pluggable data sources for tax, foreign exchange, and commodity pricing. The project ships with lightweight domain models, adapter contracts, and a demo CLI so teams can stitch together finance workflows without committing to a heavyweight stack.
 
+## Toolkit Scope
+
+- In scope: accounting snapshot orchestration, provider adapters (FX/commodity/tax), journal and ledger control surfaces, and observability-first operational tooling.
+- Out of scope: full ERP coverage, treasury execution workflows, and production-hardened React UI (the React app remains a placeholder scaffold).
+- Release readiness is tracked in the public audit log at [../PUBLIC_RELEASE_AUDIT.md](../PUBLIC_RELEASE_AUDIT.md).
+
 ## Getting Started
 
 - **[Setup](setup.md)**: Installation, prerequisites, and running tests
@@ -47,3 +53,4 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 - **[Main README](../README.md)**: Project overview and quickstart
 - **[AGENTS.md](../AGENTS.md)**: Guidelines for automated contributions
 - **[CHANGELOG.md](../CHANGELOG.md)**: Release history and changes
+- **[Public Release Audit](../PUBLIC_RELEASE_AUDIT.md)**: Public release validation checkpoints and clean-clone results

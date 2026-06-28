@@ -1,4 +1,4 @@
-"""Run the repository quality gate (lint, type, test, security)."""
+"""Run the repository quality gate (lint, type, tests, security)."""
 
 from __future__ import annotations
 
@@ -11,19 +11,27 @@ COMMANDS: Sequence[Sequence[str]] = (
     ("ruff", "check", "."),
     (
         "mypy",
-        "apps/modular_accounting/application",
-        "apps/api",
-        "apps/extensions",
-        "cli",
+        "src/apps/modular_accounting/application",
+        "src/apps/api",
+        "src/apps/extensions",
+        "src/cli",
         "tests",
     ),
     (
         "pytest",
-        "--cov=apps",
-        "--cov=plugins",
-        "--cov=cli",
+        "--cov=src/apps",
+        "--cov=src/plugins",
+        "--cov=src/cli",
         "--cov-report=term-missing",
         "--cov-fail-under=85",
+    ),
+    (
+        "pytest",
+        "-q",
+        "tests/test_ledger_service.py",
+        "tests/test_data_snapshot_service.py",
+        "tests/test_modular_accounting_snapshot.py",
+        "tests/test_modular_accounting_controls.py",
     ),
     (sys.executable, "-m", "safety", "check", "--full-report"),
 )

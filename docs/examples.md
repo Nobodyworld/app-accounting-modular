@@ -1,16 +1,19 @@
 # Examples
 
 ## Produce a Snapshot with Custom Symbols
+
 ```bash
 python -m cli.demo_cli snapshot --base EUR --commodity XAU --commodity XPT --format table --include-diagnostics
 ```
 
 ## Filter Tax Rules by Jurisdiction
+
 ```bash
 python -m cli.demo_cli snapshot --jurisdiction uk --format json --include-diagnostics
 ```
 
 ## Embed the Service in Python Code
+
 ```python
 from datetime import date
 from decimal import Decimal
@@ -65,29 +68,37 @@ service.clear_cache()
 ```
 
 ## Inspect platform health
+
 ```bash
 python -m cli.macli health
 ```
 
 ## List configured extensions
+
 ```bash
 python -m cli.macli extensions
 ```
 
 ## Build provider-backed data snapshots
+
 ```bash
 python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format json
 ```
+
 The command returns a JSON payload containing FX rates, commodity quotes, tax rules, cache statistics, and the provider keys
 used for each capability. Switch to `--format table` for a human-friendly summary when demonstrating the workflow.
+
 ## Execute batch scenario plans
+
 ```bash
 python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json
 python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table
 ```
+
 Start with `inspect-plan` to validate metadata, defaults, and coverage directly from the plan file. The subsequent
 `snapshot-scenarios` execution reuses the configured providers for each scenario and prints an aggregated summary
 alongside per-scenario diagnostics. Use the companion HTTP endpoints to automate the same workflow:
+
 ```bash
 curl -X POST http://localhost:8000/snapshot/plans/preview \
   -H "Content-Type: application/json" \
@@ -95,7 +106,17 @@ curl -X POST http://localhost:8000/snapshot/plans/preview \
 curl -X POST http://localhost:8000/snapshot/scenarios \
   -H "Content-Type: application/json" \
   -d @docs/examples/scenario-plan.json
+```
 
 ## Map Transactions to External Ledgers
+
 Concrete examples for pushing modular-accounting transactions into external systems live in `docs/examples/ledger_persistence.md`. The snippets cover QuickBooks-style journal entries, Xero-compatible payloads, and SQL upserts for custom ledgers.
-```
+
+## Foreign Currency Accounting Case Study
+
+See `docs/examples/foreign_currency_accounting_case_study.md` for a worked
+example that covers:
+
+- Initial recognition of a supplier invoice in EUR when the ledger base is USD.
+- Settlement at a different FX rate with realized gain/loss balancing entries.
+- Month-end revaluation controls and documentation expectations for auditability.

@@ -4,39 +4,39 @@ Modular Accounting now exposes a layered architecture with shared observability
 and extension scaffolding so that new modules can be introduced without
 touching the core. The diagram below illustrates the major runtime surfaces.
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                             Entry Points                                 │
-│  - FastAPI (apps/api/main.py)                                            │
-│  - CLI (cli/macli.py)                                                    │
-│  - Scheduled jobs (apps/api/scheduler.py)                                │
+│  - FastAPI (src/apps/api/main.py)                                        │
+│  - CLI (src/cli/macli.py)                                                │
+│  - Scheduled jobs (src/apps/api/scheduler.py)                            │
 └───────────────┬───────────────────────────────┬──────────────────────────┘
                 │                               │
 ┌───────────────▼───────────────┐   ┌───────────▼────────────────────────┐
 │ Application Services           │   │ Observability Layer                 │
 │ - DataSnapshotService          │   │ - Structured logging                │
-│   (apps/modular_accounting/    │   │   (apps/observability/logging.py)   │
+│   (src/apps/modular_accounting/│   │   (src/apps/observability/logging.py)│
 │    application/snapshots.py)   │   │ - Metrics + health registry         │
 │ - Telemetry adapter            │   │   (apps/observability/{metrics,     │
-│   (apps/modular_accounting/    │   │    health}.py)                      │
+│   (src/apps/modular_accounting/│   │    health}.py)                      │
 │    application/telemetry.py)   │   │ - ExtensionTelemetryAdapter         │
-│ - Tracing context helpers      │   │   (apps/observability/metrics.py)   │
-│   (apps/observability/tracing.py)│ │ - Diagnostics snapshot              │
-│                                │   │   (apps/observability/diagnostics.py)│
+│ - Tracing context helpers      │   │   (src/apps/observability/metrics.py)│
+│   (src/apps/observability/tracing.py)│ │ - Diagnostics snapshot              │
+│                                │   │   (src/apps/observability/diagnostics.py)│
 │                                │   │ - Tracing + trace middleware        │
-└───────────────┬───────────────┘   │   (apps/observability/tracing.py)   │
+└───────────────┬───────────────┘   │   (src/apps/observability/tracing.py)│
                 │                   └───────────┬────────────────────────┘
                 │                                │
 ┌───────────────▼───────────────┐   ┌───────────▼────────────────────────┐
 │ Domain Ports & Providers       │   │ Extension Registry                 │
-│ - Ports (apps/modular_         │   │ - apps/extensions/registry.py      │
+│ - Ports (src/apps/modular_     │   │ - src/apps/extensions/registry.py  │
 │   accounting/domain/ports.py)  │   │ - Default extension loader         │
-│ - Provider loader (apps/api/   │   │   (apps/api/services/               │
+│ - Provider loader (src/apps/api/│   │   (src/apps/api/services/          │
 │   services/plugin_loader.py)   │   │    extension_loader.py)             │
-│ - Built-in plugins (plugins/)  │   │ - Baseline analytics extension     │
+│ - Built-in plugins (src/plugins/)│   │ - Baseline analytics extension     │
 └───────────────────────────────┘   │   (plugins/analytics_baseline/)      │
                                      │ - Operations heartbeat extension    │
-                                     │   (plugins/ops_heartbeat/)          │
+                                     │   (src/plugins/ops_heartbeat/)      │
                                      └────────────────────────────────────┘
 ```
 
@@ -47,7 +47,7 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    `RequestMetricsMiddleware` so every request gains a traceparent header and
    latency metrics, while the CLI uses `logging_context` + `traced` to provide
    correlation IDs and trace IDs for background work.  A dedicated
-   `StartupManager` (`apps/api/startup.py`) now orchestrates the API bootstrap
+   `StartupManager` (`src/apps/api/startup.py`) now orchestrates the API bootstrap
    sequence so logging/tracing configuration, database initialisation, health
    registration, and extension loading emit structured step metadata.  The
    collected records are exposed via `app.state.startup_records` for diagnostics
@@ -56,7 +56,7 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    operators can see which steps executed or failed.
 2. **Extension loader** imports every enabled module declared in
    `Settings.allowed_extensions`. Extensions register an `ExtensionManifest`
-   with `apps.extensions.registry.extension_registry` and can contribute health
+   with `src.apps.extensions.registry.extension_registry` and can contribute health
    checks or custom instrumentation. The loader now emits metrics via
    `ExtensionTelemetryAdapter` so dashboards can monitor load durations and
    gauge whether a module is both enabled and successfully initialised.
@@ -93,7 +93,7 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    touching API code. The tracing module ships a `_noop_exporter` sentinel so
    spans cleanly downgrade to console logging when OpenTelemetry exporters are
    unavailable. `/extensions/contracts`, `macli inspect-contracts`, and the
-   reference `plugins.ops_resilience` incident-playbook extension expose
+   reference `src/plugins/ops_resilience` incident-playbook extension expose
    operational contracts to automation tooling.
 
 ## Operational safeguards

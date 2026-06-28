@@ -8,7 +8,7 @@
 
 | Layer | Details |
 | ----- | ------- |
-| Runtime | Python 3.11 |
+| Runtime | Python 3.12 |
 | Frameworks | FastAPI, SQLModel, Streamlit |
 | Tooling | Ruff, Pytest, Makefile-driven quality gates |
 | Packaging | PEP 621 via `pyproject.toml` |

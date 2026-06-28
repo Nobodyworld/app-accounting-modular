@@ -4,7 +4,7 @@ This guide covers installing Modular Accounting, setting up your development env
 
 ## Prerequisites
 
-- **Python**: 3.11 or higher (tested up to 3.12)
+- **Python**: 3.12 or higher (tested on 3.12)
 - **pip**: Python package installer
 - **Virtual Environment**: `venv` (built-in) or `virtualenv`
 - **Optional**: Docker and Docker Compose for containerized deployment
@@ -14,12 +14,14 @@ This guide covers installing Modular Accounting, setting up your development env
 ### Local Development
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/Nobodyworld/app-accounting-modular.git
    cd app-accounting-modular
    ```
 
 2. **Create a virtual environment**:
+
    ```bash
    python -m venv .venv
    # On Windows:
@@ -29,6 +31,7 @@ This guide covers installing Modular Accounting, setting up your development env
    ```
 
 3. **Install dependencies**:
+
    ```bash
    make install
    # Or manually:
@@ -150,17 +153,20 @@ python -m cli.macli inspect-contracts
 ## Development Workflow
 
 1. **Install pre-commit hooks**:
+
    ```bash
    pip install pre-commit
    pre-commit install
    ```
 
 2. **Run quality checks before committing**:
+
    ```bash
    make quality
    ```
 
 3. **Test your changes**:
+
    ```bash
    make test
    ```
@@ -170,46 +176,58 @@ python -m cli.macli inspect-contracts
 ### Common Issues
 
 #### Import Errors
+
 **Symptoms**: `ModuleNotFoundError` or `ImportError`
 **Solutions**:
+
 - Ensure you're in the correct virtual environment: `source .venv/bin/activate`
 - Install dependencies: `make install`
-- Check Python version compatibility (3.11+ required)
+- Check Python version compatibility (3.12+ required)
 
 #### Database Connection Issues
+
 **Symptoms**: Database-related errors on startup
 **Solutions**:
+
 - Verify `DATABASE_URL` in environment variables
 - Check file permissions for SQLite database
 - Ensure database directory exists and is writable
 - For PostgreSQL: verify connection string and credentials
 
 #### Plugin Loading Failures
+
 **Symptoms**: Extensions or providers not loading
 **Solutions**:
+
 - Check plugin configuration in settings
 - Verify plugin directory structure (`plugins/name/provider.py`)
 - Ensure plugin dependencies are installed
 - Review logs for specific error messages
 
 #### Port Conflicts
+
 **Symptoms**: "Address already in use" errors
 **Solutions**:
+
 - Change ports in configuration: `MODACCT_API_PORT=8001`
 - Kill existing processes: `lsof -ti:8000 | xargs kill`
 - Use different hosts: `MODACCT_API_HOST=127.0.0.1`
 
 #### Test Failures
+
 **Symptoms**: Tests failing unexpectedly
 **Solutions**:
+
 - Run tests in isolation: `pytest tests/test_specific.py`
 - Check for missing test dependencies
 - Verify test database is clean
 - Run with verbose output: `pytest -v`
 
 #### Performance Issues
+
 **Symptoms**: Slow responses or high memory usage
 **Solutions**:
+
 - Check cache configuration and TTL settings
 - Monitor database query performance
 - Review extension loading and health checks

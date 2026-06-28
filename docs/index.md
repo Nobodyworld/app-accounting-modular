@@ -14,6 +14,8 @@ roadmap.
   runtime-checkable protocols.
 - [Examples](examples.md) – copy-paste ready commands and snippets for common
   tasks.
+- [Foreign Currency Case Study](examples/foreign_currency_accounting_case_study.md) –
+  end-to-end journal controls for a multi-currency purchase and month-end revaluation.
 - [Extension Guide](guides/extension_guide.md) – build and register optional
   automation packs with health probes and metrics.
 - [Operations & Incident Response](operations.md) – observability, tracing, and
@@ -29,3 +31,5 @@ roadmap.
   incident communications.
 - [Directory overviews](../README.md#repository-structure) – quick links to
   per-folder READMEs (architecture, governance, operations, plugins, tests).
+- [Public Release Audit](../PUBLIC_RELEASE_AUDIT.md) – release gate evidence,
+  path validation, and clean-clone verification notes.

@@ -1,7 +1,7 @@
 # Dependency & Security Posture
 
 This project pins runtime and development dependencies to versions verified on
-Python 3.11–3.12. All packages ship permissive or proprietary-compatible
+Python 3.12. All packages ship permissive or proprietary-compatible
 licenses and were checked against their upstream advisories on 2024-11-02.
 
 | Package | Version | Purpose | Notes |
