@@ -13,7 +13,6 @@ from datetime import date
 from typing import Any
 
 import requests
-
 from apps.api.config import settings
 from apps.api.models.models import Rate
 

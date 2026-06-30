@@ -6,7 +6,7 @@ import warnings
 from typing import TYPE_CHECKING, Any
 
 warnings.warn(
-    "apps.modular_accounting.services is deprecated; " "use apps.modular_accounting.application instead.",
+    "apps.modular_accounting.services is deprecated; use apps.modular_accounting.application instead.",
     DeprecationWarning,
     stacklevel=2,
 )

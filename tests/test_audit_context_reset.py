@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.api.audit import AuditActor, pop_actor, push_actor, get_current_actor
+from apps.api.audit import AuditActor, get_current_actor, pop_actor, push_actor
 
 
 def test_pop_actor_handles_cross_thread_reset() -> None:

@@ -6,7 +6,6 @@ from collections.abc import Iterable
 from datetime import date
 
 import yfinance as yf
-
 from apps.api.models.models import Price
 
 __all__ = ["YFinanceMarketProvider", "provider"]

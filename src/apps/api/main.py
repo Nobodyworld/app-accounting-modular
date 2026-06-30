@@ -97,7 +97,7 @@ def create_app() -> FastAPI:
     startup_records = startup_manager.run(startup_steps, context=startup_context)
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:  # pragma: no cover - exercised via tests
+    async def lifespan(_: FastAPI) -> AsyncGenerator[None]:  # pragma: no cover - exercised via tests
         start_scheduler()
         try:
             yield

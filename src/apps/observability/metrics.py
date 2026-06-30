@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+from collections.abc import AsyncIterator, Iterator, Mapping
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Protocol, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only imports
-    from prometheus_client import (  # type: ignore[import-not-found]
+    from prometheus_client import (
         CONTENT_TYPE_LATEST,
         CollectorRegistry,
         Counter,
@@ -36,11 +36,11 @@ else:  # pragma: no cover - runtime import with fallback
             def __init__(self) -> None:
                 self._metrics: list[_BaseMetric] = []
 
-            def register(self, metric: "_BaseMetric") -> None:
+            def register(self, metric: _BaseMetric) -> None:
                 self._metrics.append(metric)
 
             @property
-            def metrics(self) -> list["_BaseMetric"]:
+            def metrics(self) -> list[_BaseMetric]:
                 return self._metrics
 
     class _MetricHandle:
@@ -141,12 +141,24 @@ else:  # pragma: no cover - runtime import with fallback
         lines: list[str] = []
         for metric in registry.metrics:
             for key, value in metric._values.items():
-                labels = ",".join(
-                    f'{name}="{val}"' for name, val in zip(metric._labelnames, key, strict=False) if name
-                )
+                labels = ",".join(f'{name}="{val}"' for name, val in zip(metric._labelnames, key, strict=False) if name)
                 label_str = f"{{{labels}}}" if labels else ""
                 lines.append(f"{metric.name}{label_str} {value}")
         return ("\n".join(lines) + "\n").encode()
+
+    # If prometheus_client is importable, restore its primitives so fallback
+    # classes do not shadow the native collectors.
+    try:
+        import prometheus_client as _pc  # type: ignore[import-not-found]
+
+        CONTENT_TYPE_LATEST = _pc.CONTENT_TYPE_LATEST
+        CollectorRegistry = _pc.CollectorRegistry
+        Counter = _pc.Counter
+        Gauge = _pc.Gauge
+        Histogram = _pc.Histogram
+        generate_latest = _pc.generate_latest
+    except Exception:
+        pass
 
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -415,8 +427,15 @@ class MetricsRegistry:
 
     def render_latest(self) -> bytes:
         """Return the Prometheus exposition for the registry."""
+        # Prefer the native prometheus client renderer when available.
+        try:
+            import prometheus_client  # type: ignore[import-not-found]
 
-        return cast(bytes, generate_latest(self.registry))
+            if not hasattr(self.registry, "metrics"):
+                return prometheus_client.generate_latest(self.registry)
+        except Exception:
+            pass
+        return generate_latest(self.registry)
 
 
 metrics_registry = MetricsRegistry.create()
@@ -530,24 +549,16 @@ class ScenarioTelemetryAdapter:
             "scenario": scenario,
             "tags": ",".join(sorted(tags)) if tags else "<none>",
         }
-        tracker = self._registry.scenario_inflight.labels(**label_base).track_inprogress()
-        tracker.__enter__()
-        start = time.perf_counter()
-        status = "success"
-        exc_type: type[BaseException] | None = None
-        exc: BaseException | None = None
-        tb: TracebackType | None = None
-        try:
-            yield
-        except Exception as err:
-            status = "error"
-            exc_type = err.__class__
-            exc = err
-            tb = err.__traceback__
-            raise
-        finally:
-            self._record(status=status, start=start, label_base=label_base)
-            tracker.__exit__(exc_type, exc, tb)
+        with self._registry.scenario_inflight.labels(**label_base).track_inprogress():
+            start = time.perf_counter()
+            status = "success"
+            try:
+                yield
+            except Exception:
+                status = "error"
+                raise
+            finally:
+                self._record(status=status, start=start, label_base=label_base)
 
     def _record(
         self,
@@ -605,9 +616,7 @@ class RequestMetricsMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._registry = registry
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         route = _normalise_route(request.scope)
         method = request.method
         labels = {"method": method, "route": route}

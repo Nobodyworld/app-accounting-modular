@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
-import json
 
 import click
-
 from apps.modular_accounting.adapters import (
     InMemoryCommodityAdapter,
     InMemoryFXAdapter,
@@ -20,6 +19,7 @@ from apps.modular_accounting.application import (
     compute_snapshot_diagnostics,
 )
 from apps.modular_accounting.domain import TaxRule
+
 from cli.snapshot_render import format_snapshot_table, snapshot_to_payload
 
 

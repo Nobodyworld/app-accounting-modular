@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- 2026-06-30: Completed public-readiness hardening by fixing async audit worker
+  concurrency initialization, resolving scheduler/security test isolation
+  regressions, removing stale XPASS expectations, upgrading dev security
+  dependencies, validating Apache-2.0 licensing/docs alignment, and closing the
+  canonical quality gate on Python 3.14 with 244 passing tests at 86.15%
+  coverage.
+
 - 2025-05-24: Validated the post-refactor layout by adding directory-level
   READMEs, refreshing repository navigation docs (README, SPEC, STYLE-GUIDE),
   tightening API model typing/logging utilities, and aligning smoke/metadata

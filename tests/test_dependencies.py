@@ -16,7 +16,6 @@ def test_malformed_header_metrics_increment() -> None:
 def test_spoofed_header_metrics_increment() -> None:
     from apps.api.dependencies import _spoofed_header_counter
 
-    before = metrics_registry.render_latest().decode()
     _spoofed_header_counter.labels(reason="missing-org").inc()
     after = metrics_registry.render_latest().decode()
     assert "modacct_header_spoof_total" in after

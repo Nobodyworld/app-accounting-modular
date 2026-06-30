@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 
 import pytest
+from apps.api.models.models import JournalEntry, Organization, Rate, Transaction
+from apps.api.services.ledger_service import LedgerService, TrialBalanceRow
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from apps.api.models.models import Organization, JournalEntry, Transaction, Rate
-from apps.api.services.ledger_service import LedgerService, TrialBalanceRow
 
-
-def create_session():
+@contextmanager
+def create_session() -> Iterator[Session]:
     """Construct an isolated SQLModel session for ledger-related tests."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
-    return Session(engine, expire_on_commit=False)
+    session = Session(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
 
 
 def test_trial_balance_totals_balance() -> None:
@@ -243,11 +250,11 @@ def test_post_transaction_supports_reversing_entries() -> None:
             source="reversal",
             source_reference=str(txn.id),
         )
-    assert reversing.external_ref == str(txn.id)
-    tb = ledger.trial_balance()
-    rows = {row.account_code: row for row in tb["rows"]}
-    assert rows["1000"].balance == Decimal("0")
-    assert rows["4000"].balance == Decimal("0")
+        assert reversing.external_ref == str(txn.id)
+        tb = ledger.trial_balance()
+        rows = {row.account_code: row for row in tb["rows"]}
+        assert rows["1000"].balance == Decimal("0")
+        assert rows["4000"].balance == Decimal("0")
 
 
 def test_multi_org_postings_isolated() -> None:

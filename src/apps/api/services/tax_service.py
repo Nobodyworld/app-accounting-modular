@@ -4,29 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from json import dumps
-from typing import Any, TypedDict
+from typing import Any
 
 from sqlmodel import Session, select
 
 from ..audit import AuditLogger, apply_creation_metadata
 from ..models.models import AuditAction, TaxRule
 
+JSONLogicRule = Mapping[str, Any]
 
-class JSONLogicRule(TypedDict, total=False):
-    """Minimal JSONLogic schema used for tax expressions."""
-
-    __annotations__ = {
-        "and_": list["JSONLogicRule"],  # pragma: no cover - schema for type hints
-        "or_": list["JSONLogicRule"],
-        "if_": list["JSONLogicRule"],
-        "gt": list[float | int],
-        "lt": list[float | int],
-        "le": list[float | int],
-        "ge": list[float | int],
-        "eq": list[float | int | str],
-        "var": str,
-        "rate": float | int,
-    }
 
 __all__ = ["BaseTaxProvider", "TaxService"]
 _DEFAULT_JURISDICTION_RULES = {
@@ -102,7 +88,7 @@ class TaxService:
                 raise ValueError(f"Operator '{key}' expects a numeric rate at {path}")
 
     @classmethod
-    def _normalise_expression(cls, expr: str | JSONLogicRule) -> str:
+    def _normalise_expression(cls, expr: object) -> str:
         if isinstance(expr, str):
             return expr
         if isinstance(expr, Mapping):
@@ -224,7 +210,7 @@ class JurisdictionTaxUpdater:
         """Synchronise rules for all configured jurisdictions."""
 
         total = 0
-        for jurisdiction, provider in self.provider_factory.items():
+        for _jurisdiction, provider in self.provider_factory.items():
             service = TaxService(self.session, provider, organization_id=self.organization_id)
             total += service.sync_rules()
         return total

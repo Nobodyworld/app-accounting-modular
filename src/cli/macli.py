@@ -7,15 +7,13 @@ import csv
 import json
 import logging
 import sys
+import tomllib
 from collections.abc import Iterable, Sequence
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
-import tomllib
-from sqlmodel import Session, select
-
 from apps.api.config import settings
 from apps.api.db import engine, init_db
 from apps.api.models.models import Account, AccountType
@@ -26,17 +24,18 @@ from apps.api.services.extension_loader import (
     registered_contracts,
 )
 from apps.api.services.fx_service import FXService
+from apps.api.services.health import register_default_health_checks as _register_health_checks
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import MarketService
 from apps.api.services.plugin_loader import load_provider
 from apps.api.services.snapshot_service import SnapshotOrchestrator, scenario_batch_to_payload
-from apps.api.services.health import register_default_health_checks as _register_health_checks
 from apps.extensions.scaffold import scaffold_extension
 from apps.modular_accounting.application import SnapshotScenario
 from apps.observability.diagnostics import collect_observability_snapshot
 from apps.observability.health import health_registry
 from apps.observability.logging import configure_logging, logging_context
 from apps.observability.tracing import configure_tracing, traced
+from sqlmodel import Session, select
 
 
 def _bootstrap_observability() -> None:
@@ -52,7 +51,9 @@ def _bootstrap_observability() -> None:
     root_logger = logging.getLogger()
     for handler in root_logger.handlers:
         try:
-            handler.stream = sys.stderr
+            stream_handler = cast(Any, handler)
+            if hasattr(stream_handler, "stream"):
+                stream_handler.stream = sys.stderr
         except AttributeError:
             continue
     logging.getLogger("apps.observability.tracing").setLevel(logging.WARNING)
@@ -155,7 +156,6 @@ def _load_transactions_from_csv(ledger: LedgerService, file_path: str | Path) ->
     if not path.exists():
         raise click.ClickException(f"CSV file not found: {path}")
 
-    session = ledger.s  # reuse existing session for lookups/creates
     grouped: dict[tuple[date, str], list[dict[str, object]]] = {}
 
     with path.open(encoding="utf-8") as handle:
@@ -199,8 +199,8 @@ def _load_transactions_from_csv(ledger: LedgerService, file_path: str | Path) ->
 
     transactions: list[dict[str, object]] = []
     for (txn_date, description), postings in grouped.items():
-        total_debit = sum(p["debit"] for p in postings)
-        total_credit = sum(p["credit"] for p in postings)
+        total_debit = sum(float(cast(Any, p["debit"])) for p in postings)
+        total_credit = sum(float(cast(Any, p["credit"])) for p in postings)
         if round(total_debit - total_credit, 4) != 0:
             raise click.ClickException(
                 f"Unbalanced transaction '{description}' on {txn_date}: "
@@ -428,11 +428,12 @@ def sync_fx(base: str, provider: str) -> None:
     with logging_context(command="sync-fx", base=base, provider=provider):
         with traced("cli.sync_fx", base=base, provider=provider):
             init_db()
-            prov = load_provider(provider)
+            provider_handle = load_provider(provider)
+            provider_instance = provider_handle.instance
             with Session(engine) as session:
-                service = FXService(session, prov)
+                service = FXService(session, provider_instance)
                 count = service.sync(base=base)
-                click.echo(f"Synced {count} FX rates via {prov.name}")
+                click.echo(f"Synced {count} FX rates via {provider_handle.metadata.name}")
 
 
 @cli.command("sync-prices")
@@ -446,13 +447,17 @@ def sync_prices(symbol: str, start: str, end: str, provider: str) -> None:
     with logging_context(command="sync-prices", symbol=symbol, provider=provider):
         with traced("cli.sync_prices", symbol=symbol, provider=provider):
             init_db()
-            prov = load_provider(provider)
+            provider_handle = load_provider(provider)
+            provider_instance = provider_handle.instance
             start_date = date.fromisoformat(start)
             end_date = date.fromisoformat(end)
             with Session(engine) as session:
-                service = MarketService(session, prov)
+                service = MarketService(session, provider_instance)
                 count = service.sync_prices(symbol, start_date, end_date)
-                click.echo(f"Synced {count} prices for {symbol} from {start_date} to {end_date} via {prov.name}")
+                click.echo(
+                    f"Synced {count} prices for {symbol} from {start_date} to {end_date} "
+                    f"via {provider_handle.metadata.name}"
+                )
 
 
 @cli.command("snapshot")
@@ -485,9 +490,14 @@ def snapshot_command(
         click.echo(json.dumps(result.as_payload(), default=str))
         return
 
-    payload = result.as_payload()
+    payload = cast(dict[str, Any], result.as_payload())
     click.echo("Snapshot")
-    click.echo(_render_table(("Section", "Count"), [("fx_rates", str(len(payload["fx_rates"]))), ("tax_rules", str(len(payload["tax_rules"])))]))
+    click.echo(
+        _render_table(
+            ("Section", "Count"),
+            [("fx_rates", str(len(payload["fx_rates"]))), ("tax_rules", str(len(payload["tax_rules"])))],
+        )
+    )
     click.echo("\nProviders:")
     click.echo(_json_dump(payload["providers"]))
     click.echo("\nDiagnostics")
@@ -515,17 +525,22 @@ def snapshot_scenarios(plan: str, format_: str, reset_cache: bool) -> None:
     else:
         with plan_path.open(encoding="utf-8") as handle:
             plan_payload = json.load(handle)
-    scenarios_raw = plan_payload.get("scenarios") or []
-    scenarios = [SnapshotScenario.from_mapping(item) for item in scenarios_raw]
+    scenarios_value = plan_payload.get("scenarios")
+    scenarios_raw = scenarios_value if isinstance(scenarios_value, list) else []
+    scenarios = [SnapshotScenario.from_mapping(item) for item in scenarios_raw if isinstance(item, dict)]
     batch = orchestrator.run_scenarios(scenarios, reset_cache_between_runs=reset_cache)
-    payload = scenario_batch_to_payload(batch)
+    payload = cast(dict[str, Any], scenario_batch_to_payload(batch))
 
     if format_.lower() == "json":
         click.echo(json.dumps(payload, default=str))
         return
 
     click.echo("Scenarios")
-    for result in payload["results"]:
+    results_value = payload.get("results")
+    results: list[Any] = results_value if isinstance(results_value, list) else []
+    for result in results:
+        if not isinstance(result, dict):
+            continue
         click.echo(f"- {result['name']}: providers={result.get('providers')}")
     click.echo("\nScenario Summary")
     click.echo(_json_dump(payload["summary"]))
@@ -550,11 +565,14 @@ def inspect_plan(plan: str, format_: str) -> None:
         with plan_path.open(encoding="utf-8") as handle:
             payload = json.load(handle)
 
-    scenarios_raw = payload.get("scenarios") or []
+    scenarios_payload = payload.get("scenarios")
+    scenarios_raw = list(scenarios_payload) if isinstance(scenarios_payload, list) else []
     defaults = payload.get("defaults") or {}
     default_base = defaults.get("base_currency")
     scenarios = []
     for item in scenarios_raw:
+        if not isinstance(item, dict):
+            continue
         item_with_defaults = dict(item)
         if not item_with_defaults.get("base_currency") and default_base:
             item_with_defaults["base_currency"] = default_base

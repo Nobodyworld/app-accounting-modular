@@ -6,8 +6,9 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from time import sleep
 from threading import Lock
+from time import sleep
+from typing import Any
 from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,9 +17,8 @@ from sqlmodel import Session, select
 from apps.observability.logging import logging_context
 
 from .db import engine
-from .services.budget_service import BudgetService
-
 from .models.models import ForecastPlan
+from .services.budget_service import BudgetService
 
 __all__ = [
     "start_scheduler",
@@ -93,7 +93,9 @@ def _run_scheduled_refresh() -> None:
                 logger.info("No active forecast plans available for refresh")
                 return
             for plan in plans:
-                interval = timedelta(minutes=plan.refresh_interval_minutes or int(_SCHEDULE_INTERVAL.total_seconds() / 60))
+                interval = timedelta(
+                    minutes=plan.refresh_interval_minutes or int(_SCHEDULE_INTERVAL.total_seconds() / 60)
+                )
                 if plan.last_refreshed_at is not None:
                     refreshed = plan.last_refreshed_at
                     if refreshed.tzinfo is None:

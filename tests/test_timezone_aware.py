@@ -2,9 +2,8 @@
 
 from datetime import datetime
 
-from sqlmodel import SQLModel
-
 from apps.api.audit import AuditActor, apply_creation_metadata, use_actor
+from sqlmodel import SQLModel
 
 
 class DummyRecord(SQLModel):

@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import JSON, Column, Index, UniqueConstraint
-from sqlalchemy import MetaData
 from sqlmodel import Field, SQLModel
-
 
 TABLE_KWARGS: dict[str, object] = {"extend_existing": True}
 
-class AccountType(str, Enum):
+
+class AccountType(StrEnum):
     """Enumerates supported account classifications."""
 
     ASSET = "ASSET"
@@ -23,7 +22,7 @@ class AccountType(str, Enum):
     EXPENSE = "EXPENSE"
 
 
-class WorkflowStatus(str, Enum):
+class WorkflowStatus(StrEnum):
     """Lifecycle status for staged workflow transactions."""
 
     INGESTED = "INGESTED"
@@ -196,7 +195,7 @@ class Event(SQLModel, table=True):
     __table_args__ = TABLE_KWARGS
 
 
-class AuditAction(str, Enum):
+class AuditAction(StrEnum):
     """Enumerates audit log action types."""
 
     CREATE = "CREATE"

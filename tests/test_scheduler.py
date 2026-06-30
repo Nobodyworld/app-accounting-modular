@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
-from sqlalchemy import text
-from sqlmodel import Session, delete
-
 from apps.api import scheduler
-from apps.api.db import engine, init_db
 from apps.api.models.models import ForecastPlan
-from datetime import UTC, datetime
+from sqlalchemy import text
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, delete
 
 
 class StubBudgetService:
@@ -46,8 +46,15 @@ class StubBudgetService:
 
 
 @pytest.fixture(autouse=True)
-def clean_forecast_plans() -> None:
-    init_db()
+def clean_forecast_plans(monkeypatch: pytest.MonkeyPatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    monkeypatch.setattr(scheduler, "engine", engine)
+
     with Session(engine) as session:
         # Ensure new columns exist for refreshed schema
         columns = {row[1] for row in session.exec(text("PRAGMA table_info('forecastplan')"))}
@@ -61,13 +68,14 @@ def clean_forecast_plans() -> None:
     with Session(engine) as session:
         session.exec(delete(ForecastPlan))
         session.commit()
+    engine.dispose()
 
 
 # TODO - (scheduler) Simulate distributed job runners once queue integration lands.
 
 
 def test_run_scheduled_refresh_logs_failures_and_continues(monkeypatch, caplog) -> None:
-    with Session(engine) as session:
+    with Session(scheduler.engine) as session:
         plan_with_budget = ForecastPlan(
             organization_id=1,
             budget_id=2,
@@ -140,7 +148,7 @@ def test_scheduler_warns_when_behind_schedule(caplog) -> None:
 
 
 def test_scheduler_skips_plans_not_due(monkeypatch) -> None:
-    with Session(engine) as session:
+    with Session(scheduler.engine) as session:
         plan = ForecastPlan(
             organization_id=1,
             budget_id=None,

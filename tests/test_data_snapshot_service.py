@@ -7,7 +7,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-
 from apps.modular_accounting.adapters import (
     InMemoryCommodityAdapter,
     InMemoryFXAdapter,

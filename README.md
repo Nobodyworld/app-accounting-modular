@@ -21,6 +21,16 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
 - Make integrations **composable**: treat each data source as an interchangeable plugin.
 - Provide a **clear starting point** for teams that want to layer tax, FX, or commodities intelligence on top of core ledgers.
 
+## Python Version Policy
+
+- **Minimum supported version**: Python 3.12
+- **Primary development version**: Python 3.14
+- **Latest validated version**: Python 3.14
+- **CI-enforced versions**: Python 3.12, 3.13, and 3.14
+
+Compatibility is maintained across supported versions unless a documented
+dependency or interpreter regression requires a scoped exception.
+
 ## How
 
 1. Install dependencies and activate a virtual environment:
@@ -87,16 +97,6 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
    snapshot already exists, rerun
    `python -m tools.audit_metrics --skip-trace --format json` to reuse the
    cached coverage data and refresh only the complexity/dependency metrics.
-9. Bump semantic versions and seed release notes in one go:
-
-   ```bash
-   make release PART=minor MESSAGE="Document extension contracts"
-   ```
-
-   The command updates `VERSION`, inserts a dated entry into `CHANGELOG.md`, and
-   prepends a highlight to `RELEASE_NOTES.md` so every release captures context
-   automatically. Adjust `PART` (`major`, `minor`, or `patch`) and tailor the
-   summary message for each release.
 
 ## Repository Structure
 
@@ -132,12 +132,32 @@ Extended guides live under the [`docs/`](docs/index.md) folder:
 - [Extension development guide](docs/guides/extension_guide.md)
 - [Automation & agent playbook](docs/operations/automation_playbook.md)
 - [Operations & incident response](docs/operations.md)
-- [Governance plan](docs/governance/plan.md)
-- [Stewardship report](docs/governance/stewards_report.md)
-- [Support channels](docs/governance/support.md)
+- [Foreign-currency accounting case study](docs/examples/foreign_currency_accounting_case_study.md)
 - [Agent operations quick reference](AGENTS.md)
-- [Public release audit log](PUBLIC_RELEASE_AUDIT.md)
+
+The case study includes complete invoice-to-remeasurement-to-settlement journal
+flows plus visual terminal/journal evidence under `docs/examples/assets/`.
+
+## License
+
+This repository is publicly licensed under the [Apache License 2.0](LICENSE).
 
 ## Contributing
 
 Contributions are welcome. Please review the existing governance files (`CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`) before opening a pull request.
+
+## Governance and Release Management
+
+- [Governance plan](docs/governance/plan.md)
+- [Stewardship report](docs/governance/stewards_report.md)
+- [Support channels](docs/governance/support.md)
+- [Public release audit log](PUBLIC_RELEASE_AUDIT.md)
+
+Release command:
+
+```bash
+make release PART=minor MESSAGE="Document extension contracts"
+```
+
+The release workflow updates `VERSION`, inserts a dated entry into
+`CHANGELOG.md`, and prepends highlights to `RELEASE_NOTES.md`.

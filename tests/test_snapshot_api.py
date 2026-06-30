@@ -1,9 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from fastapi.testclient import TestClient
-
-from apps.api.main import create_app
+from apps.api import main as api_main
 from apps.api.models.models import User
 from apps.api.routers import snapshot as snapshot_router
 from apps.api.security import get_current_user
@@ -19,6 +17,7 @@ from apps.modular_accounting.application import (
 )
 from apps.modular_accounting.application.cache import CacheStats
 from apps.modular_accounting.domain import CommodityQuote, FXRate, Money, TaxRule
+from fastapi.testclient import TestClient
 
 
 def _result() -> SnapshotResult:
@@ -103,8 +102,13 @@ def _batch() -> ScenarioBatchResult:
     return ScenarioBatchResult(results=(scenario_result,), summary=summary)
 
 
+def _create_app_without_db(monkeypatch):
+    monkeypatch.setattr(api_main, "init_db", lambda: None)
+    return api_main.create_app()
+
+
 def test_snapshot_endpoint_returns_payload(monkeypatch) -> None:
-    app = create_app()
+    app = _create_app_without_db(monkeypatch)
 
     def _stub_user() -> User:
         return User(
@@ -126,26 +130,26 @@ def test_snapshot_endpoint_returns_payload(monkeypatch) -> None:
     app.dependency_overrides[snapshot_router.get_snapshot_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_current_user] = _stub_user
 
-    client = TestClient(app)
-    response = client.get("/snapshot")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["providers"]["fx"] == "fx:stub"
-    assert payload["request"]["base_currency"] == "USD"
-    assert payload["diagnostics"]["fx_rate_count"] == 1
-    assert payload["diagnostics"]["missing_sections"] == []
+    with TestClient(app) as client:
+        response = client.get("/snapshot")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["providers"]["fx"] == "fx:stub"
+        assert payload["request"]["base_currency"] == "USD"
+        assert payload["diagnostics"]["fx_rate_count"] == 1
+        assert payload["diagnostics"]["missing_sections"] == []
 
-    response = client.get(
-        "/snapshot",
-        params={"commodity": ["XAG"], "jurisdiction": ["EU"]},
-    )
-    assert response.status_code == 200
-    assert orchestrator.calls[-1]["commodity_symbols"] == ["XAG"]
-    assert orchestrator.calls[-1]["jurisdictions"] == ["EU"]
+        response = client.get(
+            "/snapshot",
+            params={"commodity": ["XAG"], "jurisdiction": ["EU"]},
+        )
+        assert response.status_code == 200
+        assert orchestrator.calls[-1]["commodity_symbols"] == ["XAG"]
+        assert orchestrator.calls[-1]["jurisdictions"] == ["EU"]
 
 
 def test_snapshot_scenarios_endpoint(monkeypatch) -> None:
-    app = create_app()
+    app = _create_app_without_db(monkeypatch)
 
     def _stub_user() -> User:
         return User(
@@ -169,33 +173,33 @@ def test_snapshot_scenarios_endpoint(monkeypatch) -> None:
     app.dependency_overrides[snapshot_router.get_snapshot_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_current_user] = _stub_user
 
-    client = TestClient(app)
-    response = client.post(
-        "/snapshot/scenarios",
-        json={
-            "reset_cache_between_runs": True,
-            "scenarios": [
-                {
-                    "name": "demo",
-                    "base_currency": "USD",
-                    "commodity_symbols": ["XAU"],
-                    "jurisdictions": ["US"],
-                    "tags": ["api"],
-                }
-            ],
-        },
-    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/snapshot/scenarios",
+            json={
+                "reset_cache_between_runs": True,
+                "scenarios": [
+                    {
+                        "name": "demo",
+                        "base_currency": "USD",
+                        "commodity_symbols": ["XAU"],
+                        "jurisdictions": ["US"],
+                        "tags": ["api"],
+                    }
+                ],
+            },
+        )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["summary"]["scenario_count"] == 1
-    assert payload["results"][0]["providers"]["fx"] == "fx:stub"
-    assert orchestrator.reset_cache is True
-    assert orchestrator.calls[0].name == "demo"
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["summary"]["scenario_count"] == 1
+        assert payload["results"][0]["providers"]["fx"] == "fx:stub"
+        assert orchestrator.reset_cache is True
+        assert orchestrator.calls[0].name == "demo"
 
 
 def test_snapshot_plan_preview_endpoint(monkeypatch) -> None:
-    app = create_app()
+    app = _create_app_without_db(monkeypatch)
 
     def _stub_user() -> User:
         return User(
@@ -207,30 +211,30 @@ def test_snapshot_plan_preview_endpoint(monkeypatch) -> None:
 
     app.dependency_overrides[get_current_user] = _stub_user
 
-    client = TestClient(app)
-    response = client.post(
-        "/snapshot/plans/preview",
-        json={
-            "metadata": {"name": "QA Plan", "tags": ["ci"]},
-            "defaults": {"base_currency": "USD"},
-            "scenarios": [
-                {
-                    "name": "baseline",
-                    "base_currency": "USD",
-                    "commodity_symbols": ["XAU"],
-                },
-                {
-                    "name": "eur_fx",
-                    "base_currency": "EUR",
-                    "commodity_symbols": [],
-                    "tags": ["emea"],
-                },
-            ],
-        },
-    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/snapshot/plans/preview",
+            json={
+                "metadata": {"name": "QA Plan", "tags": ["ci"]},
+                "defaults": {"base_currency": "USD"},
+                "scenarios": [
+                    {
+                        "name": "baseline",
+                        "base_currency": "USD",
+                        "commodity_symbols": ["XAU"],
+                    },
+                    {
+                        "name": "eur_fx",
+                        "base_currency": "EUR",
+                        "commodity_symbols": [],
+                        "tags": ["emea"],
+                    },
+                ],
+            },
+        )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["plan"]["metadata"]["name"] == "QA Plan"
-    assert payload["summary"]["scenario_count"] == 2
-    assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["plan"]["metadata"]["name"] == "QA Plan"
+        assert payload["summary"]["scenario_count"] == 2
+        assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]

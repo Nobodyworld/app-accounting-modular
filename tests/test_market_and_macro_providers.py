@@ -1,7 +1,7 @@
 from datetime import date
 
-from plugins.market_commodities.provider import CommodityFuturesProvider
 from plugins.macro_fred.provider import FREDMacroProvider
+from plugins.market_commodities.provider import CommodityFuturesProvider
 
 
 def test_commodity_provider_generates_prices() -> None:

@@ -37,9 +37,7 @@ def _run_command(*args: str, raise_on_error: bool = True) -> CommandResult:
         completed = exc
         returncode = exc.returncode
     duration = time.perf_counter() - start
-    return CommandResult(
-        command=tuple(args), returncode=returncode, duration=duration
-    )
+    return CommandResult(command=tuple(args), returncode=returncode, duration=duration)
 
 
 def _collect_pytest(skip: bool) -> CommandResult | None:
@@ -84,9 +82,7 @@ def _parse_cover_file(path: Path) -> tuple[int, int]:
     return executed, missing
 
 
-def _aggregate_coverage(
-    trace_dir: Path, prefixes: Mapping[str, str]
-) -> dict[str, dict[str, float]]:
+def _aggregate_coverage(trace_dir: Path, prefixes: Mapping[str, str]) -> dict[str, dict[str, float]]:
     results: dict[str, dict[str, float]] = {}
     for display, prefix in prefixes.items():
         executed = 0
@@ -128,13 +124,7 @@ def _compute_complexity(modules: Iterable[Path]) -> dict[str, dict[str, float]]:
         def generic_visit(self, node):  # type: ignore[override]
             if isinstance(
                 node,
-                ast.If
-                | ast.For
-                | ast.While
-                | ast.With
-                | ast.AsyncWith
-                | ast.Try
-                | ast.Match,
+                ast.If | ast.For | ast.While | ast.With | ast.AsyncWith | ast.Try | ast.Match,
             ):
                 self.complexity += 1
             elif isinstance(node, ast.BoolOp):
@@ -271,9 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     ]
     metrics["complexity"] = _compute_complexity(target_modules)
     metrics["dependencies"] = _dependency_profile(target_modules)
-    metrics["package_sizes_kb"] = _measure_package_size(
-        Path(name) for name in ("apps", "cli", "plugins")
-    )
+    metrics["package_sizes_kb"] = _measure_package_size(Path(name) for name in ("apps", "cli", "plugins"))
 
     if args.format == "markdown":
         rendered = _render_markdown(metrics)

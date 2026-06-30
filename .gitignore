@@ -638,6 +638,7 @@ Cargo.lock
 *.tiff
 *.svg
 *.ico
+!docs/examples/assets/*.svg
 
 # Videos
 *.mp4

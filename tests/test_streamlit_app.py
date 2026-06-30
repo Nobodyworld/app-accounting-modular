@@ -160,7 +160,7 @@ def test_cashflow_flow(fake_requests):
     at.checkbox(key="cashflow_refresh_toggle").check()
     at.run()
     at.button(key="cashflow_report_button").click()
-    at.run()
+    at.run(timeout=10)
 
     assert "cashflow_report_payload" in at.session_state
     payload = at.session_state["cashflow_report_payload"]

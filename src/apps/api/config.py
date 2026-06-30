@@ -22,7 +22,7 @@ def _fallback_load_dotenv(*args: object, **kwargs: object) -> bool:
 
 try:
     _dotenv = importlib.import_module("dotenv")
-    load_dotenv = _dotenv.load_dotenv  # type: ignore[attr-defined]
+    load_dotenv = cast(Any, _dotenv).load_dotenv
 except Exception:
     load_dotenv = _fallback_load_dotenv
 
@@ -264,7 +264,7 @@ class Settings(BaseModel):
     def _validate_log_level(cls, value: str) -> str:
         level = value.upper() or DEFAULT_LOG_LEVEL
         if level not in VALID_LOG_LEVELS:
-            msg = f"Unsupported log level '{value}'. " f"Valid options: {sorted(VALID_LOG_LEVELS)}"
+            msg = f"Unsupported log level '{value}'. Valid options: {sorted(VALID_LOG_LEVELS)}"
             raise ValueError(msg)
         return level
 
@@ -273,7 +273,7 @@ class Settings(BaseModel):
     def _validate_log_destination(cls, value: str) -> str:
         destination = value.strip().lower() or DEFAULT_LOG_DESTINATION
         if destination not in VALID_LOG_DESTINATIONS:
-            msg = f"Unsupported log destination '{value}'. " f"Valid options: {sorted(VALID_LOG_DESTINATIONS)}"
+            msg = f"Unsupported log destination '{value}'. Valid options: {sorted(VALID_LOG_DESTINATIONS)}"
             raise ValueError(msg)
         return destination
 
@@ -282,7 +282,7 @@ class Settings(BaseModel):
     def _validate_log_format(cls, value: str) -> LogFormat:
         format_normalized = value.upper() or DEFAULT_LOG_FORMAT
         if format_normalized not in VALID_LOG_FORMATS:
-            msg = f"Unsupported log format '{value}'. " f"Valid options: {sorted(VALID_LOG_FORMATS)}"
+            msg = f"Unsupported log format '{value}'. Valid options: {sorted(VALID_LOG_FORMATS)}"
             raise ValueError(msg)
         return cast(LogFormat, format_normalized)
 
@@ -291,7 +291,7 @@ class Settings(BaseModel):
     def _validate_tracing_exporter(cls, value: str) -> str:
         exporter = (value or DEFAULT_TRACING_EXPORTER).strip().lower()
         if exporter not in VALID_TRACING_EXPORTERS:
-            msg = f"Unsupported tracing exporter '{value}'. " f"Valid options: {sorted(VALID_TRACING_EXPORTERS)}"
+            msg = f"Unsupported tracing exporter '{value}'. Valid options: {sorted(VALID_TRACING_EXPORTERS)}"
             raise ValueError(msg)
         return exporter
 
@@ -336,7 +336,7 @@ class Settings(BaseModel):
     def _validate_jwt_algorithm(cls, value: str) -> str:
         algorithm = value.upper()
         if algorithm not in ALLOWED_JWT_ALGORITHMS:
-            msg = f"Unsupported JWT algorithm '{value}'. " f"Valid options: {sorted(ALLOWED_JWT_ALGORITHMS)}"
+            msg = f"Unsupported JWT algorithm '{value}'. Valid options: {sorted(ALLOWED_JWT_ALGORITHMS)}"
             raise ValueError(msg)
         return algorithm
 

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import UTC, datetime
-import logging
 from queue import Empty, Queue
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from typing import Any
 from uuid import uuid4
 
@@ -118,6 +118,7 @@ class AuditLogger:
         self._worker: Thread | None = None
         self._stop_event: Event | None = None
         self._session_factory: Callable[[], Session] | None = None
+        self._worker_init_lock = Lock()
 
     def log(
         self,
@@ -167,20 +168,18 @@ class AuditLogger:
     def _ensure_async_worker(self) -> None:
         """Initialise the background worker if asynchronous logging is requested."""
 
-        if self._queue is not None:
-            return
+        with self._worker_init_lock:
+            if self._queue is not None:
+                return
 
-        bind = self.session.get_bind()
-        if bind is None:  # pragma: no cover - defensive guard for misconfigured sessions
-            msg = "AuditLogger requires a bound session or session_factory for async flushing"
-            raise RuntimeError(msg)
-        engine = getattr(bind, "engine", bind)
+            bind = self.session.get_bind()
+            engine = getattr(bind, "engine", bind)
 
-        self._queue = Queue()
-        self._stop_event = Event()
-        self._session_factory = lambda: Session(engine)  # type: ignore[arg-type]
-        self._worker = Thread(target=self._worker_loop, name="audit-flusher", daemon=True)
-        self._worker.start()
+            self._queue = Queue()
+            self._stop_event = Event()
+            self._session_factory = lambda: Session(engine)
+            self._worker = Thread(target=self._worker_loop, name="audit-flusher", daemon=True)
+            self._worker.start()
 
     def _enqueue(self, payload: dict[str, Any]) -> None:
         """Queue audit payloads for background persistence."""

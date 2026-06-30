@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from apps.modular_accounting.application.plans import (
     ScenarioPlan,
     ScenarioPlanValidationError,

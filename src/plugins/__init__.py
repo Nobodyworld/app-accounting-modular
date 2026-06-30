@@ -35,8 +35,8 @@ from . import (  # noqa: E402,F401
     ops_resilience,
     reference_cashflow,
     scenario_variance,
-    tax_oecd_vat,
     tax_oecd_stub,
+    tax_oecd_vat,
     tax_us_tables,
 )
 

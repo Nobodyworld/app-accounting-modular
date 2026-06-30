@@ -2,8 +2,6 @@ import json
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from click.testing import CliRunner
-
 from apps.modular_accounting.application import (
     DataSnapshot,
     ScenarioBatchResult,
@@ -16,6 +14,7 @@ from apps.modular_accounting.application import (
 )
 from apps.modular_accounting.application.cache import CacheStats
 from apps.modular_accounting.domain import CommodityQuote, FXRate, Money, TaxRule
+from click.testing import CliRunner
 
 
 def _extract_json_payload(output: str, *, required_key: str | None = None) -> dict[str, object]:

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from fastapi import Response
-
 from apps.api.routers import reports
 from apps.api.routers.reports import cashflow_forecast
+from fastapi import Response
 
 
 class _StubReport:

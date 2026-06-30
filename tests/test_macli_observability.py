@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 
 import pytest
-from click.testing import CliRunner
-
 from apps.observability.health import HealthReport
 from cli.macli import cli
+from click.testing import CliRunner
 
 
 @pytest.fixture(autouse=True)

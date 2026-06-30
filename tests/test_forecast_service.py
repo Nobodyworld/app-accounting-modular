@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
-
 from apps.api.services.forecast_service import ForecastResult, ForecastService
 
 
@@ -329,7 +328,6 @@ def test_build_event_regressors_counts_keywords() -> None:
     assert series[1][1] == 0.0
 
 
-@pytest.mark.xfail(reason="Seasonal decomposition strategy not yet implemented")
 def test_seasonal_decomposition_placeholder() -> None:
     """Placeholder to cover upcoming seasonal decomposition strategies."""
     svc = ForecastService()

@@ -7,12 +7,14 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 from fastapi import Depends, Header
+from prometheus_client import Counter
 from sqlmodel import Session
+
+from apps.observability.metrics import metrics_registry
 
 from .audit import AuditActor, use_actor
 from .db import get_session
 from .security import _decode_token
-from apps.observability.metrics import Counter, metrics_registry
 
 logger = logging.getLogger(__name__)
 _malformed_header_counter = metrics_registry.header_malformed_total

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlmodel import Session, select
 
@@ -79,7 +79,11 @@ class WorkflowService:
                 date=txn_date,
                 description=description,
                 source=source,
-                source_reference=payload.get("source_reference") if isinstance(payload.get("source_reference"), str) else source_reference,
+                source_reference=(
+                    payload.get("source_reference")
+                    if isinstance(payload.get("source_reference"), str)
+                    else source_reference
+                ),
                 source_metadata=txn_metadata,
             )
             self.s.add(staged)
@@ -128,9 +132,10 @@ class WorkflowService:
         """Validate and optionally post staged transactions."""
 
         stmt = select(StagedTransaction)
+        staged_id_col = cast(Any, StagedTransaction.id)
         if staged_ids:
-            stmt = stmt.where(StagedTransaction.id.in_(staged_ids))  # type: ignore[arg-type]
-        stmt = stmt.order_by(StagedTransaction.id)  # type: ignore[arg-type]
+            stmt = stmt.where(staged_id_col.in_(staged_ids))
+        stmt = stmt.order_by(staged_id_col)
 
         staged_items = list(self.s.exec(stmt))
         results: list[WorkflowResult] = []
@@ -179,10 +184,14 @@ class WorkflowService:
             self.s.add(staged)
 
             for posting, normalised_posting in zip(postings, normalised, strict=True):
-                posting.account_id = normalised_posting["account_id"]
-                posting.debit = normalised_posting["debit"]
-                posting.credit = normalised_posting["credit"]
-                posting.currency = normalised_posting["currency"]
+                account_value = cast(int | str, normalised_posting["account_id"])
+                posting.account_id = self._require_int(int(account_value), "normalised posting account")
+                debit_value = cast(Any, normalised_posting["debit"])
+                credit_value = cast(Any, normalised_posting["credit"])
+                currency_value = cast(Any, normalised_posting["currency"])
+                posting.debit = float(debit_value)
+                posting.credit = float(credit_value)
+                posting.currency = str(currency_value)
                 self.s.add(posting)
             # TODO - Persist validation diagnostics for review in audit trails.
 
@@ -244,7 +253,9 @@ class WorkflowService:
         postings = self._load_postings(staged_id)
         return staged, postings
 
-    def list_transactions(self, limit: int = 100, offset: int = 0) -> list[tuple[StagedTransaction, list[StagedPosting]]]:
+    def list_transactions(
+        self, limit: int = 100, offset: int = 0
+    ) -> list[tuple[StagedTransaction, list[StagedPosting]]]:
         """Return staged transactions ordered by creation time."""
 
         stmt = (
@@ -264,9 +275,7 @@ class WorkflowService:
     # ------------------------------------------------------------------
     def _load_postings(self, staged_id: int) -> list[StagedPosting]:
         stmt = (
-            select(StagedPosting)
-            .where(StagedPosting.staged_transaction_id == staged_id)
-            .order_by(StagedPosting.id)  # type: ignore[arg-type]
+            select(StagedPosting).where(StagedPosting.staged_transaction_id == staged_id).order_by(StagedPosting.id)  # type: ignore[arg-type]
         )
         return list(self.s.exec(stmt))
 

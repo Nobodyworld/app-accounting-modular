@@ -12,6 +12,7 @@ from functools import lru_cache
 from typing import Any, Literal
 
 from apps.api.version import API_VERSION
+
 from ..config import ProviderInfo, settings
 
 __all__ = [
@@ -246,11 +247,7 @@ def _cached_provider_descriptors(
 
     descriptors.sort(key=lambda item: item.metadata.key)
 
-    incompatible = [
-        descriptor
-        for descriptor in descriptors
-        if descriptor.compatibility.status == "incompatible"
-    ]
+    incompatible = [descriptor for descriptor in descriptors if descriptor.compatibility.status == "incompatible"]
     if incompatible:
         logger.warning(
             "Incompatible providers detected",
@@ -334,9 +331,9 @@ def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
         raise ValueError(f"Factory '{factory}' in {module_path} is not callable")
 
     provider = factory_fn()
-    if inspect.iscoroutine(provider):  # type: ignore[arg-type]
+    if inspect.iscoroutine(provider):
         try:
-            provider.close()  # type: ignore[call-arg]
+            provider.close()
         except Exception:
             pass
         raise ValueError("Async provider factories are not supported; use synchronous factories")

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models.models import Account, Transaction, User
@@ -18,9 +19,12 @@ router = APIRouter(prefix="/ledger", tags=["ledger"])
 
 def _service_for_org(session: Session, organization_id: int) -> LedgerService:
     cache = session.info.setdefault("ledger_service_cache", {})
+    typed_cache = cache if isinstance(cache, dict) else {}
+    if typed_cache is not cache:
+        session.info["ledger_service_cache"] = typed_cache
     if organization_id not in cache:
-        cache[organization_id] = LedgerService(session, organization_id=organization_id)
-    return cache[organization_id]
+        typed_cache[organization_id] = LedgerService(session, organization_id=organization_id)
+    return cast(LedgerService, typed_cache[organization_id])
 
 
 @router.post("/account", response_model=Account)
@@ -49,7 +53,9 @@ def create_account(
         if existing:
             raise HTTPException(status_code=400, detail="Account code already exists")
 
-    org_id = int(org_ctx.organization.id)  # org IDs are persisted, guard for typing
+    if org_ctx.organization.id is None:
+        raise HTTPException(status_code=500, detail="Organization id is missing")
+    org_id = org_ctx.organization.id
     service = _service_for_org(session, org_id)
     data = payload.model_dump(exclude={"organization_id"})
     # TODO - Validate account code uniqueness before delegating to the service layer.
@@ -72,7 +78,9 @@ def post_transaction(
     if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_ledger):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    org_id = int(org_ctx.organization.id)
+    if org_ctx.organization.id is None:
+        raise HTTPException(status_code=500, detail="Organization id is missing")
+    org_id = org_ctx.organization.id
     service = _service_for_org(session, org_id)
     return service.post_transaction(
         payload.date,
@@ -102,7 +110,9 @@ def trial_balance(
     if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_ledger or org_ctx.membership.can_manage_tax):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    org_id = int(org_ctx.organization.id)
+    if org_ctx.organization.id is None:
+        raise HTTPException(status_code=500, detail="Organization id is missing")
+    org_id = org_ctx.organization.id
     service = _service_for_org(session, org_id)
     return TrialBalanceResponse.from_service(
         service.trial_balance(start_date=start_date, end_date=end_date, currency=currency)

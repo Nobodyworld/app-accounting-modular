@@ -32,7 +32,7 @@ StartupContext = MutableMapping[str, Any]
 class StartupFailure(RuntimeError):
     """Raised when a fatal startup step fails."""
 
-    def __init__(self, step_name: str, error: BaseException, records: tuple["StartupRecord", ...] | None = None):
+    def __init__(self, step_name: str, error: BaseException, records: tuple[StartupRecord, ...] | None = None):
         self.step_name = step_name
         self.error = error
         self.records: tuple[StartupRecord, ...] = records or tuple()

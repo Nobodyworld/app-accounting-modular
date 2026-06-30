@@ -1,6 +1,12 @@
 # Release Notes
 
 ## Highlights
+- Completed release hardening for public distribution: closed the async audit
+  worker race under concurrency, eliminated remaining scheduler/security test
+  regressions and SQLite teardown warnings, aligned licensing/docs to
+  Apache-2.0, and passed the full Python 3.14 quality gate (lint, format,
+  mypy, full pytest + coverage, focused accounting suites, dependency checks,
+  and secret scan).
 - Rebuilt the `macli` CLI diagnostics commands with deterministic table/JSON
   output, added regression tests for health/observability snapshots, and made
   the scheduler tolerant of missing legacy models so automation entry points

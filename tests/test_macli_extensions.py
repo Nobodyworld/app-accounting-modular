@@ -4,11 +4,10 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from click.testing import CliRunner
-
 from apps.api.config import ExtensionInfo
 from apps.api.services import extension_loader
 from cli.macli import cli
+from click.testing import CliRunner
 
 
 @pytest.fixture(autouse=True)

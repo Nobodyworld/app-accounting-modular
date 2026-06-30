@@ -6,8 +6,8 @@ the rest of the system can exercise bank feed plumbing without live API keys.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, timedelta
-from typing import Iterable
 
 
 class PlaidBankProvider:

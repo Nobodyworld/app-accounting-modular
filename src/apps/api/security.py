@@ -130,7 +130,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     """Create a signed JWT access token embedding ``data``."""
 
     to_encode = data.copy()
-    session_id = to_encode.setdefault("sid", str(uuid4()))
+    to_encode.setdefault("sid", str(uuid4()))
     to_encode["type"] = "access"
     expire = datetime.now(UTC) + (
         expires_delta if expires_delta is not None else timedelta(minutes=settings.access_token_expire_minutes)
@@ -225,6 +225,9 @@ def _membership_cache_key(user_id: int, organization_id: int) -> tuple[int, int]
     return (user_id, organization_id)
 
 
+_organization_context_cache: dict[tuple[int, int], tuple[int | None, Membership]] = {}
+
+
 def get_current_organization_cached(
     organization_id: int,
     session: Session = Depends(get_session),
@@ -233,11 +236,10 @@ def get_current_organization_cached(
     """Cached variant of ``get_current_organization`` for high-traffic checks."""
 
     key = _membership_cache_key(current_user.id, organization_id)
-    membership = None
+    membership: Membership | None = None
     org: Organization | None = None
     try:
-        membership = get_current_organization_cached._cache[key]  # type: ignore[attr-defined]
-        org_id, mem = membership
+        org_id, mem = _organization_context_cache[key]
         org = session.get(Organization, org_id)
         membership = mem
     except Exception:
@@ -245,8 +247,7 @@ def get_current_organization_cached(
 
     if membership is None or org is None:
         ctx = get_current_organization(organization_id, session, current_user)
-        get_current_organization_cached._cache = getattr(get_current_organization_cached, "_cache", {})  # type: ignore[attr-defined]
-        get_current_organization_cached._cache[key] = (ctx.organization.id, ctx.membership)  # type: ignore[attr-defined]
+        _organization_context_cache[key] = (ctx.organization.id, ctx.membership)
         return ctx
 
-    return OrganizationContext(organization=org, membership=membership)  # type: ignore[arg-type]
+    return OrganizationContext(organization=org, membership=membership)

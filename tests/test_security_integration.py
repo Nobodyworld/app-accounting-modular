@@ -5,18 +5,18 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
-
+from apps.api import db
+from apps.api.config import settings
 from apps.api.db import get_session
 from apps.api.main import create_app
 from apps.api.models.models import AuditLog, Membership, Organization, User
 from apps.api.routers import auth as auth_router
 from apps.api.security import create_access_token, create_refresh_token, get_password_hash
-from jose import jwt
-from apps.api.config import settings
 from apps.api.services.ledger_service import LedgerService
+from fastapi.testclient import TestClient
+from jose import jwt
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
 
 
 @pytest.fixture()
@@ -28,6 +28,8 @@ def api_context():
         poolclass=StaticPool,
     )
     SQLModel.metadata.create_all(engine)
+    db.engine = engine
+    db.connect_args = {"check_same_thread": False}
 
     app = create_app()
 
@@ -114,7 +116,11 @@ def api_context():
         "member": create_access_token({"sub": str(member_id)}),
     }
 
-    return client, {"org1_id": org1_id, "org2_id": org2_id, "tokens": tokens}, engine
+    try:
+        yield client, {"org1_id": org1_id, "org2_id": org2_id, "tokens": tokens}, engine
+    finally:
+        client.close()
+        engine.dispose()
 
 
 def test_requires_authentication(api_context):

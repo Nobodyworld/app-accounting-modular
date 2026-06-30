@@ -8,7 +8,7 @@
 
 | Layer | Details |
 | ----- | ------- |
-| Runtime | Python 3.12 |
+| Runtime | Python 3.12+ (primary dev on 3.14) |
 | Frameworks | FastAPI, SQLModel, Streamlit |
 | Tooling | Ruff, Pytest, Makefile-driven quality gates |
 | Packaging | PEP 621 via `pyproject.toml` |
@@ -18,12 +18,12 @@
 
 The repository is organised into documentation-first modules with README files in every directory:
 
-- [`apps/`](apps/README.md) – Service packages (API, domain, extensions, observability, Streamlit UI).
-- [`cli/`](cli/README.md) – Demo and operational CLIs for snapshot orchestration.
+- [`src/apps/`](../src/apps/README.md) – Service packages (API, accounting domain, extensions, observability, web).
+- [`src/cli/`](../src/cli/README.md) – Demo and operational CLIs for snapshot orchestration.
 - [`docs/`](docs/README.md) – Architecture, governance, operations, and roadmap references.
-- [`plugins/`](plugins/README.md) – Reference adapters and operational extensions.
+- [`src/plugins/`](../src/plugins/README.md) – Reference adapters and operational extensions.
 - [`tests/`](tests/README.md) – Pytest suites mirroring the runtime packages.
-- [`tools/`](tools/README.md) – Audit, release, and quality gate automation.
+- [`src/tools/`](../src/tools/README.md) – Audit, release, quality gate, and security automation.
 
 See the root [README](README.md#repository-structure) for a tabular map of all directories.
 
@@ -45,7 +45,7 @@ See the root [README](README.md#repository-structure) for a tabular map of all d
 ## Testing Strategy
 
 - Unit and integration tests under `tests/` with pytest fixtures for the CLI, API services, observability, and smoke paths.
-- CI runs `make ci`, invoking Ruff, pytest, and safety checks.
+- CI runs `make ci`, invoking Ruff, format-check, mypy, pytest, and project-scoped `pip-audit` checks.
 - Generated audit artefacts stored in `docs/reports/` and summarised in `CHANGELOG.md` during releases.
 
 ## Dependencies & Security

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from threading import RLock
 from time import monotonic
-from typing import Generic, Protocol, TypeVar
+from typing import Protocol, TypeVar
 
 __all__ = ["CacheEntry", "CacheObserver", "CacheStats", "TTLCache"]
 
@@ -15,7 +15,7 @@ V = TypeVar("V")
 
 
 @dataclass(slots=True)
-class CacheEntry(Generic[V]):
+class CacheEntry[V]:
     """Container storing cached values with optional expiry metadata."""
 
     value: V
@@ -52,7 +52,7 @@ class CacheObserver(Protocol):
         """Record the current size of the cache."""
 
 
-class TTLCache(Generic[K, V]):
+class TTLCache[K, V]:
     """Thread-safe cache with optional time-to-live semantics."""
 
     def __init__(

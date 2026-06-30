@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from io import StringIO
+from typing import Any, cast
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -88,6 +89,12 @@ class BudgetService:
         self.session = session
         self.forecaster = forecast_service or ForecastService()
 
+    @staticmethod
+    def _require_int(value: int | None, context: str) -> int:
+        if value is None:
+            raise ValueError(f"{context} missing identifier")
+        return int(value)
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -95,8 +102,9 @@ class BudgetService:
         """Return a budget vs actual report, optionally refreshing persisted data."""
 
         plan = self._ensure_budget_plan(budget_id, horizon)
+        plan_id = self._require_int(plan.id, "forecast plan")
         if not refresh:
-            cached = self._load_latest_output(plan.id, "budget_vs_actual")
+            cached = self._load_latest_output(plan_id, "budget_vs_actual")
             if cached is not None:
                 return cached
 
@@ -110,8 +118,9 @@ class BudgetService:
         """Return a cashflow forecast for an organisation."""
 
         plan = self._ensure_cashflow_plan(organization_id, horizon)
+        plan_id = self._require_int(plan.id, "forecast plan")
         if not refresh:
-            cached = self._load_latest_cashflow(plan.id)
+            cached = self._load_latest_cashflow(plan_id)
             if cached is not None:
                 return cached
 
@@ -153,7 +162,7 @@ class BudgetService:
 
         plan_stmt = select(ForecastPlan).where(
             ForecastPlan.organization_id == organization_id,
-            ForecastPlan.budget_id.is_(None),
+            cast(Any, ForecastPlan.budget_id).is_(None),
             ForecastPlan.name == self.CASHFLOW_PLAN_NAME,
         )
         plan = self.session.exec(plan_stmt).one_or_none()
@@ -178,9 +187,9 @@ class BudgetService:
 
         lines_stmt = (
             select(BudgetLine, Account)
-            .join(Account, BudgetLine.account_id == Account.id)
+            .join(Account, cast(Any, BudgetLine.account_id) == cast(Any, Account.id))
             .where(BudgetLine.budget_id == budget.id)
-            .order_by(BudgetLine.period_start, Account.name)
+            .order_by(cast(Any, BudgetLine.period_start), cast(Any, Account.name))
         )
 
         lines: list[BudgetVarianceLine] = []
@@ -189,9 +198,10 @@ class BudgetService:
 
         budget_lines: list[tuple[BudgetLine, Account]] = list(self.session.exec(lines_stmt).all())
         for line, account in budget_lines:
-            account_ids.add(account.id)
+            account_id = self._require_int(account.id, "account")
+            account_ids.add(account_id)
             period_keys.add(self._period_key(line.period_start))
-        accounts_by_id = {account.id: account for _, account in budget_lines}
+        accounts_by_id = {self._require_int(account.id, "account"): account for _, account in budget_lines}
 
         if not budget_lines:
             raise ValueError("Budget contains no lines to analyse")
@@ -204,8 +214,9 @@ class BudgetService:
         total_actual = Decimal("0")
 
         for line, account in budget_lines:
+            account_id = self._require_int(account.id, "account")
             period = self._period_key(line.period_start)
-            actual_amount = actuals.get((account.id, period), Decimal("0"))
+            actual_amount = actuals.get((account_id, period), Decimal("0"))
             budget_amount = Decimal(str(line.amount))
             variance = actual_amount - budget_amount
             burn_rate = None
@@ -214,7 +225,7 @@ class BudgetService:
 
             lines.append(
                 BudgetVarianceLine(
-                    account_id=account.id,
+                    account_id=account_id,
                     account_code=account.code,
                     account_name=account.name,
                     period_start=period,
@@ -222,7 +233,7 @@ class BudgetService:
                     actual_amount=float(actual_amount),
                     variance=float(variance),
                     burn_rate=burn_rate,
-                    forecast=[(point[0], point[1]) for point in forecast_series.get(account.id, [])],
+                    forecast=[(point[0], point[1]) for point in forecast_series.get(account_id, [])],
                 )
             )
 
@@ -270,8 +281,10 @@ class BudgetService:
         )
 
     def _build_cashflow_report(self, plan: ForecastPlan) -> CashflowReport:
+        account_id_col = cast(Any, Account.id)
+        account_currency_col = cast(Any, Account.currency)
         asset_accounts = self.session.exec(
-            select(Account.id, Account.currency)
+            select(account_id_col, account_currency_col)
             .where(Account.organization_id == plan.organization_id)
             .where(Account.type == AccountType.ASSET)
         ).all()
@@ -282,11 +295,15 @@ class BudgetService:
         account_ids = {row[0] if isinstance(row, tuple) else row.id for row in asset_accounts}
         currencies = {row[1] if isinstance(row, tuple) else row.currency for row in asset_accounts}
 
+        txn_date_col = cast(Any, Transaction.date)
+        debit_col = cast(Any, JournalEntry.debit)
+        credit_col = cast(Any, JournalEntry.credit)
+        account_id_filter = cast(Any, JournalEntry.account_id)
         stmt = (
-            select(Transaction.date, JournalEntry.debit, JournalEntry.credit)
-            .join(JournalEntry, JournalEntry.transaction_id == Transaction.id)
-            .where(JournalEntry.account_id.in_(account_ids))
-            .order_by(Transaction.date)
+            select(txn_date_col, debit_col, credit_col)
+            .join(JournalEntry, cast(Any, JournalEntry.transaction_id) == cast(Any, Transaction.id))
+            .where(account_id_filter.in_(account_ids))
+            .order_by(txn_date_col)
         )
         results = self.session.exec(stmt).all()
 
@@ -354,7 +371,7 @@ class BudgetService:
             csv_export=csv_export,
         )
 
-    def _provision_plan(self, stmt, candidate: ForecastPlan) -> ForecastPlan:
+    def _provision_plan(self, stmt: Any, candidate: ForecastPlan) -> ForecastPlan:
         """Persist a new forecast plan guarding against concurrent creation."""
 
         self.session.add(candidate)
@@ -363,7 +380,7 @@ class BudgetService:
         except IntegrityError:
             self.session.rollback()
             existing = self.session.exec(stmt).one()
-            return existing
+            return cast(ForecastPlan, existing)
         self.session.refresh(candidate)
         return candidate
 
@@ -381,11 +398,11 @@ class BudgetService:
         if from_ccy == to_ccy:
             return amount
         rate_stmt = (
-            select(Rate.value)
+            select(cast(Any, Rate.value))
             .where(Rate.base == from_ccy)
             .where(Rate.quote == to_ccy)
             .where(Rate.date <= as_of)
-            .order_by(Rate.date.desc())
+            .order_by(cast(Any, Rate.date).desc())
         )
         rate = self.session.exec(rate_stmt).first()
         if rate is None:
@@ -410,9 +427,14 @@ class BudgetService:
         max_period = max(period_set)
 
         stmt = (
-            select(JournalEntry.account_id, Transaction.date, JournalEntry.debit, JournalEntry.credit)
-            .join(Transaction, Transaction.id == JournalEntry.transaction_id)
-            .where(JournalEntry.account_id.in_(set(accounts_by_id.keys())))
+            select(
+                cast(Any, JournalEntry.account_id),
+                cast(Any, Transaction.date),
+                cast(Any, JournalEntry.debit),
+                cast(Any, JournalEntry.credit),
+            )
+            .join(Transaction, cast(Any, Transaction.id) == cast(Any, JournalEntry.transaction_id))
+            .where(cast(Any, JournalEntry.account_id).in_(set(accounts_by_id.keys())))
             .where(Transaction.date >= min_period)
             .where(Transaction.date <= self._period_month_end(max_period))
         )
@@ -425,7 +447,8 @@ class BudgetService:
             period = self._period_key(txn_date)
             key = (account_id, period)
             raw_amount = Decimal(str(debit)) - Decimal(str(credit))
-            account_currency = accounts_by_id.get(account_id).currency if accounts_by_id.get(account_id) else budget_currency
+            account = accounts_by_id.get(account_id)
+            account_currency = account.currency if account is not None else budget_currency
             converted = self._convert_currency(raw_amount, account_currency, budget_currency, txn_date)
             if converted is None:
                 continue
@@ -457,7 +480,7 @@ class BudgetService:
             select(ForecastOutput)
             .where(ForecastOutput.plan_id == plan_id)
             .where(ForecastOutput.report_type == report_type)
-            .order_by(ForecastOutput.generated_at.desc())
+            .order_by(cast(Any, ForecastOutput.generated_at).desc())
         )
         output = self.session.exec(stmt).first()
         if output is None or not output.summary:
@@ -495,7 +518,7 @@ class BudgetService:
             select(ForecastOutput)
             .where(ForecastOutput.plan_id == plan_id)
             .where(ForecastOutput.report_type == "cashflow_forecast")
-            .order_by(ForecastOutput.generated_at.desc())
+            .order_by(cast(Any, ForecastOutput.generated_at).desc())
         )
         output = self.session.exec(stmt).first()
         if output is None or not output.summary:
@@ -620,12 +643,12 @@ class BudgetService:
         return buffer.getvalue()
 
     @staticmethod
-    def _render_cashflow_csv(historical: Iterable[tuple[date, float]], forecast: ForecastResult | None) -> str:
+    def _render_cashflow_csv(historical: Iterable[tuple[date | str, float]], forecast: ForecastResult | None) -> str:
         buffer = StringIO()
         writer = csv.writer(buffer)
         writer.writerow(["period", "amount", "type"])
         for period, amount in historical:
-            label = period.isoformat() if hasattr(period, "isoformat") else period
+            label: str = period.isoformat() if hasattr(period, "isoformat") else str(period)
             writer.writerow([label, f"{amount:.2f}", "historical"])
         if forecast:
             for period, amount in forecast.points:

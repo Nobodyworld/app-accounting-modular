@@ -6,7 +6,6 @@ import sys
 import types
 
 import pytest
-
 from apps.modular_accounting.application import telemetry_provider
 
 

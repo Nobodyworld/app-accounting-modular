@@ -42,12 +42,12 @@ _EXPORTS: dict[str, tuple[str, str]] = {
 
 if TYPE_CHECKING:  # pragma: no cover - for static analyzers
     from .budget_service import BudgetService
+    from .extension_loader import active_extensions, load_configured_extensions
     from .forecast_service import ForecastService
     from .fx_service import FXService
     from .ledger_service import LedgerService
     from .market_service import MarketService
     from .plugin_loader import ProviderHandle, ProviderMetadata, available_providers, load_provider
-    from .extension_loader import active_extensions, load_configured_extensions
     from .tax_service import TaxService
     from .workflow_service import WorkflowService
 else:

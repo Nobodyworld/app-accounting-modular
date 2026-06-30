@@ -118,5 +118,7 @@ See `docs/examples/foreign_currency_accounting_case_study.md` for a worked
 example that covers:
 
 - Initial recognition of a supplier invoice in EUR when the ledger base is USD.
+- Month-end remeasurement controls for open liabilities before settlement.
 - Settlement at a different FX rate with realized gain/loss balancing entries.
-- Month-end revaluation controls and documentation expectations for auditability.
+- Provider and rate provenance records attached to each valuation event.
+- Terminal-output image evidence of balanced journal checks.

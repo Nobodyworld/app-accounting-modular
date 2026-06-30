@@ -3,7 +3,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-
 from apps.api.config import ExtensionInfo
 from apps.api.services import extension_loader
 from apps.api.services.extension_loader import (

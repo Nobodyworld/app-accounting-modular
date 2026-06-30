@@ -15,7 +15,7 @@ import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 API = os.getenv("API_BASE", "http://localhost:8000")
-BUDGET_TEMPLATE = "account_id,period_start,amount\n" "101,2024-01-01,2500\n" "101,2024-02-01,2600\n"
+BUDGET_TEMPLATE = "account_id,period_start,amount\n101,2024-01-01,2500\n101,2024-02-01,2600\n"
 
 
 def _can_render_downloads() -> bool:
@@ -102,7 +102,7 @@ with health_tab:
 
 with budget_tab:
     st.subheader("Upload budget lines")
-    st.caption("Drag & drop CSV with columns: " "account_id, period_start (YYYY-MM-DD), amount")
+    st.caption("Drag & drop CSV with columns: account_id, period_start (YYYY-MM-DD), amount")
     uploaded_file = st.file_uploader(
         "Budget CSV",
         type=["csv"],

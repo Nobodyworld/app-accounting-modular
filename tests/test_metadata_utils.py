@@ -121,6 +121,7 @@ def test_prepare_metadata_for_response_combines_normalisation_steps() -> None:
     assert prepared["generated_at"].tzinfo == UTC
     assert prepared["forecast_diagnostics"] == {"observations": 5, "flag": True}
 
+
 def test_prepare_metadata_handles_deeply_nested_arrays() -> None:
     metadata = {
         "forecastDiagnostics": {

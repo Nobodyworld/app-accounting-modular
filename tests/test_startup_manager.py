@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 
 import pytest
-
 from apps.api.startup import StartupFailure, StartupManager, StartupStep
 
 

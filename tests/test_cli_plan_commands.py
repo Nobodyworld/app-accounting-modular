@@ -1,9 +1,8 @@
 import json
 from pathlib import Path
 
-from click.testing import CliRunner
-
 from cli.macli import cli
+from click.testing import CliRunner
 
 
 def test_inspect_plan_command_outputs_summary(tmp_path: Path) -> None:

@@ -46,7 +46,7 @@ def init_db() -> None:
     _initialised_engines.add(id(engine))
 
 
-def get_session() -> Generator[Session, None, None]:
+def get_session() -> Generator[Session]:
     """Provide a SQLModel session suitable for dependency injection."""
 
     with Session(engine, expire_on_commit=False) as session:

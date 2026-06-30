@@ -23,15 +23,14 @@ def _provider_compatibility_summary(providers: list[dict[str, Any]]) -> dict[str
     """Summarise compatibility status counts for quick health inspection."""
 
     counts = {"compatible": 0, "incompatible": 0, "unknown": 0}
+    known_statuses = frozenset(counts)
     for provider in providers:
         # provider dicts may contain arbitrary values; treat as Mapping-like
         compatibility = provider.get("compatibility") if isinstance(provider, dict) else None
         compatibility = compatibility or {}
         status = compatibility.get("status") if isinstance(compatibility, dict) else None
-        if status in counts:
-            counts[status] += 1
-        else:  # pragma: no cover - defensive catch-all
-            counts["unknown"] += 1
+        bucket = str(status) if str(status) in known_statuses else "unknown"
+        counts[bucket] += 1
     counts["total"] = len(providers)
     return counts
 
@@ -41,8 +40,6 @@ def _provider_compatibility_alerts(providers: list[dict[str, Any]]) -> list[dict
 
     alerts: list[dict[str, Any]] = []
     for provider in providers:
-        if not isinstance(provider, dict):
-            continue
         compatibility = provider.get("compatibility")
         if not isinstance(compatibility, dict):
             continue

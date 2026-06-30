@@ -1,7 +1,6 @@
 from datetime import date
 
 import requests
-
 from apps.api.models.models import Rate
 
 

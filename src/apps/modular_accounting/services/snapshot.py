@@ -7,8 +7,7 @@ import warnings
 from ..application import snapshots as _snapshots
 
 warnings.warn(
-    "apps.modular_accounting.services.snapshot is deprecated; "
-    "import from apps.modular_accounting.application instead.",
+    "apps.modular_accounting.services.snapshot is deprecated; import from apps.modular_accounting.application instead.",
     DeprecationWarning,
     stacklevel=2,
 )

@@ -75,6 +75,8 @@ def login(
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     with _lock:
         _clear_failures(identifier)
+    if user.id is None:  # pragma: no cover - persisted users should always have an id
+        raise HTTPException(status_code=500, detail="Authenticated user is missing an id")
     session_id = str(uuid4())
     access_token = create_access_token({"sub": str(user.id), "sid": session_id})
     refresh_token = create_refresh_token(user.id, session_id=session_id)

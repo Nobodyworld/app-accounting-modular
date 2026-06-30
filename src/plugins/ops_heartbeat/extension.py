@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Protocol
 
 from apps.extensions import ExtensionManifest, ExtensionRegistry
 from apps.observability.health import HealthReport
 from apps.observability.metrics import Gauge, metrics_registry
+
+
+class _GaugeHandle(Protocol):
+    def set(self, value: float) -> None:
+        """Update the heartbeat gauge value."""
+
 
 MANIFEST = ExtensionManifest(
     key="ops:heartbeat",
@@ -17,13 +24,20 @@ MANIFEST = ExtensionManifest(
     author="Modular Accounting",
 )
 
-_HEARTBEAT_GAUGE = Gauge(
-    "modacct_ops_heartbeat_timestamp",
-    "Unix timestamp of the most recent heartbeat emitted by the ops extension.",
-    labelnames=(),
-    registry=metrics_registry.registry,
-)
-_HEARTBEAT_HANDLE = _HEARTBEAT_GAUGE.labels()
+try:
+    _HEARTBEAT_GAUGE = Gauge(
+        "modacct_ops_heartbeat_timestamp",
+        "Unix timestamp of the most recent heartbeat emitted by the ops extension.",
+        labelnames=(),
+        registry=metrics_registry.registry,
+    )
+except ValueError:
+    existing = getattr(metrics_registry.registry, "_names_to_collectors", {}).get("modacct_ops_heartbeat_timestamp")
+    if existing is None:
+        raise
+    _HEARTBEAT_GAUGE = existing
+
+_HEARTBEAT_HANDLE = _HEARTBEAT_GAUGE if hasattr(_HEARTBEAT_GAUGE, "set") else _HEARTBEAT_GAUGE.labels()
 _HEARTBEAT_HANDLE.set(0.0)
 
 

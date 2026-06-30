@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 
 import pytest
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, SQLModel, create_engine
-
 from apps.api.models.models import (
     Budget,
     BudgetLine,
@@ -18,13 +16,22 @@ from apps.api.models.models import (
 )
 from apps.api.services.budget_service import BudgetService
 from apps.api.services.ledger_service import LedgerService
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, SQLModel, create_engine
 
 
-def create_session() -> Session:
+@contextmanager
+def create_session() -> Iterator[Session]:
     """Construct an in-memory SQLModel session for budget service tests."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
-    return Session(engine, expire_on_commit=False)
+    session = Session(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
 
 
 def seed_basic_ledger(session: Session) -> tuple[int, int]:
@@ -129,7 +136,17 @@ def test_cashflow_forecast_handles_history() -> None:
 
             def forecast_series(self, series, horizon, **kwargs):
                 self.calls += 1
-                return type("Result", (), {"points": [(f"2024-0{i+3}-01", 100.0) for i in range(horizon)], "horizon": horizon, "model_order": (0, 0, 0), "diagnostics": {"strategy": "stub"}, "timezone": "UTC"})
+                return type(
+                    "Result",
+                    (),
+                    {
+                        "points": [(f"2024-0{i + 3}-01", 100.0) for i in range(horizon)],
+                        "horizon": horizon,
+                        "model_order": (0, 0, 0),
+                        "diagnostics": {"strategy": "stub"},
+                        "timezone": "UTC",
+                    },
+                )
 
         stub = SlowForecast()
         service = BudgetService(session, forecast_service=stub)  # type: ignore[arg-type]

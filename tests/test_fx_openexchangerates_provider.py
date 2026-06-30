@@ -1,7 +1,6 @@
 from datetime import date
 
 import pytest
-
 from plugins.fx_openexchangerates.provider import OpenExchangeRatesProvider
 
 

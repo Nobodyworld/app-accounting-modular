@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from click.testing import CliRunner
-
 from cli.macli import cli
+from click.testing import CliRunner
 
 
 def test_scaffold_extension_generates_files(monkeypatch) -> None:

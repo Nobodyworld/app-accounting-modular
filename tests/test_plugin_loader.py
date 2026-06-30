@@ -6,7 +6,6 @@ import sys
 import types
 
 import pytest
-
 from apps.api.config import ProviderInfo, settings
 from apps.api.services.plugin_loader import (
     available_providers,

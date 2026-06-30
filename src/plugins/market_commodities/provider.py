@@ -8,8 +8,8 @@ by :class:`MarketService`.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, timedelta
-from typing import Iterable
 
 from apps.api.models.models import Price
 

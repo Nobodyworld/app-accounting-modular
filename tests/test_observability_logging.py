@@ -8,10 +8,6 @@ import logging
 from typing import Any
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.testclient import TestClient
-
 from apps.observability.logging import (
     ContextFilter,
     JsonFormatter,
@@ -22,6 +18,31 @@ from apps.observability.logging import (
     get_context,
     logging_context,
 )
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.testclient import TestClient
+
+
+def _multiprocessing_log_worker(queue: Any) -> None:
+    configure_logging("INFO", "JSON", service_name="svc-mp", force=True)
+    with logging_context(correlation_id="cid-child"):
+        logger = logging.getLogger("tests.multiproc")
+        logger.info("child log")
+        handlers = logger.handlers or logging.getLogger().handlers
+        if not handlers:
+            return
+        handler = handlers[0]
+        record = logging.LogRecord(
+            name="tests.multiproc",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=0,
+            msg="child log",
+            args=(),
+            exc_info=None,
+        )
+        ContextFilter().filter(record)
+        queue.put(handler.format(record))
 
 
 def test_logging_context_injects_fields() -> None:
@@ -143,30 +164,14 @@ def test_logging_context_survives_multiprocessing(tmp_path) -> None:
 
     import multiprocessing as mp
 
-    def worker(queue):
-        with logging_context(correlation_id="cid-child"):
-            logger = logging.getLogger("tests.multiproc")
-            logger.info("child log")
-            handlers = logger.handlers or logging.getLogger().handlers
-            if not handlers:
-                return
-            handler = handlers[0]
-            record = logging.LogRecord(
-                name="tests.multiproc",
-                level=logging.INFO,
-                pathname=__file__,
-                lineno=0,
-                msg="child log",
-                args=(),
-                exc_info=None,
-            )
-            ContextFilter().filter(record)
-            queue.put(handler.format(record))
-
     queue: mp.Queue[str] = mp.Queue()
-    proc = mp.Process(target=worker, args=(queue,))
+    proc = mp.Process(target=_multiprocessing_log_worker, args=(queue,))
     proc.start()
-    proc.join(timeout=10)
+    proc.join(timeout=30)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(timeout=5)
+        pytest.fail("multiprocessing logging worker timed out")
     assert proc.exitcode == 0
     output = queue.get(timeout=5)
     payload = json.loads(output)

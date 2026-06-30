@@ -1,9 +1,8 @@
 """Schema metadata tests ensuring constraints and indexes exist as expected."""
 
+from apps.api.models import models  # noqa: F401 - ensure metadata registration
 from sqlalchemy import create_engine, inspect
 from sqlmodel import SQLModel
-
-from apps.api.models import models  # noqa: F401 - ensure metadata registration
 
 
 def _create_engine():

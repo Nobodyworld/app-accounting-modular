@@ -1,7 +1,7 @@
 # Public Release Audit
 
 - Repository: app-accounting-modular
-- Audit date: 2026-06-27
+- Audit date: 2026-06-30
 - Branch audited: main
 - Auditor mode: direct-to-main, no PR
 
@@ -20,8 +20,7 @@ validation.
 - Accounting controls now include dedicated journal and financial data tests.
 - A foreign-currency accounting case study has been added for audit-style review.
 
-Status: Ready for public release, pending routine security and dependency refresh
-in the next scheduled maintenance window.
+Status: READY FOR PUBLIC REVIEW
 
 ## Findings By Area
 
@@ -65,7 +64,7 @@ Status: Verified
 
 ### 5) Security and dependency posture
 
-- Security gate remains based on `safety check --full-report`.
+- Security gate is based on project-scoped `pip-audit` requirements scanning.
 - No new security findings introduced by this release-audit change set.
 
 Status: Partial (scheduled recurring verification)
@@ -92,10 +91,33 @@ fresh checkout with no local cache assumptions.
   - Updated docs references resolved to existing files.
   - Accounting control suites executed as part of release gate policy.
 
+### Latest rerun (2026-06-30)
+
+- Environment: Windows local workspace, Python 3.14 virtual environment
+- Command used: `python -m src.tools.quality_gate` (canonical release gate)
+- Outcome: Pass
+- Notes:
+  - Ruff, Ruff format check, mypy, pytest with coverage threshold, focused
+    accounting suites, `pip check`, project-scoped `pip_audit`, and
+    `src.tools.secret_scan` all passed.
+  - Final gate reported 244 passed tests and 86.15% total coverage.
+  - SQLite ResourceWarning cleanup was validated in the final gate output.
+
+### Remote synchronization evidence
+
+- Local branch: `main`
+- Push target: `origin/main`
+- SHA parity verification commands to record after push:
+  - `git rev-parse HEAD`
+  - `git rev-parse origin/main`
+  - `git ls-remote origin refs/heads/main`
+- Outcome: Pending this audit update commit push.
+
 ## Commands Executed During Audit
 
 - `git rev-parse --abbrev-ref HEAD`
 - `git status --porcelain`
+- `python -m src.tools.quality_gate`
 - Repository metadata and workflow inspections
 - Documentation and source-path cross checks
 - Targeted accounting control test review

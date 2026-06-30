@@ -4,9 +4,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
-from sqlmodel import Session, func, select
+from sqlmodel import Session, select
 
 from ..audit import AuditAction, AuditLogger, apply_creation_metadata
 from ..models.models import Account, AccountType, JournalEntry, Rate, Transaction
@@ -161,12 +161,16 @@ class LedgerService:
         self.s.add(txn)
         self.s.flush()
         for posting in normalised:
+            account_id_value = cast(Any, posting["account_id"])
+            debit_value = cast(Any, posting["debit"])
+            credit_value = cast(Any, posting["credit"])
+            currency_value = cast(Any, posting["currency"])
             je = JournalEntry(
                 transaction_id=txn.id,
-                account_id=int(posting["account_id"]),
-                debit=float(posting["debit"]),
-                credit=float(posting["credit"]),
-                currency=str(posting["currency"]),
+                account_id=int(account_id_value),
+                debit=float(debit_value),
+                credit=float(credit_value),
+                currency=str(currency_value),
             )
             self.s.add(je)
         self.s.commit()
@@ -184,8 +188,8 @@ class LedgerService:
                 "postings": [
                     {
                         "account_id": posting["account_id"],
-                        "debit": float(posting["debit"]),
-                        "credit": float(posting["credit"]),
+                        "debit": float(cast(Any, posting["debit"])),
+                        "credit": float(cast(Any, posting["credit"])),
                         "currency": posting["currency"],
                     }
                     for posting in normalised
@@ -217,15 +221,9 @@ class LedgerService:
 
         if accounts:
             stmt = (
-                select(
-                    JournalEntry.account_id,
-                    func.sum(JournalEntry.debit),
-                    func.sum(JournalEntry.credit),
-                    Transaction.date,
-                    Account.currency,
-                )
-                .join(Transaction, Transaction.id == JournalEntry.transaction_id)
-                .join(Account, Account.id == JournalEntry.account_id)
+                select(JournalEntry, Transaction, Account)
+                .join(Transaction, cast(Any, Transaction.id) == cast(Any, JournalEntry.transaction_id))
+                .join(Account, cast(Any, Account.id) == cast(Any, JournalEntry.account_id))
             )
             if self.organization_id is not None:
                 stmt = stmt.where(Account.organization_id == self.organization_id)
@@ -233,20 +231,22 @@ class LedgerService:
                 stmt = stmt.where(Transaction.date >= start_date)
             if end_date is not None:
                 stmt = stmt.where(Transaction.date <= end_date)
-            stmt = stmt.group_by(JournalEntry.account_id, Transaction.date, Account.currency)
-            for account_id, debit, credit, txn_date, acct_currency in self.s.exec(stmt):
-                if account_id is None:
-                    continue
-                debit_dec = Decimal(str(debit or 0))
-                credit_dec = Decimal(str(credit or 0))
+            for entry, txn, account in self.s.exec(stmt):
+                account_id = int(entry.account_id)
+                debit_amount = entry.debit
+                credit_amount = entry.credit
+                txn_date = txn.date
+                acct_currency = account.currency
+                debit_dec = Decimal(str(debit_amount or 0))
+                credit_dec = Decimal(str(credit_amount or 0))
                 if currency and acct_currency and acct_currency != currency:
                     rate = (
                         self.s.exec(
-                            select(Rate.value)
+                            select(cast(Any, Rate.value))
                             .where(Rate.base == acct_currency)
                             .where(Rate.quote == currency)
                             .where(Rate.date <= txn_date)
-                            .order_by(Rate.date.desc())
+                            .order_by(cast(Any, Rate.date).desc())
                         ).first()
                         or None
                     )
@@ -259,14 +259,14 @@ class LedgerService:
                 totals[int(account_id)]["credit"] += credit_dec
 
         rows: list[TrialBalanceRow] = []
-        account_map: dict[int, dict[str, Decimal]] = {}
+        account_map: dict[object, object] = {}
         for account in accounts:
             if account.id is None:
                 continue
             account_totals = totals.get(account.id, {"debit": Decimal("0"), "credit": Decimal("0")})
-            debit = account_totals["debit"]
-            credit = account_totals["credit"]
-            balance = debit - credit
+            debit_decimal = account_totals["debit"]
+            credit_decimal = account_totals["credit"]
+            balance_decimal = debit_decimal - credit_decimal
             rows.append(
                 TrialBalanceRow(
                     account_id=int(account.id),
@@ -274,19 +274,23 @@ class LedgerService:
                     account_name=account.name,
                     account_type=account.type,
                     currency=currency or account.currency,
-                    debit=debit,
-                    credit=credit,
-                    balance=balance,
+                    debit=debit_decimal,
+                    credit=credit_decimal,
+                    balance=balance_decimal,
                 )
             )
-            account_map[int(account.id)] = {"debit": debit, "credit": credit, "net": balance}
+            account_map[int(account.id)] = {
+                "debit": debit_decimal,
+                "credit": credit_decimal,
+                "net": balance_decimal,
+            }
 
         total_debit = sum((row.debit for row in rows), start=Decimal("0"))
         total_credit = sum((row.credit for row in rows), start=Decimal("0"))
-        account_map["rows"] = rows  # type: ignore[index]
-        account_map["total_debit"] = total_debit  # type: ignore[index]
-        account_map["total_credit"] = total_credit  # type: ignore[index]
-        return account_map
+        account_map["rows"] = rows
+        account_map["total_debit"] = total_debit
+        account_map["total_credit"] = total_credit
+        return cast(dict[str, object], account_map)
 
 
 __all__ = ["LedgerService", "TrialBalanceRow"]

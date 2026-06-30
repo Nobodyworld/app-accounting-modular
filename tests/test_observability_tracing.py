@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from apps.observability.logging import get_context
 from apps.observability.tracing import (
     RequestTraceMiddleware,
@@ -12,6 +9,8 @@ from apps.observability.tracing import (
     current_span_ids,
     traced,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 def test_traced_context_populates_logging_context() -> None:

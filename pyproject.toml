@@ -37,7 +37,7 @@ pythonpath = ["."]
 filterwarnings = [
   "error::sqlalchemy.exc.SADeprecationWarning",
   "ignore::DeprecationWarning:passlib",
-  "ignore::altair.utils.deprecation.AltairDeprecationWarning",
+  "ignore:.*Altair.*:DeprecationWarning",
 ]
 markers = [
   "asyncio: tests that require an asyncio event loop",

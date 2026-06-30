@@ -11,10 +11,9 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.middleware.base import RequestResponseEndpoint
 from starlette.types import ASGIApp
 
 __all__ = [
@@ -136,11 +135,37 @@ def configure_tracing(
     otel_enabled = False
     otel_endpoint: str | None = endpoint
 
+    if exporter == "console":
+        _OTEL_TRACER = None
+
+        def _log_export(span: SpanContext) -> None:
+            duration = span.end_time - span.start_time if span.end_time is not None else None
+            logger.info(
+                "Span completed",
+                extra={
+                    "trace_id": span.trace_id,
+                    "span_id": span.span_id,
+                    "parent_span_id": span.parent_span_id,
+                    "duration": duration,
+                    "attributes": span.attributes,
+                },
+            )
+
+        _EXPORTER = _log_export
+        _CONFIG = TracingConfig(
+            service_name=service_name,
+            exporter=exporter,
+            enabled=True,
+            otel_enabled=False,
+            endpoint=endpoint,
+        )
+        return _CONFIG
+
     try:  # pragma: no cover - exercised when OpenTelemetry is installed
-        from opentelemetry import trace  # type: ignore[import-not-found]
-        from opentelemetry.sdk.resources import Resource  # type: ignore[import-not-found]
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
-        from opentelemetry.sdk.trace.export import (  # type: ignore[import-not-found]
+        from opentelemetry import trace
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import (
             BatchSpanProcessor,
             ConsoleSpanExporter,
         )
@@ -148,11 +173,11 @@ def configure_tracing(
         provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
         if exporter == "otlp":
             try:
-                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore[import-not-found]
+                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
                     OTLPSpanExporter,
                 )
 
-                otlp_kwargs = {"endpoint": otel_endpoint} if otel_endpoint else {}
+                otlp_kwargs: dict[str, Any] = {"endpoint": otel_endpoint} if otel_endpoint else {}
                 provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(**otlp_kwargs)))
             except Exception as exc:  # pragma: no cover - optional dependency
                 logger.warning(
@@ -173,7 +198,7 @@ def configure_tracing(
 
         if exporter == "otlp":
             logger.warning(
-                ("OpenTelemetry not installed; OTLP exporter downgraded to " "console logging."),
+                ("OpenTelemetry not installed; OTLP exporter downgraded to console logging."),
             )
 
         def _log_export(span: SpanContext) -> None:
@@ -318,9 +343,7 @@ class RequestTraceMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._operation_name = operation_name
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not is_tracing_enabled():
             return await call_next(request)
 

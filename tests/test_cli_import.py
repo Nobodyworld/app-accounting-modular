@@ -2,24 +2,31 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
 import click
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
-
 from apps.api.models.models import WorkflowStatus
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.workflow_service import WorkflowService
 from cli.macli import _load_transactions_from_csv
+from sqlmodel import Session, SQLModel, create_engine
 
 
-def create_session():
+@contextmanager
+def create_session() -> Iterator[Session]:
     """Construct an in-memory session for CLI import operations."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
-    return Session(engine, expire_on_commit=False)
+    session = Session(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
 
 
 def write_csv(tmp_path: Path, rows: list[dict[str, str]]) -> Path:

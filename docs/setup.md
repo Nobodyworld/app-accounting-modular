@@ -4,7 +4,11 @@ This guide covers installing Modular Accounting, setting up your development env
 
 ## Prerequisites
 
-- **Python**: 3.12 or higher (tested on 3.12)
+- **Python**: 3.12 or higher
+  - Minimum supported: 3.12
+  - Primary development target: 3.14
+  - Latest validated: 3.14
+  - CI-enforced versions: 3.12, 3.13, 3.14
 - **pip**: Python package installer
 - **Virtual Environment**: `venv` (built-in) or `virtualenv`
 - **Optional**: Docker and Docker Compose for containerized deployment
@@ -37,6 +41,13 @@ This guide covers installing Modular Accounting, setting up your development env
    # Or manually:
    pip install -r requirements.txt
    pip install -r requirements-dev.txt
+   ```
+
+4. **Fresh-environment validation (recommended before release)**:
+
+   ```bash
+   python -m pip check
+   python -c "import apps.api.main, cli.macli, apps.modular_accounting.application; print('imports-ok')"
    ```
 
 ### Docker Setup
@@ -124,7 +135,7 @@ make test
 pytest
 
 # With coverage
-pytest --cov=apps --cov-report=html
+pytest --cov=src/apps --cov=src/plugins --cov=src/cli --cov-report=html
 ```
 
 ### Quality Checks
@@ -182,7 +193,7 @@ python -m cli.macli inspect-contracts
 
 - Ensure you're in the correct virtual environment: `source .venv/bin/activate`
 - Install dependencies: `make install`
-- Check Python version compatibility (3.12+ required)
+- Check Python version compatibility (3.12+ required, newer versions preferred)
 
 #### Database Connection Issues
 

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import json
 
-from click.testing import CliRunner
-
 from cli.demo_cli import demo
+from click.testing import CliRunner
 
 
 def test_snapshot_command_table_output() -> None:

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel import Session
@@ -161,11 +161,9 @@ def cashflow_forecast(
     refresh: bool = False,
     stream_csv: bool = False,
     session: Session = Depends(get_session),
-) -> CashflowForecastResponse:
+) -> CashflowForecastResponse | Response:
     """Return a rolling cashflow forecast for an organisation."""
 
-    if not isinstance(refresh, bool):
-        refresh = False
     stream_csv = bool(stream_csv)
     if stream_csv:
         refresh = True

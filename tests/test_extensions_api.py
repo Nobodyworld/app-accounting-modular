@@ -1,6 +1,5 @@
-from fastapi.testclient import TestClient
-
 from apps.api.main import create_app
+from fastapi.testclient import TestClient
 
 
 def test_list_contracts_exposes_variance_contract() -> None:

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import types
-
 from apps.api.config import ProviderInfo, Settings
 
 
@@ -21,4 +19,3 @@ def test_settings_load_triggers_provider_cache_refresh(monkeypatch) -> None:
     Settings.load()
 
     assert called["refresh"] == 1
-

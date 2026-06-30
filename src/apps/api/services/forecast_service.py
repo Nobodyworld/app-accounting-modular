@@ -4,11 +4,11 @@ import importlib
 import logging
 import math
 import warnings
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from math import sqrt
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -180,7 +180,7 @@ class ForecastService:
             return True
         try:
             module = importlib.import_module("prophet")
-            self._prophet_class = getattr(module, "Prophet")
+            self._prophet_class = module.Prophet
             return True
         except Exception as exc:  # pragma: no cover - availability depends on environment
             self._prophet_error = exc
@@ -222,9 +222,9 @@ class ForecastService:
             return pd.date_range(start=start, periods=horizon, freq=index.freq)
 
         if len(index) >= 2:
-            inferred = index[-1] - index[-2]
+            inferred = pd.tseries.frequencies.to_offset(index[-1] - index[-2])
         else:
-            inferred = pd.Timedelta(days=1)
+            inferred = pd.offsets.Day(1)
         start = index[-1] + inferred
         return pd.date_range(start=start, periods=horizon, freq=inferred)
 
@@ -251,7 +251,7 @@ class ForecastService:
             last = df.index[-1]
             ts = pd.Timestamp(last)
             ts_utc = ts.tz_convert("UTC") if ts.tzinfo is not None else ts.tz_localize("UTC")
-            diagnostics["last_observation_label"] = (ts.isoformat() if ts.tzinfo is not None else ts_utc.isoformat())
+            diagnostics["last_observation_label"] = ts.isoformat() if ts.tzinfo is not None else ts_utc.isoformat()
             diagnostics["last_observation_epoch"] = ts_utc.timestamp()
 
         if timezone and timezone != "UTC":
@@ -401,8 +401,7 @@ class ForecastService:
             effective_exog_future = exog_future or self._default_future_exog(exog_df, forecast_index)
         forecast_values = best.forecast(steps=horizon, exog=effective_exog_future)
         points = [
-            (stamp.isoformat(), float(value))
-            for stamp, value in zip(forecast_index, forecast_values, strict=False)
+            (stamp.isoformat(), float(value)) for stamp, value in zip(forecast_index, forecast_values, strict=False)
         ]
 
         residuals = best.resid.dropna()
@@ -468,18 +467,19 @@ class ForecastService:
             future["ds"] = future["ds"].dt.tz_convert("UTC").dt.tz_localize(None)
 
         if regressors:
-            future_exog = exog_future if exog_future is not None else self._default_future_exog(
-                exog_df if exog_df is not None else pd.DataFrame(index=df.index), forecast_index
+            future_exog = (
+                exog_future
+                if exog_future is not None
+                else self._default_future_exog(
+                    exog_df if exog_df is not None else pd.DataFrame(index=df.index), forecast_index
+                )
             )
             for reg in regressors:
                 future[reg] = future_exog[reg].reset_index(drop=True)
 
         forecast_frame = model.predict(future)
         values = forecast_frame["yhat"].tolist()
-        points = [
-            (stamp.isoformat(), float(value))
-            for stamp, value in zip(forecast_index, values, strict=False)
-        ]
+        points = [(stamp.isoformat(), float(value)) for stamp, value in zip(forecast_index, values, strict=False)]
         diagnostics: dict[str, object] = {
             "observations": len(df),
             "model": "prophet",
@@ -518,7 +518,7 @@ class ForecastService:
         if exog_lookup is not None and not exog_lookup.empty:
             row = exog_lookup.loc[ts] if ts in exog_lookup.index else exog_lookup.iloc[-1]
             for col in exog_lookup.columns:
-                features[col] = float(row[col])
+                features[col] = float(cast(Any, row[col]))
         return features
 
     def _forecast_gradient_boosting(
@@ -531,7 +531,7 @@ class ForecastService:
         exog_future: pd.DataFrame | None,
     ) -> ForecastResult:
         try:
-            from sklearn.ensemble import GradientBoostingRegressor
+            from sklearn.ensemble import GradientBoostingRegressor  # type: ignore[import-untyped]
         except Exception as exc:
             self._sklearn_error = exc
             raise ValueError("scikit-learn is required for gradient boosting forecasts") from exc
@@ -557,15 +557,17 @@ class ForecastService:
         feature_columns = list(feature_frame.columns)
 
         forecast_index = self._generate_future_index(pd.DatetimeIndex(df.index), horizon)
-        exog_future_aligned = exog_future or (self._default_future_exog(exog_df, forecast_index) if exog_df is not None else None)
+        exog_future_aligned = exog_future or (
+            self._default_future_exog(exog_df, forecast_index) if exog_df is not None else None
+        )
         predictions: list[tuple[str, float]] = []
-        for i, ts in enumerate(forecast_index):
+        for _i, ts in enumerate(forecast_index):
             position = len(history)
             exog_lookup = None
             if exog_future_aligned is not None:
                 exog_lookup = exog_future_aligned
             feature_row = self._ml_feature_row(pd.Timestamp(ts), history, position, lags, exog_lookup)
-            row_df = pd.DataFrame([feature_row], columns=feature_columns).fillna(method="ffill").fillna(0.0)
+            row_df = pd.DataFrame([feature_row], columns=feature_columns).ffill().fillna(0.0)
             pred = float(model.predict(row_df)[0])
             history.append(pred)
             predictions.append((pd.Timestamp(ts).isoformat(), pred))
@@ -712,11 +714,11 @@ class ForecastService:
             metrics = {
                 "mae": float(np.mean([fold.mae for fold in folds])),
                 "rmse": float(np.mean([fold.rmse for fold in folds])),
-                "mape": float(
-                    np.mean([fold.mape for fold in folds if fold.mape is not None])
-                )
-                if any(fold.mape is not None for fold in folds)
-                else None,
+                "mape": (
+                    float(np.mean([fold.mape for fold in folds if fold.mape is not None]))
+                    if any(fold.mape is not None for fold in folds)
+                    else None
+                ),
             }
             tested_points = sum(len(fold.actual) for fold in folds)
             results.append(

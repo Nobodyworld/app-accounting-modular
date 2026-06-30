@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from apps.api.routers import core as core_router
 from apps.api.routers import health as health_router
 from apps.observability.health import HealthReport, health_registry
 from apps.observability.metrics import RequestMetricsMiddleware, metrics_registry
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 api_app = FastAPI()
 api_app.add_middleware(RequestMetricsMiddleware, registry=metrics_registry)

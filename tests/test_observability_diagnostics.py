@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from apps.observability.diagnostics import collect_observability_snapshot
 from apps.observability.health import HealthReport
 

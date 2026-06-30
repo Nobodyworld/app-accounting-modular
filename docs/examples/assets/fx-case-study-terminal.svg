@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Terminal output for FX accounting case study</title>
+  <desc id="desc">Terminal-style image showing three balanced accounting transactions with provider provenance references.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#102a43"/>
+      <stop offset="100%" stop-color="#243b53"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1200" height="760" fill="url(#bg)"/>
+  <rect x="36" y="36" width="1128" height="688" rx="14" fill="#0b1622" stroke="#334e68" stroke-width="2"/>
+  <circle cx="70" cy="62" r="8" fill="#ff5f56"/>
+  <circle cx="94" cy="62" r="8" fill="#ffbd2e"/>
+  <circle cx="118" cy="62" r="8" fill="#27c93f"/>
+  <text x="146" y="68" fill="#9fb3c8" font-family="Consolas, 'Courier New', monospace" font-size="18">pwsh - case-study journal validation</text>
+
+  <text x="64" y="114" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="20">PS&gt; python -m cli.macli snapshot --base USD --format json</text>
+  <text x="64" y="150" fill="#f0b429" font-family="Consolas, 'Courier New', monospace" font-size="18">providers.fx = fx_openexchangerates</text>
+  <text x="64" y="184" fill="#9ae6b4" font-family="Consolas, 'Courier New', monospace" font-size="18">rate evidence: EUR/USD@1.10, EUR/USD@1.12, EUR/USD@1.13</text>
+
+  <text x="64" y="242" fill="#7fd4ff" font-family="Consolas, 'Courier New', monospace" font-size="19">TXN AP-INV-2026-05-10</text>
+  <text x="86" y="272" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="18">debits:  11,000.00 USD</text>
+  <text x="86" y="300" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="18">credits: 11,000.00 USD</text>
+  <text x="86" y="328" fill="#9ae6b4" font-family="Consolas, 'Courier New', monospace" font-size="18">balanced: true</text>
+
+  <text x="64" y="384" fill="#7fd4ff" font-family="Consolas, 'Courier New', monospace" font-size="19">TXN AP-RM-2026-05-31</text>
+  <text x="86" y="414" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="18">debits:  200.00 USD</text>
+  <text x="86" y="442" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="18">credits: 200.00 USD</text>
+  <text x="86" y="470" fill="#9ae6b4" font-family="Consolas, 'Courier New', monospace" font-size="18">balanced: true</text>
+
+  <text x="64" y="526" fill="#7fd4ff" font-family="Consolas, 'Courier New', monospace" font-size="19">TXN AP-PMT-2026-06-15</text>
+  <text x="86" y="556" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="18">debits:  11,300.00 USD</text>
+  <text x="86" y="584" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="18">credits: 11,300.00 USD</text>
+  <text x="86" y="612" fill="#9ae6b4" font-family="Consolas, 'Courier New', monospace" font-size="18">balanced: true</text>
+
+  <rect x="738" y="238" width="390" height="410" rx="10" fill="#102a43" stroke="#486581"/>
+  <text x="758" y="270" fill="#f7c948" font-family="Consolas, 'Courier New', monospace" font-size="17">Validation Summary</text>
+  <text x="758" y="308" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="16">invoice    : pass</text>
+  <text x="758" y="336" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="16">remeasure  : pass</text>
+  <text x="758" y="364" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="16">settlement : pass</text>
+  <text x="758" y="392" fill="#9ae6b4" font-family="Consolas, 'Courier New', monospace" font-size="16">all journals balanced</text>
+
+  <text x="758" y="438" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="15">unrealized fx loss: 200.00 USD</text>
+  <text x="758" y="464" fill="#d9e2ec" font-family="Consolas, 'Courier New', monospace" font-size="15">realized fx loss  : 100.00 USD</text>
+  <text x="758" y="490" fill="#f0b429" font-family="Consolas, 'Courier New', monospace" font-size="15">total fx loss     : 300.00 USD</text>
+
+  <text x="64" y="694" fill="#829ab1" font-family="Consolas, 'Courier New', monospace" font-size="15">Source: docs/examples/foreign_currency_accounting_case_study.md</text>
+</svg>

@@ -95,7 +95,7 @@ def compute_snapshot_diagnostics(
     )
 
 
-def rate_strings(rates: Iterable) -> Iterable[str]:
+def rate_strings(rates: Iterable[object]) -> Iterable[str]:
     """Yield canonical string representations for FX rate pairs."""
 
     for rate in rates:
@@ -122,7 +122,7 @@ def _unique_pairs(items: Iterable[str]) -> tuple[str, ...]:
     return tuple(seen.keys())
 
 
-def _max_age_seconds(values: Iterable, now_fn: Callable[[], datetime]) -> float | None:
+def _max_age_seconds(values: Iterable[object], now_fn: Callable[[], datetime]) -> float | None:
     ages: list[float] = []
     reference = _normalise_datetime(now_fn())
     for value in values:
@@ -144,7 +144,7 @@ def _normalise_datetime(moment: datetime) -> datetime:
     return moment.astimezone(UTC).replace(tzinfo=None)
 
 
-def _count_active_rules(rules, today_fn: Callable[[], date]) -> int:
+def _count_active_rules(rules: Iterable[object], today_fn: Callable[[], date]) -> int:
     today_value = today_fn()
     active = 0
     for rule in rules:

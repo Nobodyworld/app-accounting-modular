@@ -79,9 +79,7 @@ def prepare_release(version: str, *, today: str | None = None) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Prepare release collateral")
     parser.add_argument("version", help="Semantic version to release")
-    parser.add_argument(
-        "--date", dest="date", help="Override release date (YYYY-MM-DD)"
-    )
+    parser.add_argument("--date", dest="date", help="Override release date (YYYY-MM-DD)")
     args = parser.parse_args(argv)
     prepare_release(args.version, today=args.date)
     return 0

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, date
+from datetime import UTC, date, datetime
 
+from apps.api.models.models import Budget
 from apps.api.routers import reports
 from apps.api.routers.reports import budget_vs_actual
-from apps.api.models.models import Budget
 from apps.api.services.budget_service import BudgetReport, BudgetVarianceLine
 
 
@@ -37,7 +37,9 @@ class _StubService:
 
 def test_budget_vs_actual_pagination(monkeypatch):
     monkeypatch.setattr(reports, "BudgetService", lambda session: _StubService())
-    fake_budget = Budget(id=1, organization_id=1, name="stub", start_date=date(2024, 1, 1), end_date=date(2024, 12, 31), currency="USD")  # type: ignore[call-arg]
+    fake_budget = Budget(
+        id=1, organization_id=1, name="stub", start_date=date(2024, 1, 1), end_date=date(2024, 12, 31), currency="USD"
+    )  # type: ignore[call-arg]
     session = type("S", (), {"get": lambda self, model, id: fake_budget})()  # type: ignore[type-arg]
     resp = budget_vs_actual(budget_id=1, organization_id=1, limit=1, offset=1, session=session)  # type: ignore[arg-type]
     assert len(resp.lines) == 1

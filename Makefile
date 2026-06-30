@@ -1,7 +1,7 @@
 PYTHON ?= python
 PIP ?= pip
 
-.PHONY: install lint format typecheck test coverage quality security health plan-validate quality-gate audit release
+.PHONY: install lint format format-check typecheck test coverage quality security health plan-validate quality-gate audit release
 
 install:
 	$(PIP) install -r requirements-dev.txt
@@ -12,6 +12,9 @@ lint:
 format:
 	ruff format .
 
+format-check:
+	ruff format --check .
+
 typecheck:
 	mypy src/apps/modular_accounting/application src/apps/api src/apps/extensions src/cli tests
 
@@ -21,17 +24,17 @@ test:
 coverage: test
 
 security:
-	$(PYTHON) -m pip install --quiet safety==3.2.1 && safety check --full-report
+	$(PYTHON) -m pip install --quiet pip-audit==2.9.0 && $(PYTHON) -m pip_audit -r requirements.txt -r requirements-dev.txt
 
-quality: lint typecheck test security
+quality: lint format-check typecheck test security
 
-ci: lint typecheck test security
+ci: lint format-check typecheck test security
 
 health:
 	$(PYTHON) -m cli.macli health
 
 quality-gate:
-	$(PYTHON) -m tools.quality_gate
+	$(PYTHON) -m src.tools.quality_gate
 
 plan-validate:
 	test -n "$(PLAN)" || (echo "PLAN=<path> is required" >&2 && exit 1)

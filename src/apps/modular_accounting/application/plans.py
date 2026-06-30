@@ -86,6 +86,16 @@ def _normalise_sequence(value: object) -> tuple[str, ...]:
     raise ScenarioPlanValidationError("Sequence defaults must be strings or iterables of strings")
 
 
+def _coerce_tag_iterable(value: object) -> Iterable[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, str | bytes):
+        return (_coerce_to_str(value),)
+    if isinstance(value, Iterable):
+        return [_coerce_to_str(item) for item in value if isinstance(item, str | bytes)]
+    return None
+
+
 @dataclass(slots=True)
 class ScenarioPlanMetadata:
     """Descriptive metadata about a scenario plan."""
@@ -187,7 +197,7 @@ class ScenarioPlan:
                 elif key in {"commodity_symbols", "jurisdictions"}:
                     defaults_mapping[key] = list(_normalise_sequence(value))
                 elif key == "tags":
-                    default_tags = _normalise_tags(value)
+                    default_tags = _normalise_tags(_coerce_tag_iterable(value))
                     defaults_mapping[key] = list(default_tags)
 
         plan_tags = metadata.tags
@@ -200,7 +210,7 @@ class ScenarioPlan:
             merged: dict[str, object] = dict(defaults_mapping)
             merged.update(scenario_payload)
 
-            scenario_tags = _normalise_tags(scenario_payload.get("tags"))
+            scenario_tags = _normalise_tags(_coerce_tag_iterable(scenario_payload.get("tags")))
             combined_tags = _normalise_tags((*plan_tags, *default_tags, *scenario_tags))
             merged["tags"] = combined_tags
 
@@ -245,7 +255,7 @@ class ScenarioPlan:
             description=(
                 str(metadata_payload.get("description")) if metadata_payload.get("description") is not None else None
             ),
-            tags=_normalise_tags(metadata_payload.get("tags")),
+            tags=_normalise_tags(_coerce_tag_iterable(metadata_payload.get("tags"))),
             schedule=(str(metadata_payload.get("schedule")) if metadata_payload.get("schedule") is not None else None),
             parameters=(
                 metadata_payload.get("parameters") if isinstance(metadata_payload.get("parameters"), Mapping) else {}

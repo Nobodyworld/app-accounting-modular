@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
+from collections.abc import Iterator
+from contextlib import contextmanager
 
+import pytest
 from apps.api import db
 from apps.api.main import create_app
 from apps.api.models.models import StagedPosting, User, WorkflowStatus
 from apps.api.security import get_current_user
 from apps.api.services.ledger_service import LedgerService
+from fastapi.testclient import TestClient
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
 
 pytest.importorskip("httpx")
 
 
-def create_client() -> tuple[TestClient, Session]:
+@contextmanager
+def create_client() -> Iterator[tuple[TestClient, Session]]:
     """Create a FastAPI test client with in-memory workflow data stores."""
     engine = create_engine(
         "sqlite://",
@@ -37,78 +40,84 @@ def create_client() -> tuple[TestClient, Session]:
         )
 
     app.dependency_overrides[get_current_user] = _stub_user
-    return TestClient(app), Session(engine, expire_on_commit=False)
+    client = TestClient(app)
+    session = Session(engine, expire_on_commit=False)
+    try:
+        yield client, session
+    finally:
+        session.close()
+        client.close()
+        engine.dispose()
 
 
 def test_workflow_api_end_to_end() -> None:
-    client, session = create_client()
-    with session:
+    with create_client() as (client, session):
         ledger = LedgerService(session)
         cash = ledger.create_account(name="Cash", type="ASSET", code="1000")
         revenue = ledger.create_account(name="Revenue", type="REVENUE", code="4000")
 
-    payload = {
-        "source": "test_api",
-        "source_reference": "batch-1",
-        "metadata": {"uploaded_by": "unit"},
-        "transactions": [
-            {
-                "date": "2024-04-01",
-                "description": "Invoice",
-                "postings": [
-                    {"account_id": cash.id, "debit": 200.0, "credit": 0.0},
-                    {"account_id": revenue.id, "debit": 0.0, "credit": 200.0},
-                ],
-            },
-            {
-                "date": "2024-04-02",
-                "description": "Broken entry",
-                "postings": [
-                    {"account_id": 9999, "debit": 200.0, "credit": 0.0},
-                    {"account_id": cash.id, "debit": 0.0, "credit": 200.0},
-                ],
-            },
-        ],
-    }
+        payload = {
+            "source": "test_api",
+            "source_reference": "batch-1",
+            "metadata": {"uploaded_by": "unit"},
+            "transactions": [
+                {
+                    "date": "2024-04-01",
+                    "description": "Invoice",
+                    "postings": [
+                        {"account_id": cash.id, "debit": 200.0, "credit": 0.0},
+                        {"account_id": revenue.id, "debit": 0.0, "credit": 200.0},
+                    ],
+                },
+                {
+                    "date": "2024-04-02",
+                    "description": "Broken entry",
+                    "postings": [
+                        {"account_id": 9999, "debit": 200.0, "credit": 0.0},
+                        {"account_id": cash.id, "debit": 0.0, "credit": 200.0},
+                    ],
+                },
+            ],
+        }
 
-    response = client.post("/workflow/ingest", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data["staged_ids"]) == 2
-    assert len(data["results"]) == 2
+        response = client.post("/workflow/ingest", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["staged_ids"]) == 2
+        assert len(data["results"]) == 2
 
-    failed = next(r for r in data["results"] if r["status"] == WorkflowStatus.FAILED.value)
-    assert "account 9999 not found" in failed["validation_errors"][0]
+        failed = next(r for r in data["results"] if r["status"] == WorkflowStatus.FAILED.value)
+        assert "account 9999 not found" in failed["validation_errors"][0]
 
-    with Session(db.engine, expire_on_commit=False) as session:
-        posting = session.exec(
-            select(StagedPosting).where(
-                StagedPosting.staged_transaction_id == failed["staged_transaction_id"],
-                StagedPosting.debit > 0,
-            )
-        ).one()
-        posting.account_id = revenue.id
-        session.add(posting)
-        session.commit()
+        with Session(db.engine, expire_on_commit=False) as patch_session:
+            posting = patch_session.exec(
+                select(StagedPosting).where(
+                    StagedPosting.staged_transaction_id == failed["staged_transaction_id"],
+                    StagedPosting.debit > 0,
+                )
+            ).one()
+            posting.account_id = revenue.id
+            patch_session.add(posting)
+            patch_session.commit()
 
-    process_response = client.post(
-        "/workflow/process",
-        json={"staged_ids": [failed["staged_transaction_id"]]},
-    )
-    assert process_response.status_code == 200
-    processed = process_response.json()
-    assert processed[0]["status"] == WorkflowStatus.POSTED.value
+        process_response = client.post(
+            "/workflow/process",
+            json={"staged_ids": [failed["staged_transaction_id"]]},
+        )
+        assert process_response.status_code == 200
+        processed = process_response.json()
+        assert processed[0]["status"] == WorkflowStatus.POSTED.value
 
-    detail_response = client.get(f"/workflow/{failed['staged_transaction_id']}")
-    assert detail_response.status_code == 200
-    detail = detail_response.json()
-    assert detail["status"] == WorkflowStatus.POSTED.value
-    assert len(detail["postings"]) == 2
+        detail_response = client.get(f"/workflow/{failed['staged_transaction_id']}")
+        assert detail_response.status_code == 200
+        detail = detail_response.json()
+        assert detail["status"] == WorkflowStatus.POSTED.value
+        assert len(detail["postings"]) == 2
 
-    list_response = client.get("/workflow")
-    assert list_response.status_code == 200
-    listing = list_response.json()
-    assert len(listing) >= 2
+        list_response = client.get("/workflow")
+        assert list_response.status_code == 200
+        listing = list_response.json()
+        assert len(listing) >= 2
 
 
 # TODO[P2][4d]: Cover approval and rejection transitions via API routes.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
@@ -26,9 +27,11 @@ def list_audit_logs(
     after_id: int | None = Query(default=None, description="Fetch entries older than this id for pagination"),
 ) -> list[AuditLogSchema]:
     """Return audit entries filtered by optional parameters."""
-    stmt = select(AuditLog).order_by(AuditLog.ts.desc()).limit(limit)
+    ts_col = cast(Any, AuditLog.ts)
+    id_col = cast(Any, AuditLog.id)
+    stmt = select(AuditLog).order_by(ts_col.desc()).limit(limit)
     if after_id is not None:
-        stmt = stmt.where(AuditLog.id < after_id)
+        stmt = stmt.where(id_col < after_id)
     if entity:
         stmt = stmt.where(AuditLog.entity_name == entity)
     if user_id is not None:

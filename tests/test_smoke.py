@@ -1,9 +1,8 @@
 from datetime import date
 
-from sqlmodel import Session, SQLModel, create_engine, select
-
 from apps.api.models.models import JournalEntry
 from apps.api.services.ledger_service import LedgerService
+from sqlmodel import Session, SQLModel, create_engine, select
 
 # Test database
 engine = create_engine("sqlite:///:memory:", echo=False)
@@ -11,6 +10,10 @@ engine = create_engine("sqlite:///:memory:", echo=False)
 
 def setup_module() -> None:
     SQLModel.metadata.create_all(engine)
+
+
+def teardown_module() -> None:
+    engine.dispose()
 
 
 def test_create_account() -> None:

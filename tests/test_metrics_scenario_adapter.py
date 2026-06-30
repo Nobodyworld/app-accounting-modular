@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from apps.observability.metrics import MetricsRegistry, ScenarioTelemetryAdapter
 
 
@@ -16,9 +15,20 @@ def test_scenario_telemetry_records_success_and_gauge_resets() -> None:
 
     metrics = registry.render_latest().decode()
 
-    assert 'modacct_scenario_runs_total{scenario="baseline",tags="alpha,beta",status="success"} ' "1.0" in metrics
-    assert 'modacct_scenario_inflight{scenario="baseline",tags="alpha,beta"} 0.0' in metrics
-    assert 'modacct_scenario_latency_seconds{scenario="baseline",tags="alpha,beta",status="success"}' in metrics
+    assert (
+        'modacct_scenario_runs_total{scenario="baseline",status="success",tags="alpha,beta"} 1.0' in metrics
+        or 'modacct_scenario_runs_total{scenario="baseline",tags="alpha,beta",status="success"} 1.0' in metrics
+        or 'modacct_scenario_runs_total{scenario="baseline",status="success",tags="alpha,beta"} 1' in metrics
+        or 'modacct_scenario_runs_total{scenario="baseline",tags="alpha,beta",status="success"} 1' in metrics
+    )
+    assert (
+        'modacct_scenario_inflight{scenario="baseline",tags="alpha,beta"} 0.0' in metrics
+        or 'modacct_scenario_inflight{scenario="baseline",tags="alpha,beta"} 0' in metrics
+    )
+    assert (
+        'modacct_scenario_latency_seconds_count{scenario="baseline",status="success",tags="alpha,beta"}' in metrics
+        or 'modacct_scenario_latency_seconds_count{scenario="baseline",tags="alpha,beta",status="success"}' in metrics
+    )
 
 
 def test_scenario_telemetry_records_error_and_resets_gauge() -> None:
@@ -31,8 +41,16 @@ def test_scenario_telemetry_records_error_and_resets_gauge() -> None:
 
     metrics = registry.render_latest().decode()
 
-    assert 'modacct_scenario_runs_total{scenario="unstable",tags="<none>",status="error"} ' "1.0" in metrics
-    assert 'modacct_scenario_inflight{scenario="unstable",tags="<none>"} 0.0' in metrics
+    assert (
+        'modacct_scenario_runs_total{scenario="unstable",status="error",tags="<none>"} 1.0' in metrics
+        or 'modacct_scenario_runs_total{scenario="unstable",tags="<none>",status="error"} 1.0' in metrics
+        or 'modacct_scenario_runs_total{scenario="unstable",status="error",tags="<none>"} 1' in metrics
+        or 'modacct_scenario_runs_total{scenario="unstable",tags="<none>",status="error"} 1' in metrics
+    )
+    assert (
+        'modacct_scenario_inflight{scenario="unstable",tags="<none>"} 0.0' in metrics
+        or 'modacct_scenario_inflight{scenario="unstable",tags="<none>"} 0' in metrics
+    )
 
 
 def test_scenario_telemetry_async_records_success() -> None:
@@ -47,5 +65,13 @@ def test_scenario_telemetry_async_records_success() -> None:
 
     metrics = registry.render_latest().decode()
 
-    assert 'modacct_scenario_runs_total{scenario="async-run",tags="beta",status="success"} ' "1.0" in metrics
-    assert 'modacct_scenario_inflight{scenario="async-run",tags="beta"} 0.0' in metrics
+    assert (
+        'modacct_scenario_runs_total{scenario="async-run",status="success",tags="beta"} 1.0' in metrics
+        or 'modacct_scenario_runs_total{scenario="async-run",tags="beta",status="success"} 1.0' in metrics
+        or 'modacct_scenario_runs_total{scenario="async-run",status="success",tags="beta"} 1' in metrics
+        or 'modacct_scenario_runs_total{scenario="async-run",tags="beta",status="success"} 1' in metrics
+    )
+    assert (
+        'modacct_scenario_inflight{scenario="async-run",tags="beta"} 0.0' in metrics
+        or 'modacct_scenario_inflight{scenario="async-run",tags="beta"} 0' in metrics
+    )

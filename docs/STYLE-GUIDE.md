@@ -36,7 +36,7 @@ Any deviation from “TS + React for new app UIs” requires a short ADR explain
 - **Organization**: Nobody Production  
 - **GitHub Org**: Nobodyworld  
 - **Maintainer**: Nobody  
-- **License**: Proprietary (see LICENSE file)  
+- **License**: Apache License 2.0 (see LICENSE file)  
 - **Solo Developer**: Yes — all repositories are maintained by a single developer  
 
 ---

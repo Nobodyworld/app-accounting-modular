@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import types
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
+from threading import Barrier
 
 import pytest
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
-
 from apps.api.audit import AuditActor, AuditLogger, use_actor
 from apps.api.models.models import (
     AuditAction,
@@ -24,13 +25,21 @@ from apps.api.services.fx_service import BaseFXProvider, FXService
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.market_service import BaseMarketProvider, MarketService
 from apps.api.services.tax_service import BaseTaxProvider, TaxService
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
 
 
-def _create_session() -> Session:
+@contextmanager
+def _create_session() -> Iterator[Session]:
     """Initialise an isolated in-memory database session for audit tests."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
-    return Session(engine, expire_on_commit=False)
+    session = Session(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
 
 
 def _seed_actor(session: Session) -> AuditActor:
@@ -104,6 +113,53 @@ def test_concurrent_async_audit_logs() -> None:
         logger.flush()
         rows = session.exec(select(AuditLog).where(AuditLog.entity_name == "Concurrent")).all()
         assert len(rows) == count
+
+
+def test_async_audit_worker_single_initialization_under_concurrency() -> None:
+    with _create_session() as session:
+        logger = AuditLogger(session)
+        original_worker_loop = logger._worker_loop
+        worker_starts = 0
+
+        def _wrapped_worker_loop(self: AuditLogger) -> None:
+            nonlocal worker_starts
+            worker_starts += 1
+            original_worker_loop()
+
+        logger._worker_loop = types.MethodType(_wrapped_worker_loop, logger)  # type: ignore[method-assign]
+
+        submissions = 60
+        concurrency = 12
+        barrier = Barrier(concurrency)
+
+        def _worker(idx: int) -> None:
+            barrier.wait()
+            logger.log(
+                AuditAction.CREATE,
+                "ConcurrentInit",
+                idx,
+                after={"index": idx},
+                asynchronous=True,
+            )
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            for i in range(submissions):
+                pool.submit(_worker, i)
+
+        logger.flush()
+        rows = session.exec(select(AuditLog).where(AuditLog.entity_name == "ConcurrentInit")).all()
+        persisted_ids = {row.entity_id for row in rows}
+
+        assert worker_starts == 1
+        assert logger._worker is not None
+        assert len(rows) == submissions
+        assert len(persisted_ids) == submissions
+
+        logger.close()
+        assert logger._worker is not None
+        assert not logger._worker.is_alive()
 
 
 def test_ledger_post_transaction_creates_audit_entry() -> None:

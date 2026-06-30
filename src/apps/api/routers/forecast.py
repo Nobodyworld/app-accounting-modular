@@ -8,6 +8,7 @@ from sqlmodel import Session
 from ..db import get_session
 from ..models.models import User
 from ..schemas import (
+    BacktestFoldSchema,
     BacktestRequest,
     BacktestResponse,
     CausalImpactRequest,
@@ -15,6 +16,7 @@ from ..schemas import (
     ForecastModelInfo,
     ForecastRequest,
     ForecastResponse,
+    ImpactPointSchema,
 )
 from ..security import get_current_organization, get_current_user
 from ..services.forecast_service import ForecastService
@@ -102,16 +104,16 @@ def backtest_series(
         BacktestResponse(
             model=result.model,
             folds=[
-                {
-                    "start": fold.start,
-                    "end": fold.end,
-                    "horizon": fold.horizon,
-                    "actual": fold.actual,
-                    "forecast": fold.forecast,
-                    "mae": fold.mae,
-                    "rmse": fold.rmse,
-                    "mape": fold.mape,
-                }
+                BacktestFoldSchema(
+                    start=fold.start,
+                    end=fold.end,
+                    horizon=fold.horizon,
+                    actual=fold.actual,
+                    forecast=fold.forecast,
+                    mae=fold.mae,
+                    rmse=fold.rmse,
+                    mape=fold.mape,
+                )
                 for fold in result.folds
             ],
             metrics=result.metrics,
@@ -151,12 +153,12 @@ def causal_impact(
         cumulative_impact=result.cumulative_impact,
         p_value=result.p_value,
         points=[
-            {
-                "timestamp": point.timestamp,
-                "actual": point.actual,
-                "predicted": point.predicted,
-                "impact": point.impact,
-            }
+            ImpactPointSchema(
+                timestamp=point.timestamp,
+                actual=point.actual,
+                predicted=point.predicted,
+                impact=point.impact,
+            )
             for point in result.points
         ],
         diagnostics=result.diagnostics,

@@ -7,11 +7,10 @@ package importer to have already loaded submodules. Import errors are caught
 and the attribute is set to `None` so import-time failures are non-fatal.
 """
 
-from importlib import import_module
-from typing import List
 import types
+from importlib import import_module
 
-__all__: List[str] = [
+__all__: list[str] = [
     "audit",
     "auth",
     "core",

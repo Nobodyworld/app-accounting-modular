@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-from fastapi import HTTPException
-from sqlalchemy import select
-from sqlmodel import Session, SQLModel, create_engine
-
 from apps.api import db
 from apps.api.models.models import Budget, BudgetLine, ForecastOutput, Organization, Rate
 from apps.api.routers.reports import (
@@ -21,14 +19,23 @@ from apps.api.services.budget_service import CashflowReport
 from apps.api.services.forecast_service import ForecastResult
 from apps.api.services.ledger_service import LedgerService
 from apps.api.utils.metadata import prepare_metadata_for_response
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlmodel import Session, SQLModel, create_engine
 
 
-def setup_database() -> Session:
+@contextmanager
+def setup_database() -> Iterator[Session]:
     """Initialise the in-memory database and bind the global engine for tests."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     db.engine = engine
     SQLModel.metadata.create_all(engine)
-    return Session(engine, expire_on_commit=False)
+    session = Session(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
 
 
 def seed_data(session: Session) -> tuple[int, int]:
@@ -102,109 +109,106 @@ def seed_data(session: Session) -> tuple[int, int]:
 
 
 def test_budget_vs_actual_multicurrency_conversion() -> None:
-    session = setup_database()
-    org = Organization(name="FX Org")
-    session.add(org)
-    session.commit()
-    session.refresh(org)
+    with setup_database() as session:
+        org = Organization(name="FX Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
 
-    ledger = LedgerService(session)
-    cash = ledger.create_account("Cash", "ASSET", code="1000", organization_id=org.id, currency="USD")
-    expense = ledger.create_account("Ops EUR", "EXPENSE", code="5000", organization_id=org.id, currency="EUR")
+        ledger = LedgerService(session)
+        cash = ledger.create_account("Cash", "ASSET", code="1000", organization_id=org.id, currency="USD")
+        expense = ledger.create_account("Ops EUR", "EXPENSE", code="5000", organization_id=org.id, currency="EUR")
 
-    ledger.post_transaction(
-        date=date(2024, 1, 1),
-        description="EUR spend",
-        postings=[
-            {"account_id": expense.id, "debit": 100.0, "credit": 0.0, "currency": "EUR"},
-            {"account_id": cash.id, "debit": 0.0, "credit": 100.0, "currency": "USD"},
-        ],
-    )
-
-    budget = Budget(
-        organization_id=org.id,
-        name="FX Budget",
-        start_date=date(2024, 1, 1),
-        end_date=date(2024, 12, 31),
-        currency="USD",
-    )
-    session.add(budget)
-    session.commit()
-    session.refresh(budget)
-    session.add(
-        BudgetLine(
-            budget_id=budget.id,
-            account_id=expense.id,
-            period_start=date(2024, 1, 1),
-            amount=110.0,
+        ledger.post_transaction(
+            date=date(2024, 1, 1),
+            description="EUR spend",
+            postings=[
+                {"account_id": expense.id, "debit": 100.0, "credit": 0.0, "currency": "EUR"},
+                {"account_id": cash.id, "debit": 0.0, "credit": 100.0, "currency": "USD"},
+            ],
         )
-    )
-    session.commit()
-    session.add(Rate(base="EUR", quote="USD", date=date(2024, 1, 1), value=1.1, provider="stub"))
-    session.commit()
 
-    # run endpoint
-    response = budget_vs_actual(
-        budget_id=budget.id,
-        organization_id=org.id,
-        horizon=15,
-        refresh=True,
-        session=session,
-    )
-    assert response.metadata.reporting_currency == "USD"
-    assert response.summary["total_actual"] >= 100.0
-    session.close()
+        budget = Budget(
+            organization_id=org.id,
+            name="FX Budget",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 12, 31),
+            currency="USD",
+        )
+        session.add(budget)
+        session.commit()
+        session.refresh(budget)
+        session.add(
+            BudgetLine(
+                budget_id=budget.id,
+                account_id=expense.id,
+                period_start=date(2024, 1, 1),
+                amount=110.0,
+            )
+        )
+        session.commit()
+        session.add(Rate(base="EUR", quote="USD", date=date(2024, 1, 1), value=1.1, provider="stub"))
+        session.commit()
+
+        # run endpoint
+        response = budget_vs_actual(
+            budget_id=budget.id,
+            organization_id=org.id,
+            horizon=15,
+            refresh=True,
+            session=session,
+        )
+        assert response.metadata.reporting_currency == "USD"
+        assert response.summary["total_actual"] >= 100.0
 
 
 def test_budget_vs_actual_endpoint() -> None:
-    session = setup_database()
-    org_id, budget_id = seed_data(session)
+    with setup_database() as session:
+        org_id, budget_id = seed_data(session)
 
-    response = budget_vs_actual(
-        budget_id=budget_id,
-        organization_id=org_id,
-        horizon=15,
-        refresh=True,
-        session=session,
-    )
-    assert response.summary["total_actual"] > 0
-    assert response.metadata.budget_id == budget_id
-    assert response.metadata.organization_id == org_id
-    assert response.metadata.reporting_currency == "USD"
-    assert response.metadata.plan_revision is not None
-    assert response.metadata.generated_at.tzinfo == UTC
-    assert response.metadata.accounts_without_actuals is not None
-    missing = response.metadata.accounts_without_actuals
-    assert missing and missing[0].account_name == "Backoffice"
+        response = budget_vs_actual(
+            budget_id=budget_id,
+            organization_id=org_id,
+            horizon=15,
+            refresh=True,
+            session=session,
+        )
+        assert response.summary["total_actual"] > 0
+        assert response.metadata.budget_id == budget_id
+        assert response.metadata.organization_id == org_id
+        assert response.metadata.reporting_currency == "USD"
+        assert response.metadata.plan_revision is not None
+        assert response.metadata.generated_at.tzinfo == UTC
+        assert response.metadata.accounts_without_actuals is not None
+        missing = response.metadata.accounts_without_actuals
+        assert missing and missing[0].account_name == "Backoffice"
 
-    stored_row = session.exec(select(ForecastOutput).where(ForecastOutput.report_type == "budget_vs_actual")).first()
-    assert stored_row is not None
-    stored = stored_row if isinstance(stored_row, ForecastOutput) else stored_row[0]
-    assert stored.plan_id is not None
-
-    session.close()
+        stored_row = session.exec(
+            select(ForecastOutput).where(ForecastOutput.report_type == "budget_vs_actual")
+        ).first()
+        assert stored_row is not None
+        stored = stored_row if isinstance(stored_row, ForecastOutput) else stored_row[0]
+        assert stored.plan_id is not None
 
 
 def test_cashflow_endpoint() -> None:
-    session = setup_database()
-    org_id, budget_id = seed_data(session)
+    with setup_database() as session:
+        org_id, budget_id = seed_data(session)
 
-    response = cashflow_forecast(
-        organization_id=org_id,
-        horizon=10,
-        refresh=True,
-        session=session,
-    )
-    assert response.metadata.organization_id == org_id
-    assert response.current_cash < 0  # cash reduced by spend
-    assert response.metadata.forecast_diagnostics is not None
-    diagnostics = response.metadata.forecast_diagnostics
-    assert diagnostics is not None
-    assert isinstance(diagnostics.get("last_observation_label"), str)
-    assert response.metadata.forecast_status == "success"
-    assert response.metadata.forecast_timezone == "UTC"
-
-    session.close()
+        response = cashflow_forecast(
+            organization_id=org_id,
+            horizon=10,
+            refresh=True,
+            session=session,
+        )
+        assert response.metadata.organization_id == org_id
+        assert response.current_cash < 0  # cash reduced by spend
+        assert response.metadata.forecast_diagnostics is not None
+        diagnostics = response.metadata.forecast_diagnostics
+        assert diagnostics is not None
+        assert isinstance(diagnostics.get("last_observation_label"), str)
+        assert response.metadata.forecast_status == "success"
+        assert response.metadata.forecast_timezone == "UTC"
 
 
 def test_prepare_metadata_for_response_serialises_diagnostics() -> None:
@@ -266,56 +270,52 @@ def test_response_from_cashflow_serialises_forecast_diagnostics() -> None:
 
 
 def test_budget_vs_actual_rejects_cross_org_access() -> None:
-    session = setup_database()
-    org_id, budget_id = seed_data(session)
+    with setup_database() as session:
+        org_id, budget_id = seed_data(session)
 
-    with pytest.raises(HTTPException) as excinfo:
-        budget_vs_actual(
-            budget_id=budget_id,
-            organization_id=org_id + 1,
-            session=session,
-        )
+        with pytest.raises(HTTPException) as excinfo:
+            budget_vs_actual(
+                budget_id=budget_id,
+                organization_id=org_id + 1,
+                session=session,
+            )
 
-    assert excinfo.value.status_code == 404
-
-    session.close()
+        assert excinfo.value.status_code == 404
 
 
 def test_budget_vs_actual_returns_400_for_empty_budget() -> None:
-    session = setup_database()
-    org = Organization(name="Empty Budget Org")
-    session.add(org)
-    session.commit()
-    session.refresh(org)
+    with setup_database() as session:
+        org = Organization(name="Empty Budget Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
 
-    budget = Budget(
-        organization_id=org.id,
-        name="Empty",
-        start_date=date(2024, 1, 1),
-        end_date=date(2024, 12, 31),
-    )
-    session.add(budget)
-    session.commit()
-    session.refresh(budget)
-
-    with pytest.raises(HTTPException) as excinfo:
-        budget_vs_actual(
-            budget_id=budget.id,
+        budget = Budget(
             organization_id=org.id,
-            session=session,
+            name="Empty",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 12, 31),
         )
+        session.add(budget)
+        session.commit()
+        session.refresh(budget)
 
-    assert excinfo.value.status_code == 400
-    session.close()
+        with pytest.raises(HTTPException) as excinfo:
+            budget_vs_actual(
+                budget_id=budget.id,
+                organization_id=org.id,
+                session=session,
+            )
+
+        assert excinfo.value.status_code == 400
 
 
 def test_cashflow_forecast_returns_404_for_missing_org() -> None:
-    session = setup_database()
-    with pytest.raises(HTTPException) as excinfo:
-        cashflow_forecast(
-            organization_id=999,
-            session=session,
-        )
+    with setup_database() as session:
+        with pytest.raises(HTTPException) as excinfo:
+            cashflow_forecast(
+                organization_id=999,
+                session=session,
+            )
 
-    assert excinfo.value.status_code == 404
-    session.close()
+        assert excinfo.value.status_code == 404

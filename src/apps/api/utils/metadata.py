@@ -7,7 +7,7 @@ import re
 from collections.abc import Mapping, MutableMapping, Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 _SNAKE_CASE_PATTERN = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -64,7 +64,7 @@ def normalise_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
             return [transform(item) for item in obj]
         return _normalise_scalar(obj)
 
-    return transform(metadata)
+    return cast(dict[str, Any], transform(metadata))
 
 
 def _coerce_json_scalar(value: Any) -> JSONScalar:

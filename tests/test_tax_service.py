@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 
 import pytest
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
-
 from apps.api.models import TaxRule
 from apps.api.services.tax_service import (
     BaseTaxProvider,
@@ -13,12 +12,20 @@ from apps.api.services.tax_service import (
     TaxService,
     default_tax_providers,
 )
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
 
 
-def _session() -> Session:
+@contextmanager
+def _session() -> Iterator[Session]:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
-    return Session(engine, expire_on_commit=False)
+    session = Session(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
 
 
 class _Provider(BaseTaxProvider):
