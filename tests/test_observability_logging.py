@@ -167,13 +167,13 @@ def test_logging_context_survives_multiprocessing(tmp_path) -> None:
     queue: mp.Queue[str] = mp.Queue()
     proc = mp.Process(target=_multiprocessing_log_worker, args=(queue,))
     proc.start()
-    proc.join(timeout=30)
+    proc.join(timeout=60)
     if proc.is_alive():
         proc.terminate()
-        proc.join(timeout=5)
+        proc.join(timeout=10)
         pytest.fail("multiprocessing logging worker timed out")
     assert proc.exitcode == 0
-    output = queue.get(timeout=5)
+    output = queue.get(timeout=15)
     payload = json.loads(output)
     assert payload["correlation_id"] == "cid-child"
     assert payload["message"] == "child log"

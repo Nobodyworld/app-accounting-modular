@@ -111,7 +111,26 @@ fresh checkout with no local cache assumptions.
   - `git rev-parse HEAD`
   - `git rev-parse origin/main`
   - `git ls-remote origin refs/heads/main`
-- Outcome: Pending this audit update commit push.
+- Outcome: Completed for commit `8823845d59940d1470c0c877912003f7fe185b40`.
+
+### Clean-clone rerun (2026-06-30)
+
+- Fresh clone path: `app-accounting-modular-clean-8823845`
+- Commit validated: `8823845d59940d1470c0c877912003f7fe185b40`
+- Initial rerun outcome: Fail
+  - `ruff format --check` reported repository-wide reformat requirements under
+    Windows checkout line endings.
+  - Full pytest step saw environment-sensitive timeout failures in
+    multiprocessing logging and Streamlit AppTest flows.
+  - `pip_audit` failed from transient PyPI network read timeout.
+- Follow-up hardening applied:
+  - Enforced LF checkout for Python files in `.gitattributes`.
+  - Increased robustness timeouts in `tests/test_observability_logging.py` and
+    `tests/test_streamlit_app.py`.
+  - Increased `pip_audit` network timeout to 60 seconds in quality gate.
+- Post-hardening local gate outcome: Pass
+  - `python -m src.tools.quality_gate` passed with 244 tests and 86.15%
+    coverage, including all accounting control suites.
 
 ## Commands Executed During Audit
 

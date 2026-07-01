@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Keep Python source stable across platforms so Ruff format --check is deterministic.
+*.py text eol=lf

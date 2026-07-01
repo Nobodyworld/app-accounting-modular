@@ -53,6 +53,8 @@ COMMANDS: Sequence[Sequence[str]] = (
         sys.executable,
         "-m",
         "pip_audit",
+        "--timeout",
+        "60",
         "-r",
         "requirements.txt",
         "-r",

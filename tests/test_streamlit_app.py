@@ -117,16 +117,16 @@ def fake_requests(monkeypatch):
 
 def test_budget_report_flow(fake_requests):
     at = AppTest.from_file("apps/web/app.py")
-    at.run()
+    at.run(timeout=10)
 
     at.number_input(key="budget_id_input").set_value(1)
-    at.run()
+    at.run(timeout=10)
     at.number_input(key="budget_horizon_input").set_value(45)
-    at.run()
+    at.run(timeout=10)
     at.checkbox(key="budget_refresh_toggle").check()
-    at.run()
+    at.run(timeout=10)
     at.button(key="budget_report_button").click()
-    at.run()
+    at.run(timeout=20)
 
     assert "budget_report_payload" in at.session_state
     summary = at.session_state["budget_report_payload"]["summary"]
@@ -135,13 +135,13 @@ def test_budget_report_flow(fake_requests):
 
 def test_budget_upload_preview(fake_requests):
     at = AppTest.from_file("apps/web/app.py")
-    at.run()
+    at.run(timeout=10)
 
     csv_bytes = b"account_id,period_start,amount\n1,2024-01-01,100\n"
     at.session_state["uploaded_budget_bytes"] = csv_bytes
     if "uploaded_budget_preview" in at.session_state:
         del at.session_state["uploaded_budget_preview"]
-    at.run()
+    at.run(timeout=10)
 
     assert "uploaded_budget_preview" in at.session_state
     preview = at.session_state["uploaded_budget_preview"]
@@ -151,16 +151,16 @@ def test_budget_upload_preview(fake_requests):
 def test_cashflow_flow(fake_requests):
     budget_payload, cashflow_payload, calls = fake_requests
     at = AppTest.from_file("apps/web/app.py")
-    at.run()
+    at.run(timeout=10)
 
     at.number_input(key="cashflow_org_input").set_value(1)
-    at.run()
-    at.number_input(key="cashflow_horizon_input").set_value(30)
-    at.run()
-    at.checkbox(key="cashflow_refresh_toggle").check()
-    at.run()
-    at.button(key="cashflow_report_button").click()
     at.run(timeout=10)
+    at.number_input(key="cashflow_horizon_input").set_value(30)
+    at.run(timeout=10)
+    at.checkbox(key="cashflow_refresh_toggle").check()
+    at.run(timeout=10)
+    at.button(key="cashflow_report_button").click()
+    at.run(timeout=20)
 
     assert "cashflow_report_payload" in at.session_state
     payload = at.session_state["cashflow_report_payload"]
