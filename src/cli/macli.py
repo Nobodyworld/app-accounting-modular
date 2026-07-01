@@ -527,7 +527,25 @@ def snapshot_scenarios(plan: str, format_: str, reset_cache: bool) -> None:
             plan_payload = json.load(handle)
     scenarios_value = plan_payload.get("scenarios")
     scenarios_raw = scenarios_value if isinstance(scenarios_value, list) else []
-    scenarios = [SnapshotScenario.from_mapping(item) for item in scenarios_raw if isinstance(item, dict)]
+    defaults_value = plan_payload.get("defaults")
+    defaults = defaults_value if isinstance(defaults_value, dict) else {}
+    default_base = defaults.get("base_currency")
+    default_commodities = defaults.get("commodity_symbols")
+    default_jurisdictions = defaults.get("jurisdictions")
+
+    scenarios = []
+    for item in scenarios_raw:
+        if not isinstance(item, dict):
+            continue
+        item_with_defaults = dict(item)
+        if not item_with_defaults.get("base_currency") and default_base:
+            item_with_defaults["base_currency"] = default_base
+        if item_with_defaults.get("commodity_symbols") is None and default_commodities is not None:
+            item_with_defaults["commodity_symbols"] = default_commodities
+        if item_with_defaults.get("jurisdictions") is None and default_jurisdictions is not None:
+            item_with_defaults["jurisdictions"] = default_jurisdictions
+        scenarios.append(SnapshotScenario.from_mapping(item_with_defaults))
+
     batch = orchestrator.run_scenarios(scenarios, reset_cache_between_runs=reset_cache)
     payload = cast(dict[str, Any], scenario_batch_to_payload(batch))
 

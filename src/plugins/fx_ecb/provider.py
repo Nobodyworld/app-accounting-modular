@@ -19,7 +19,13 @@ class ECBFXProvider:
         r = requests.get(endpoint, timeout=20)
         r.raise_for_status()
         data = r.json()
-        d = date.fromisoformat(data["date"])
+        raw_date = data.get("date")
+        if isinstance(raw_date, str) and raw_date.strip():
+            d = date.fromisoformat(raw_date)
+        elif date_ is not None:
+            d = date_
+        else:
+            d = date.today()
         out = []
         for quote, val in data.get("rates", {}).items():
             out.append(Rate(base=base, quote=quote, date=d, value=float(val), provider=self.name))
