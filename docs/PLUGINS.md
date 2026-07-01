@@ -4,10 +4,10 @@ Plugins extend Modular Accounting with custom data providers for foreign exchang
 
 ## Plugin Structure
 
-Each plugin is a Python package under the `plugins/` directory with the following structure:
+Each plugin is a Python package under the `src/plugins/` directory with the following structure:
 
 ```text
-plugins/
+src/plugins/
   your_plugin_name/
     __init__.py
     provider.py
@@ -27,7 +27,7 @@ Your plugin must expose a `provider()` factory function in `provider.py` that re
 ### Example: FX Provider
 
 ```python
-# plugins/fx_ecb/provider.py
+# src/plugins/fx_ecb/provider.py
 import requests
 from typing import Iterable
 from apps.modular_accounting.domain import FXRate, Money
@@ -52,7 +52,7 @@ def provider() -> ECBProvider:
 ### Example: Commodity Provider
 
 ```python
-# plugins/commodity_gold/provider.py
+# src/plugins/commodity_gold/provider.py
 from apps.modular_accounting.domain import CommodityQuote, Money
 
 class GoldPriceProvider:
@@ -75,8 +75,8 @@ def provider() -> GoldPriceProvider:
 
 Plugins are automatically discovered and loaded by the plugin loader. The loader:
 
-1. Scans the `plugins/` directory
-2. Imports each plugin's `provider.py` module
+1. Reads the configured provider keys from settings
+2. Imports each configured plugin's `provider.py` module
 3. Calls the `provider()` function to get the provider instance
 4. Registers the provider with the appropriate service
 
@@ -103,8 +103,8 @@ DEFAULT_ALLOWED_PROVIDERS = {
 
 ## Reference Implementations
 
-- `plugins/fx_ecb/`: ECB foreign exchange rates
-- `plugins/market_yfinance/`: Yahoo Finance market data
-- `plugins/tax_oecd_stub/`: OECD tax rules stub
+- `src/plugins/fx_ecb/`: ECB foreign exchange rates
+- `src/plugins/market_yfinance/`: Yahoo Finance market data
+- `src/plugins/tax_oecd_stub/`: OECD tax rules stub
 
 See [Adapter Contracts](adapters.md) for detailed interface specifications.

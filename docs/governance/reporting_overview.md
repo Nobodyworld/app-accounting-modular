@@ -2,38 +2,54 @@
 
 ## Structure & Dependency Map
 
-- **Services**: `apps/api/routers` expose FastAPI routes layered over service modules such as `budget_service`, `forecast_service`, and `ledger_service`. Persistence sits in `apps/api/models` (SQLModel) with session helpers in `apps/api/db.py`.
-- **Clients**: `apps/web` provides Streamlit dashboards and `cli/` offers operational commands sharing the same service layer.
-- **Plugins**: Provider integrations live under `plugins/` and are dynamically loaded through `apps/api/services/plugin_loader.py` based on configuration from `apps/api/config.py`.
-- **Tooling**: Python 3.12 project managed via `requirements.txt` / `requirements-dev.txt`, linting/formatting handled by Ruff/Black through pre-commit, and pytest for the extensive `tests/` suite. Docker compose files supply local orchestration.
+- **Services**: Runtime Python service packages live under `src/apps/`, including
+ FastAPI routers, accounting domain models, extension registry code,
+ observability helpers, and the Streamlit app.
+- **Clients**: Operational CLIs live under `src/cli/`. The top-level `apps/`
+ directory is retained for frontend placeholders and is not the Python runtime
+ source of truth.
+- **Plugins**: Provider integrations and reference operational extensions live
+ under `src/plugins/` and are loaded through
+ `src/apps/api/services/plugin_loader.py` and
+ `src/apps/api/services/extension_loader.py`.
+- **Tooling**: Python 3.12 is the minimum supported version, Python 3.14 is the
+ primary development baseline, and the workflow matrix covers Python 3.12,
+ 3.13, and 3.14.
 
-## Key Findings
+## Release Reporting Status
 
-1. Cashflow report metadata normalisation coerced diagnostic ISO strings into `datetime` objects, breaching the `CashflowForecastResponse` contract and causing runtime 422 errors when diagnostics were present.【F:apps/api/routers/reports.py†L20-L90】【F:apps/api/schemas.py†L324-L371】
-2. Response shaping now routes through `apps.api.utils.metadata.prepare_metadata_for_response`, consolidating metadata normalisation, timezone coercion, and diagnostics serialisation in a single helper leveraged by routers, services, and tests.【F:apps/api/utils/metadata.py†L1-L183】【F:apps/api/routers/reports.py†L1-L96】【F:apps/api/services/budget_service.py†L1-L360】
-3. Diagnostics serialisation hardens against JSON edge cases (non-finite floats, `None` values) and regression tests enforce the helper contract across utilities and API flows, catching schema drift earlier; `merge_forecast_diagnostics` now unifies cached metadata with live forecast telemetry without redundant coercion.【F:apps/api/utils/metadata.py†L93-L183】【F:tests/test_metadata_utils.py†L1-L138】【F:tests/test_reports_api.py†L1-L210】
-4. Documentation has been overhauled to provide hands-on examples for REST/CLI workflows, plugin development, and architecture navigation, reducing onboarding friction for new contributors.【F:README.md†L1-L166】【F:docs/PLUGINS.md†L1-L97】【F:docs/README.md†L1-L41】
+- Current public-release verdict: `KEEP PRIVATE - NEAR READY`.
+- Canonical status source: [`../../PUBLIC_RELEASE_AUDIT.md`](../../PUBLIC_RELEASE_AUDIT.md).
+- Local Python 3.14 quality-gate evidence reports 244 passing tests and 86.15%
+ coverage.
+- Hosted GitHub Actions evidence for commit
+ `71ff89a17c45e4c2cf09399e6801a0464d951e3d` is not recorded in the audit.
+- Full-history secret scanning and clean-clone validation of the final
+ publication commit remain required before the repository should be made
+ public.
+
+## Evidence To Record Before Publication
+
+- Gitleaks or equivalent full-history scan: tool version, command, commits
+ scanned, findings, false-positive disposition, and final pass/fail result.
+- Clean-clone validation: dependency installation, quality gate, full tests and
+ coverage, focused accounting-control suites, audit generation, CLI snapshot,
+ API startup, and Streamlit smoke test.
+- Hosted CI disposition: successful GitHub Actions run for the final commit, or
+ explicit documentation that hosted Actions are disabled and clean-clone local
+ validation is authoritative.
 
 ## Risk Notes
 
-- Report metadata remains tightly coupled to the `ReportMetadata` schema; any downstream change to diagnostics structure requires coordinated updates to normalisation logic and tests to prevent schema drift.【F:apps/api/routers/reports.py†L34-L82】
-- Cached provider metadata (`plugin_loader`) still assumes global settings; dynamic reconfiguration at runtime would require cache invalidation hooks to avoid stale modules (deferred for future work).【F:apps/api/services/plugin_loader.py†L1-L165】
+- Current-tree secret scanning is useful but does not inspect historical commits.
+- CI configuration is credible, but configuration alone is not the same as a
+ recorded hosted run for the release candidate.
+- Visual evidence remains thin for employer review; top-level collateral should
+ add architecture, CLI, API or Streamlit, and foreign-currency journal images.
 
-## Test Posture
+## Verification Baseline
 
-- Broad pytest suite (`tests/`) spans services, routers, CLI, and scheduling behaviour. Coverage is strong for happy paths; new regression tests were added for diagnostics serialisation to catch schema mismatches earlier.【F:tests/test_reports_api.py†L96-L204】
-- Type checking via mypy targets critical config/services but does not yet cover every router; future expansion would harden typing around metadata transforms.
-
-## CI/CD Posture
-
-- GitHub Actions workflow (`.github/workflows/ci.yml`) installs dev dependencies, runs pre-commit (Black, Ruff, etc.), and executes the pytest suite for Python 3.12 on pushes/PRs. CodeQL scanning supplements static analysis.【F:.github/workflows/ci.yml†L1-L35】【F:.github/workflows/codeql.yml†L1-L73】
-
-## Modes Selected
-
-- **Security & Stability Audit** – Eliminated metadata coercion that crashed the cashflow endpoint, restoring predictable API responses for authenticated clients.【F:apps/api/routers/reports.py†L1-L96】
-- **Zero-Bloat Refactor** – Consolidated duplicated diagnostics normalisation into a single helper shared by metadata utilities, services, and routers.【F:apps/api/utils/metadata.py†L1-L160】【F:apps/api/services/budget_service.py†L1-L360】
-- **Test & Verify** – Augmented API and utility tests to assert diagnostics serialisation and reran the full pytest suite to confirm end-to-end stability.【F:tests/test_reports_api.py†L124-L210】【F:tests/test_metadata_utils.py†L1-L138】【caa2ef†L1-L2】
-
-## Verification
-
-- ✅ `pytest -q` (local) – All 87 tests now pass, confirming the cashflow forecast endpoint emits schema-compliant metadata and utility helpers remain stable.【caa2ef†L1-L2】
+- `python -m src.tools.quality_gate` is the canonical local quality gate.
+- `make audit` regenerates the latest audit artifact under `docs/reports/`.
+- `PUBLIC_RELEASE_AUDIT.md` must be updated whenever release validation evidence
+ changes.

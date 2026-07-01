@@ -3,6 +3,7 @@
 ## Milestone 1: Engineering Governance & CI Foundations
 
 ### Workstream 1.1: Repository Governance
+
 - **Task**: Establish community health files (CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, support.md, CODEOWNERS) and update README/CHANGELOG scaffolding.
   - **Goal**: Provide clear contribution, support, and security reporting guidance.
   - **Acceptance Criteria**: New docs added with project-specific instructions; README references governance; CHANGELOG adopts semantic-versioning header; no code behavior changes.
@@ -19,6 +20,7 @@
   - **Tags**: {DX, docs}.
 
 ### Workstream 1.2: Automation Baseline
+
 - **Task**: Introduce EditorConfig, central Black/Ruff configs, and adopt Prettier for non-Python assets.
   - **Goal**: Enforce consistent formatting.
   - **Acceptance Criteria**: `.editorconfig`, `pyproject.toml` updated, Prettier config added, no source reformat yet.
@@ -50,6 +52,7 @@
 ## Milestone 2: Type Safety & Code Hygiene
 
 ### Workstream 2.1: Typing & Lint Strictness
+
 - **Task**: Introduce mypy (or pyright) configuration with strict mode and SQLModel plugin adjustments.
   - **Goal**: Enforce static typing.
   - **Acceptance Criteria**: `mypy.ini` (or pyrightconfig) committed; CI updated to run type checks.
@@ -67,6 +70,7 @@
   - **Status**: 🔄 Forecast service deduplication rewritten for type-safety; strict coverage extended to audit, security, database, and dependency helpers with remaining domain services queued for future passes.
 
 ### Workstream 2.2: Dead Code Retirement
+
 - **Task**: Identify and remove unused modules/enums/services (e.g., unused AuditAction values, orphan docs) with changelog entry.
   - **Goal**: Reduce maintenance surface.
   - **Acceptance Criteria**: Confirm via `vulture`/`ruff --select=F401,F841` or tests; update docs accordingly.
@@ -77,6 +81,7 @@
 ## Milestone 3: Testing & Quality Gates
 
 ### Workstream 3.1: Test Coverage Expansion
+
 - **Task**: Add API contract tests validating OpenAPI schema and key endpoint responses.
   - **Goal**: Protect REST contracts.
   - **Acceptance Criteria**: Tests exercising auth + representative endpoints with schema validation; coverage report generated.
@@ -92,6 +97,7 @@
   - **Tags**: {testing}.
 
 ### Workstream 3.2: Coverage & Reporting
+
 - **Task**: Configure pytest coverage (XML/HTML) and integrate coverage badge/upload to CI artifacts.
   - **Goal**: Visibility into coverage levels.
   - **Acceptance Criteria**: Coverage config, CI artifact, README badge.
@@ -105,17 +111,21 @@
   - **Blast Radius**: CI only.
   - **Rollback Plan**: Disable workflows.
   - **Tags**: {security, reliability}.
+  - **Status**: Partial. CodeQL workflow configuration exists, but Gitleaks or
+    equivalent full-history secret scanning is still required before public
+    release.
 
 ## Milestone 4: Security, Configuration, and Observability
 
 ### Workstream 4.1: Configuration Hardening
-- **Task**: Introduce `.env.example`, document configuration keys, and add runtime validation using Pydantic Settings with stricter validators.
+
+- **Task**: Introduce `config/.env.example`, document configuration keys, and add runtime validation using Pydantic Settings with stricter validators.
   - **Goal**: Prevent insecure defaults and misconfiguration.
   - **Acceptance Criteria**: Settings module rejects weak defaults; docs updated.
   - **Blast Radius**: Medium—affects startup config.
   - **Rollback Plan**: Revert settings changes; fallback to previous defaults.
   - **Tags**: {security, reliability, DX}.
-  - **Status**: ✅ `.env.example`, configuration guide, and hardened validators shipped; monitor for downstream integration feedback.
+  - **Status**: ✅ `config/.env.example`, configuration guide, and hardened validators shipped; monitor for downstream integration feedback.
 
 - **Task**: Add SBOM generation (Syft/CycloneDX) and dependency vulnerability scan in CI.
   - **Goal**: Supply chain transparency.
@@ -125,6 +135,7 @@
   - **Tags**: {security}.
 
 ### Workstream 4.2: Observability Enhancements
+
 - **Task**: Implement structured logging (JSON logger, correlation IDs) and propagate through API, scheduler, CLI.
   - **Goal**: Improve debuggability.
   - **Acceptance Criteria**: Logging middleware, scheduler logging, CLI logging harness; tests updated.
@@ -143,6 +154,7 @@
 ## Milestone 5: Architecture, Performance, and Release Automation
 
 ### Workstream 5.1: Domain Modularisation
+
 - **Task**: Extract repository interfaces for ledger/forecast services (ports/adapters) to decouple from SQLModel.
   - **Goal**: Improve testability and enable alternative storage.
   - **Acceptance Criteria**: Interfaces defined, services refactored to depend on interfaces, unit tests cover new abstractions.
@@ -158,6 +170,7 @@
   - **Tags**: {DX, reliability}.
 
 ### Workstream 5.2: Performance & Release
+
 - **Task**: Add benchmark suite (pytest-benchmark) for critical services (forecast generation, report queries) and integrate into CI (non-blocking trend artifact).
   - **Goal**: Track performance regressions.
   - **Acceptance Criteria**: Benchmarks with baseline documentation; CI artifact produced.
@@ -180,6 +193,7 @@
   - **Tags**: {DX}.
 
 ## Sequencing & Dependencies
+
 - Milestone 1 prerequisites: none (foundation work).
 - Milestone 2 depends on CI to enforce typing; run sequentially after baseline automation.
 - Milestone 3 leverages lint/type gates from Milestone 2.
@@ -188,6 +202,7 @@
 - Tasks within workstreams can proceed in parallel when blast radius is low, but refactors (Milestone 5) should wait for instrumentation and coverage enhancements.
 
 ## Blockers & Assumptions
+
 - Assume continued use of SQLite for local dev; Postgres compatibility to be validated during configuration hardening.
 - External API quotas (ECB/Yahoo) may require mocks in tests; ensure integration tests remain offline-friendly.
 - Container registry credentials required for release automation (to be provided or replaced with GitHub Container Registry via OIDC).

@@ -1,32 +1,56 @@
 # Repository Context Report
 
 ## Stack Overview
-- **Primary Language:** Python 3.11 with FastAPI backend and Streamlit frontend.
-- **Frameworks & Libraries:** FastAPI, SQLModel, Pydantic v2, APScheduler, Streamlit, pandas/numpy, statsmodels for forecasting, Click for CLI orchestration.
-- **Testing Tooling:** Pytest-based suite under `tests/` covering services, routers, CLI commands, scheduler behaviour, and Streamlit smoke checks.
-- **Formatting & Linting:** Black (line length 88) and Ruff with import sorting; Markdown/YAML handled by Prettier via pre-commit.
+
+- **Primary language:** Python 3.12+ with Python 3.14 as the primary development
+ baseline.
+- **Frameworks and libraries:** FastAPI, SQLModel, Pydantic v2, APScheduler,
+ Streamlit, pandas/numpy, statsmodels, scikit-learn, and Click-based CLI
+ orchestration.
+- **Testing tooling:** Pytest suites under `tests/` cover services, routers,
+ CLI commands, scheduler behavior, Streamlit smoke checks, and accounting
+ controls.
+- **Formatting and linting:** Ruff and Ruff format use a 120-character line
+ length; mypy covers the most critical API, accounting, extension, and CLI
+ modules.
 
 ## Dependency & Build Tooling
-- **Dependency Management:** `requirements.txt` / `requirements-dev.txt` pinned for reproducibility.
-- **Containerisation:** `docker-compose.yml` plus `docker/` assets for API, scheduler, database, and web console.
-- **Configuration:** Centralised `apps/api/config.py` using Pydantic settings with `.env` support; documented comprehensively in `docs/CONFIGURATION.md`.
+
+- **Dependency management:** `requirements.txt` and `requirements-dev.txt` define
+ bounded runtime and development dependencies.
+- **Containerization:** Docker assets live under `config/`.
+- **Configuration:** Runtime settings live in `src/apps/api/config.py`, with
+ `.env` examples under `config/.env.example`.
 
 ## Project Structure
-- `apps/api` – FastAPI application (config, routers, services, scheduler, security, observability helpers).
-- `apps/web` – Streamlit UI composing charts and operational dashboards.
-- `cli` – Click-based administrative commands for data ingestion and sync workflows.
-- `plugins` – Provider implementations for FX, market data, and tax (dynamically imported by the plugin loader).
-- `docs` – Expanded documentation suite (architecture, forecasting, plugins, AI interface, tax model, configuration).
-- `tests` – Pytest suite with fixtures for SQLModel sessions and provider stubs.
+
+- `src/apps/` - Python service packages for API, accounting, extensions,
+ observability, and web.
+- `src/cli/` - Demo and operational CLIs for snapshots, health, observability,
+ and extension inspection.
+- `src/plugins/` - Reference provider adapters and operational extensions.
+- `apps/` - Frontend placeholders retained outside the Python runtime source.
+- `docs/` - Architecture, governance, operations, release, and example guides.
+- `tests/` - Pytest suites mirroring the runtime modules.
 
 ## CI/CD & Operations
-- GitHub Actions workflows run linting, formatting, tests, and CodeQL scans. Badges are published in `README.md`.
-- Renovate configuration automates dependency updates.
-- Structured logging funnels through `apps/observability/logging.py`, with correlation IDs exposed across API, scheduler, and CLI contexts.
+
+- GitHub Actions workflows are configured for quality gates and CodeQL scanning.
+ Hosted execution evidence for the current publication commit is not recorded
+ in the public release audit.
+- Renovate configuration automates dependency update proposals.
+- Structured logging, health probes, metrics, and tracing helpers live under
+ `src/apps/observability/`.
 
 ## Documentation Health
-- `README.md` and `docs/` now include usage examples, architecture diagrams, and provider development guidance to support rapid onboarding.
-- Governance and support files (`CODE_OF_CONDUCT.md`, `SECURITY.md`, `docs/governance/support.md`) align with contribution expectations defined in `CONTRIBUTING.md`.
+
+- `README.md` and `docs/` describe the modular accounting toolkit scope, path
+ layout, adapter contracts, CLI workflows, and foreign-currency case study.
+- Public release status is `KEEP PRIVATE - NEAR READY` until final validation
+ blockers in `PUBLIC_RELEASE_AUDIT.md` are resolved and recorded.
 
 ## Next Steps
-Continue executing the modernisation plan outlined in `docs/governance/plan.md`: broaden strict typing coverage, introduce metrics/telemetry, and build on the refreshed documentation to streamline contributor onboarding.
+
+Complete the public-release blockers: run a full-history secret scan, clean-clone
+validate the final publication commit, record hosted CI disposition, and add
+first-screen visual evidence for employer review.

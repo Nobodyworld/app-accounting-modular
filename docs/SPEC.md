@@ -12,7 +12,7 @@
 | Frameworks | FastAPI, SQLModel, Streamlit |
 | Tooling | Ruff, Pytest, Makefile-driven quality gates |
 | Packaging | PEP 621 via `pyproject.toml` |
-| CI | GitHub Actions (lint, tests, release automation) |
+| CI | GitHub Actions workflow configuration for lint, tests, and release automation; hosted evidence for the current publication commit is tracked in the public release audit |
 
 ## Layout
 
@@ -38,14 +38,14 @@ See the root [README](README.md#repository-structure) for a tabular map of all d
 
 ## Configuration & Environment
 
-- Environment variables documented in [docs/setup.md](docs/setup.md) and mirrored in `.env.example`.
+- Environment variables documented in [docs/setup.md](docs/setup.md) and mirrored in `config/.env.example`.
 - Default database is SQLite via `DATABASE_URL`; override for Postgres/MySQL as needed.
 - Observability tracing bootstrap lives in `apps/observability/tracing/configure_tracing` (see [AGENTS.md](AGENTS.md)).
 
 ## Testing Strategy
 
 - Unit and integration tests under `tests/` with pytest fixtures for the CLI, API services, observability, and smoke paths.
-- CI runs `make ci`, invoking Ruff, format-check, mypy, pytest, and project-scoped `pip-audit` checks.
+- CI is configured to run `make ci`, invoking Ruff, format-check, mypy, pytest, and project-scoped `pip-audit` checks. Hosted run status for the final publication commit must be recorded in the public release audit before the repository is published.
 - Generated audit artefacts stored in `docs/reports/` and summarised in `CHANGELOG.md` during releases.
 
 ## Dependencies & Security
@@ -53,6 +53,7 @@ See the root [README](README.md#repository-structure) for a tabular map of all d
 - Requirements tracked in `requirements.txt` and `requirements-dev.txt`.
 - Renovate configuration (`renovate.json`) automates dependency update PRs.
 - Security policy documented in `SECURITY.md`; responsible disclosure contacts in the same file.
+- Public release remains private until a full-history secret scan and final clean-clone validation are recorded in [PUBLIC_RELEASE_AUDIT.md](../PUBLIC_RELEASE_AUDIT.md).
 
 ## Documentation Sources
 

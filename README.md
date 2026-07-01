@@ -2,6 +2,25 @@
 
 A portable, modular accounting toolkit with pluggable data sources for tax, foreign exchange, and commodity pricing. The project ships with lightweight domain models, adapter contracts, and a demo CLI so teams can stitch together finance workflows without committing to a heavyweight stack.
 
+## At A Glance
+
+High-level architecture diagram:
+
+![Modular Accounting architecture overview](docs/examples/assets/architecture-overview.svg)
+
+Controlled CLI snapshot (consolidated FX, commodity, and tax data):
+
+![CLI snapshot with consolidated FX, commodity, and tax data](docs/examples/assets/cli-snapshot-consolidated.svg)
+
+Controlled API health/readiness snapshot:
+
+![API health and readiness smoke-check snapshot](docs/examples/assets/api-health-snapshot.svg)
+
+Foreign-currency case-study terminal and journal evidence:
+
+![Foreign-currency terminal evidence](docs/examples/assets/fx-case-study-terminal.svg)
+![Foreign-currency journal evidence](docs/examples/assets/fx-case-study-journal.svg)
+
 ## What
 
 - **Domain primitives** for money, FX rates, commodity quotes, tax rules, and journal transactions under `src/apps/modular_accounting/domain`.
@@ -13,7 +32,7 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
 
 - **In scope**: accounting data snapshots, adapter-driven FX/commodity/tax inputs, journal balancing primitives, operational CLI workflows, and extensible provider loading.
 - **Out of scope**: opinionated ERP workflows, custody/treasury execution, and production-grade React UI (the current React surface is a placeholder scaffold).
-- **Validation source of truth**: behavior is considered release-ready only when covered by the CI quality gate and clean-clone validation documented in `PUBLIC_RELEASE_AUDIT.md`.
+- **Validation source of truth**: publication readiness is tracked in [`PUBLIC_RELEASE_AUDIT.md`](PUBLIC_RELEASE_AUDIT.md). Current status is `KEEP PRIVATE - NEAR READY` until full-history secret scanning, final clean-clone validation, and CI disposition are recorded for the publication commit.
 
 ## Why
 
@@ -26,7 +45,7 @@ A portable, modular accounting toolkit with pluggable data sources for tax, fore
 - **Minimum supported version**: Python 3.12
 - **Primary development version**: Python 3.14
 - **Latest validated version**: Python 3.14
-- **CI-enforced versions**: Python 3.12, 3.13, and 3.14
+- **CI workflow matrix**: Python 3.12, 3.13, and 3.14
 
 Compatibility is maintained across supported versions unless a documented
 dependency or interpreter regression requires a scoped exception.
@@ -39,7 +58,11 @@ dependency or interpreter regression requires a scoped exception.
    python -m venv .venv
    source .venv/bin/activate
    make install
+   export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
    ```
+
+   On Windows PowerShell, use `$env:PYTHONPATH = "$PWD\src"` from the
+   repository root before running direct `python -m cli...` commands.
 
 2. Run the demonstration CLI to view a consolidated snapshot:
 
@@ -83,7 +106,7 @@ dependency or interpreter regression requires a scoped exception.
 
    The command generates a manifest, health probe, and tracing-aware register
    function so you can focus on business logic. Inspect the
-   `plugins/ops_heartbeat` reference extension to see how telemetry gauges and
+   `src/plugins/ops_heartbeat` reference extension to see how telemetry gauges and
    health probes combine with the new loader metrics.
 8. Generate an audit snapshot with coverage, complexity, and dependency metrics:
 
@@ -138,9 +161,19 @@ Extended guides live under the [`docs/`](docs/index.md) folder:
 The case study includes complete invoice-to-remeasurement-to-settlement journal
 flows plus visual terminal/journal evidence under `docs/examples/assets/`.
 
+## Employer Review
+
+- [Project scope](#toolkit-scope)
+- [Architecture overview](docs/architecture/overview.md)
+- [Accounting controls](PUBLIC_RELEASE_AUDIT.md#3-accounting-controls)
+- [Foreign-currency accounting case study](docs/examples/foreign_currency_accounting_case_study.md)
+- [Quality-gate evidence](docs/reports/audit-latest.md)
+- [Public-release audit](PUBLIC_RELEASE_AUDIT.md)
+
 ## License
 
-This repository is publicly licensed under the [Apache License 2.0](LICENSE).
+This repository is licensed under the [Apache License 2.0](LICENSE). Project
+attribution is recorded in [NOTICE](NOTICE).
 
 ## Contributing
 

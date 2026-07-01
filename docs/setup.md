@@ -8,7 +8,7 @@ This guide covers installing Modular Accounting, setting up your development env
   - Minimum supported: 3.12
   - Primary development target: 3.14
   - Latest validated: 3.14
-  - CI-enforced versions: 3.12, 3.13, 3.14
+  - CI workflow matrix: 3.12, 3.13, 3.14
 - **pip**: Python package installer
 - **Virtual Environment**: `venv` (built-in) or `virtualenv`
 - **Optional**: Docker and Docker Compose for containerized deployment
@@ -43,7 +43,19 @@ This guide covers installing Modular Accounting, setting up your development env
    pip install -r requirements-dev.txt
    ```
 
-4. **Fresh-environment validation (recommended before release)**:
+4. **Expose src-layout packages for direct module commands**:
+
+   ```powershell
+   # Windows PowerShell
+   $env:PYTHONPATH = "$PWD\src"
+   ```
+
+   ```bash
+   # macOS/Linux
+   export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+   ```
+
+5. **Fresh-environment validation (recommended before release)**:
 
    ```bash
    python -m pip check
@@ -59,8 +71,8 @@ For containerized development:
 docker-compose up --build
 
 # Or run individual services
-docker build -f docker/Dockerfile.api -t modacct-api .
-docker build -f docker/Dockerfile.web -t modacct-web .
+docker build -f config/Dockerfile.api -t modacct-api .
+docker build -f config/Dockerfile.web -t modacct-web .
 ```
 
 ## Configuration
@@ -87,7 +99,7 @@ MODACCT_ALLOWED_EXTENSIONS__analytics_baseline__enabled=true
 
 ### Settings Reference
 
-See `apps/api/config.py` for all available configuration options.
+See `src/apps/api/config.py` for all available configuration options.
 
 ## Running the Application
 
@@ -95,10 +107,10 @@ See `apps/api/config.py` for all available configuration options.
 
 ```bash
 # Development mode with auto-reload
-uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000
 
 # Production mode
-uvicorn apps.api.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn apps.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 The API will be available at `http://localhost:8000` with OpenAPI docs at `http://localhost:8000/docs`.
@@ -106,7 +118,7 @@ The API will be available at `http://localhost:8000` with OpenAPI docs at `http:
 ### Web UI
 
 ```bash
-streamlit run apps.web/app.py
+streamlit run src/apps/web/app.py
 ```
 
 The web interface will be available at `http://localhost:8501`.
@@ -211,7 +223,7 @@ python -m cli.macli inspect-contracts
 **Solutions**:
 
 - Check plugin configuration in settings
-- Verify plugin directory structure (`plugins/name/provider.py`)
+- Verify plugin directory structure (`src/plugins/name/provider.py`)
 - Ensure plugin dependencies are installed
 - Review logs for specific error messages
 
@@ -258,7 +270,7 @@ python -c "import apps.modular_accounting; print('Import OK')"
 python -c "from apps.api.db import get_session; print('DB OK')"
 
 # Test API startup
-uvicorn apps.api.main:app --dry-run
+python -m uvicorn apps.api.main:app --dry-run
 
 # Check plugin loading
 python -m cli.macli inspect-extensions

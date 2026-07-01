@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">Modular Accounting Architecture Overview</title>
+  <desc id="desc">High-level architecture showing CLI and API entry points, application orchestration, adapters, plugins, and observability.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f6fbff"/>
+      <stop offset="100%" stop-color="#eef6ef"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #1a2a33; }
+      .subtitle { font: 500 16px 'Segoe UI', Arial, sans-serif; fill: #3b4f5a; }
+      .box-title { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #1b2c35; }
+      .box-text { font: 500 14px 'Segoe UI', Arial, sans-serif; fill: #2f4652; }
+      .chip { font: 600 12px 'Consolas', 'Courier New', monospace; fill: #1f3a45; }
+      .arrow { stroke: #2e5561; stroke-width: 2.5; marker-end: url(#m); fill: none; }
+      .edge { stroke: #7ea0ac; stroke-width: 1.7; marker-end: url(#m); fill: none; }
+    </style>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2e5561"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1280" height="760" fill="url(#bg)"/>
+
+  <text class="title" x="54" y="66">Modular Accounting - High-Level Architecture</text>
+  <text class="subtitle" x="54" y="94">Controlled demo topology for employer review and release-readiness documentation</text>
+
+  <rect x="56" y="140" rx="14" ry="14" width="260" height="170" fill="#dff1ff" stroke="#86b3c9"/>
+  <text class="box-title" x="76" y="174">Entry Points</text>
+  <text class="box-text" x="76" y="202">- Demo CLI (cli.demo_cli)</text>
+  <text class="box-text" x="76" y="224">- Operational CLI (cli.macli)</text>
+  <text class="box-text" x="76" y="246">- FastAPI routes (/snapshot/*)</text>
+  <text class="box-text" x="76" y="268">- Streamlit app (apps.web)</text>
+
+  <rect x="362" y="120" rx="14" ry="14" width="314" height="210" fill="#e9f9e8" stroke="#88ba89"/>
+  <text class="box-title" x="384" y="154">Application Orchestration</text>
+  <text class="box-text" x="384" y="182">- DataSnapshotService</text>
+  <text class="box-text" x="384" y="204">- Scenario plan preview/runner</text>
+  <text class="box-text" x="384" y="226">- Journal balancing controls</text>
+  <text class="box-text" x="384" y="248">- Cache + provider provenance</text>
+  <rect x="384" y="268" rx="8" ry="8" width="268" height="38" fill="#d7efd6" stroke="#7dae80"/>
+  <text class="chip" x="396" y="292">src/apps/modular_accounting/application</text>
+
+  <rect x="718" y="120" rx="14" ry="14" width="244" height="210" fill="#fff5e2" stroke="#c9ac75"/>
+  <text class="box-title" x="740" y="154">Domain + Ports</text>
+  <text class="box-text" x="740" y="182">- Money, FX, tax, journal</text>
+  <text class="box-text" x="740" y="204">- Snapshot request contracts</text>
+  <text class="box-text" x="740" y="226">- Runtime-checkable ports</text>
+  <rect x="740" y="268" rx="8" ry="8" width="198" height="38" fill="#f9e5c0" stroke="#c29b60"/>
+  <text class="chip" x="752" y="292">src/apps/modular_accounting</text>
+
+  <rect x="1002" y="120" rx="14" ry="14" width="220" height="210" fill="#f7e8f8" stroke="#b48fbb"/>
+  <text class="box-title" x="1024" y="154">Providers + Extensions</text>
+  <text class="box-text" x="1024" y="182">- FX / Commodity / Tax</text>
+  <text class="box-text" x="1024" y="204">- ops:heartbeat</text>
+  <text class="box-text" x="1024" y="226">- ops:resilience</text>
+  <rect x="1024" y="268" rx="8" ry="8" width="176" height="38" fill="#efd6f1" stroke="#ad82b4"/>
+  <text class="chip" x="1036" y="292">src/plugins/*</text>
+
+  <rect x="362" y="386" rx="14" ry="14" width="400" height="214" fill="#e7f3ff" stroke="#88aac5"/>
+  <text class="box-title" x="386" y="422">Operational Assurance</text>
+  <text class="box-text" x="386" y="452">- Ruff lint + format-check</text>
+  <text class="box-text" x="386" y="474">- Mypy + full pytest + coverage</text>
+  <text class="box-text" x="386" y="496">- Accounting-control suites</text>
+  <text class="box-text" x="386" y="518">- pip check + pip-audit</text>
+  <text class="box-text" x="386" y="540">- current-tree secret scan</text>
+  <rect x="386" y="556" rx="8" ry="8" width="346" height="32" fill="#d6e9fb" stroke="#7d9fbc"/>
+  <text class="chip" x="398" y="578">python -m src.tools.quality_gate</text>
+
+  <rect x="810" y="386" rx="14" ry="14" width="412" height="214" fill="#edf6ec" stroke="#8db18a"/>
+  <text class="box-title" x="836" y="422">Release Evidence</text>
+  <text class="box-text" x="836" y="452">- PUBLIC_RELEASE_AUDIT.md</text>
+  <text class="box-text" x="836" y="474">- docs/reports/audit-latest.md</text>
+  <text class="box-text" x="836" y="496">- clean-clone validation logs</text>
+  <text class="box-text" x="836" y="518">- full-history secret scan output</text>
+  <text class="box-text" x="836" y="540">- hosted CI disposition</text>
+
+  <path class="arrow" d="M 316 222 C 336 222, 340 222, 362 222"/>
+  <path class="arrow" d="M 676 222 C 698 222, 700 222, 718 222"/>
+  <path class="arrow" d="M 962 222 C 982 222, 986 222, 1002 222"/>
+  <path class="edge" d="M 518 330 C 518 356, 518 356, 518 386"/>
+  <path class="edge" d="M 872 330 C 872 356, 948 356, 948 386"/>
+  <path class="edge" d="M 762 492 C 780 492, 790 492, 810 492"/>
+
+  <text class="subtitle" x="56" y="706">Status at audit update: KEEP PRIVATE - NEAR READY (pending full-history scan, clean-clone final SHA, hosted CI disposition)</text>
+</svg>

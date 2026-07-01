@@ -39,7 +39,7 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
 - Linting: **Ruff** (including import sorting) with project-level configuration in `pyproject.toml`.
 - Static typing: **mypy** gradually enforced—consult [docs/governance/plan.md](docs/governance/plan.md) for the current strict coverage map.
 - Front-end assets: **Prettier** for Markdown/YAML/JSON.
-- Run `pre-commit run --all-files` or `make quality` before pushing to catch style issues locally. Use `make ci` for the full lint/type/test/security pipeline (`pip-audit` included).
+- Run `pre-commit run --all-files` or `make quality` before pushing to catch style issues locally. Use `make ci` for the full lint/type/test/security pipeline (`pip-audit` included). Public-release candidates also require full-history secret-scan evidence recorded in [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md).
 - Health checks: `make health` exercises the CLI-based readiness probes.
 - Steward metrics: `make audit` generates a Markdown snapshot under `docs/reports/` with
   coverage, complexity, and dependency ratios when preparing quarterly reviews.

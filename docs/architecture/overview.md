@@ -34,7 +34,7 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 │ - Provider loader (src/apps/api/│   │   (src/apps/api/services/          │
 │   services/plugin_loader.py)   │   │    extension_loader.py)             │
 │ - Built-in plugins (src/plugins/)│   │ - Baseline analytics extension     │
-└───────────────────────────────┘   │   (plugins/analytics_baseline/)      │
+└───────────────────────────────┘   │   (src/plugins/analytics_baseline/)  │
                                      │ - Operations heartbeat extension    │
                                      │   (src/plugins/ops_heartbeat/)      │
                                      └────────────────────────────────────┘
@@ -128,7 +128,7 @@ packages. The `macli scaffold-extension` command now generates a fully wired
 package skeleton with tracing hooks and, when requested, a starter
 observability contract so contributors can start from a proven baseline.
 `macli inspect-extensions` provides an immediate, metrics-backed snapshot of
-enabled modules, while `plugins/ops_heartbeat` and `plugins/ops_resilience`
+enabled modules, while `src/plugins/ops_heartbeat` and `src/plugins/ops_resilience`
 serve as reference implementations for emitting telemetry and publishing
 incident playbooks.
 

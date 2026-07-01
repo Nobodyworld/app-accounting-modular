@@ -43,20 +43,20 @@ When `register` executes it can:
 
 The `apps.observability.metrics.ExtensionTelemetryAdapter` automatically tracks
 load success and latency for every enabled module. Extensions can build on top
-of this by registering their own metrics—see the `plugins/ops_heartbeat`
+of this by registering their own metrics—see the `src/plugins/ops_heartbeat`
 package for a reference that publishes a heartbeat gauge alongside its health
 probe.
 
 ## Wiring extensions into configuration
 
 Extensions are configured through `Settings.allowed_extensions`. The default
-configuration (see `apps/api/config.py`) already enables the baseline
-observability extension shipped in `plugins/analytics_baseline`.
+configuration (see `src/apps/api/config.py`) already enables the baseline
+observability extension shipped in `src/plugins/analytics_baseline`.
 
 To enable your own module add an entry to your environment variables or a
 settings override file:
 
-```
+```bash
 MODACCT_ALLOWED_EXTENSIONS__acme:automations__module=acme.extensions.automations
 MODACCT_ALLOWED_EXTENSIONS__acme:automations__enabled=true
 ```
@@ -74,7 +74,7 @@ installation via:
   metadata, and whether they loaded successfully. `--format json` produces a
   machine-friendly snapshot for automation.
 * `macli scaffold-extension reporting:example --observability-contract` –
-  generates a ready-to-edit package in `plugins/` with a health probe and an
+  generates a ready-to-edit package in `src/plugins/` with a health probe and an
   incident playbook contract.
 * `macli observe` – emits an aggregated telemetry snapshot (metrics, health,
   tracing) that includes extension readiness and contract exposure.
@@ -92,7 +92,7 @@ installation via:
 
 Extensions can publish structured contracts so downstream agents know which
 automation hooks exist. Register contracts with the new
-`ExtensionContract` dataclass; see `plugins/ops_resilience` for a full example
+`ExtensionContract` dataclass; see `src/plugins/ops_resilience` for a full example
 that exposes an incident playbook contract consumed by operators.
 
 ```python
@@ -125,7 +125,7 @@ capabilities without bespoke glue code.
   automation.
 * Use the Makefile quality targets (`make quality`) before publishing to ensure
   linting, typing, and coverage gates pass consistently.
-* Refer to `plugins/ops_heartbeat` and `plugins/ops_resilience` when wiring
+* Refer to `src/plugins/ops_heartbeat` and `src/plugins/ops_resilience` when wiring
   observability for operational add-ons; they demonstrate registering gauges,
   emitting heartbeat probes, publishing contracts, and integrating with the
   extension registry without touching core modules.

@@ -53,4 +53,4 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 - **[Main README](../README.md)**: Project overview and quickstart
 - **[AGENTS.md](../AGENTS.md)**: Guidelines for automated contributions
 - **[CHANGELOG.md](../CHANGELOG.md)**: Release history and changes
-- **[Public Release Audit](../PUBLIC_RELEASE_AUDIT.md)**: Public release validation checkpoints and clean-clone results
+- **[Public Release Audit](../PUBLIC_RELEASE_AUDIT.md)**: Current near-ready verdict, remaining publication blockers, and clean-clone validation requirements

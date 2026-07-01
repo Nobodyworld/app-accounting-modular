@@ -1,12 +1,13 @@
 # Release Notes
 
 ## Highlights
-- Completed release hardening for public distribution: closed the async audit
+
+- Advanced release hardening toward public distribution: closed the async audit
   worker race under concurrency, eliminated remaining scheduler/security test
   regressions and SQLite teardown warnings, aligned licensing/docs to
-  Apache-2.0, and passed the full Python 3.14 quality gate (lint, format,
+  Apache-2.0, and passed the local Python 3.14 quality gate (lint, format,
   mypy, full pytest + coverage, focused accounting suites, dependency checks,
-  and secret scan).
+  and current-tree secret scan).
 - Rebuilt the `macli` CLI diagnostics commands with deterministic table/JSON
   output, added regression tests for health/observability snapshots, and made
   the scheduler tolerant of missing legacy models so automation entry points
@@ -73,6 +74,7 @@
   contributions.
 
 ## Upgrade Guidance
+
 - Optionally install `opentelemetry-sdk` and `opentelemetry-exporter-otlp` when
   deploying to stream traces to external collectors; without these packages the
   tracer falls back to console logging.
@@ -96,6 +98,16 @@
   confirm extension manifests load and surface version metadata during releases.
 
 ## Known Issues / Follow Ups
+
+- Public release status remains `KEEP PRIVATE - NEAR READY` until the final
+  publication commit has recorded full-history secret scanning, clean-clone
+  validation, and hosted CI disposition in `PUBLIC_RELEASE_AUDIT.md`.
+- The quality gate still installs `pip-audit` dynamically; a future cleanup
+  should rely on the pinned development dependency already present in
+  `requirements-dev.txt`.
+- Employer-facing visual evidence should be improved with an architecture
+  diagram, CLI snapshot, API or Streamlit screenshot, and foreign-currency
+  journal image near the top-level project collateral.
 - Legacy TODOs still require priority/effort tags; future cleanup will align
   the remaining backlog with the new convention.
 - OTLP export is optional; install the OpenTelemetry extras noted above to ship

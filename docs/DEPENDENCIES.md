@@ -7,7 +7,7 @@ Python 3.14 as the primary development baseline.
 
 - Minimum supported Python: 3.12
 - Primary development Python: 3.14
-- CI-enforced versions: 3.12, 3.13, 3.14
+- CI workflow matrix: 3.12, 3.13, 3.14
 
 ## Runtime Dependencies
 
@@ -42,6 +42,11 @@ python -m pip_audit -r requirements.txt -r requirements-dev.txt
 
 This avoids reporting unrelated global packages from reused environments.
 
+Dependency auditing does not replace full-history secret scanning. Public release
+validation also requires a Gitleaks or equivalent scan across Git history, with
+tool version, command, commits scanned, findings, false-positive disposition, and
+final result recorded in [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md).
+
 ## Release Validation
 
 Release validation must include:
@@ -50,3 +55,5 @@ Release validation must include:
 - `python -m pip check`
 - project-scoped `pip-audit` run
 - quality gate execution (`python -m src.tools.quality_gate`)
+- full-history secret scan evidence
+- clean-clone validation of the final publication commit

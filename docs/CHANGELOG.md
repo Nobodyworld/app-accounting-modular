@@ -2,10 +2,15 @@
 
 ## Unreleased
 
-- 2026-06-30: Completed public-readiness hardening by fixing async audit worker
+- 2026-07-01: Corrected the Apache-2.0 license text, added `NOTICE`
+  attribution, and reframed public-release documentation as `KEEP PRIVATE -
+  NEAR READY` pending full-history secret scanning, final clean-clone
+  validation, hosted CI disposition, and visual evidence improvements.
+
+- 2026-06-30: Advanced public-readiness hardening by fixing async audit worker
   concurrency initialization, resolving scheduler/security test isolation
   regressions, removing stale XPASS expectations, upgrading dev security
-  dependencies, validating Apache-2.0 licensing/docs alignment, and closing the
+  dependencies, reviewing Apache-2.0 licensing/docs alignment, and closing the
   canonical quality gate on Python 3.14 with 244 passing tests at 86.15%
   coverage.
 
@@ -88,7 +93,7 @@
 - 2024-11-02: Documented architecture/dependency posture, added CLI table
   output with validation, cached snapshot adapter calls, and expanded tests to
   cover caching plus UX flows.
-- 2024-11-01: Refocused the project on portable modular accounting with domain models, adapter protocols, an in-memory demo CLI, refreshed documentation, and a proprietary license notice.
+- 2024-11-01: Refocused the project on portable modular accounting with domain models, adapter protocols, an in-memory demo CLI, refreshed documentation, and an initial license notice that has since been replaced by Apache-2.0.
 - 2024-10-25: Comprehensive documentation sweep adding module docstrings for
   built-in plugins, expanding README/architecture/configuration references with
   usage examples, and aligning AI/forecasting/tax guides for contributor
