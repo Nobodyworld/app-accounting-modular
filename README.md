@@ -156,7 +156,8 @@ Extended guides live under the [`docs/`](docs/index.md) folder:
 - [Automation & agent playbook](docs/operations/automation_playbook.md)
 - [Operations & incident response](docs/operations.md)
 - [Foreign-currency accounting case study](docs/examples/foreign_currency_accounting_case_study.md)
-- [Agent operations quick reference](AGENTS.md)
+- [End-to-end snapshot and control demonstration](docs/examples/end_to_end_snapshot_demo.md)
+- [Agent operations quick reference](docs/AGENTS.md)
 
 The case study includes complete invoice-to-remeasurement-to-settlement journal
 flows plus visual terminal/journal evidence under `docs/examples/assets/`.
@@ -167,6 +168,7 @@ flows plus visual terminal/journal evidence under `docs/examples/assets/`.
 - [Architecture overview](docs/architecture/overview.md)
 - [Accounting controls](PUBLIC_RELEASE_AUDIT.md#3-accounting-controls)
 - [Foreign-currency accounting case study](docs/examples/foreign_currency_accounting_case_study.md)
+- [End-to-end snapshot and control demonstration](docs/examples/end_to_end_snapshot_demo.md)
 - [Quality-gate evidence](docs/reports/audit-latest.md)
 - [Public-release audit](PUBLIC_RELEASE_AUDIT.md)
 

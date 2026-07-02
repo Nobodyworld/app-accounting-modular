@@ -7,6 +7,30 @@ This end-to-end case demonstrates a complete multi-currency payable workflow:
 - balanced journal output at each step
 - provider and rate provenance retained for auditability
 
+## Demonstration Boundary
+
+This case study is an accounting-control demonstration for a single foreign-currency payable lifecycle.
+
+- It demonstrates journal balancing, valuation mechanics, and rate provenance.
+- It does not represent a full ERP, production tax engine, treasury platform, or complete general-ledger implementation.
+- It uses simplified, controlled inputs so calculations are transparent for audit review.
+
+## Supported Controls Demonstrated
+
+- Balanced journal-entry validation at each posting step.
+- Account traceability through explicit account codes and transaction IDs.
+- Initial recognition at transaction-date spot rate.
+- Period-end remeasurement for open foreign-currency liabilities.
+- Settlement against carrying value with realized FX separation.
+- Provenance capture for provider key, pair, timestamp, and rate source detail.
+
+## Assumptions and Simplifications
+
+- Single payable, single reporting currency (USD), and deterministic sample rates.
+- No discounting, hedge accounting, or transaction-cost adjustments.
+- Tax treatment is out of scope for this FX journal-only demonstration.
+- Numbers are intentionally compact and rounded for explainability.
+
 ## Scenario
 
 - Functional/presentation currency: USD
@@ -100,6 +124,10 @@ Balance check: 200 debit = 200 credit.
 
 Balance check: 11,300 debit = 11,300 credit.
 
+## Optional Subsequent-Close Pattern
+
+When an organization posts an automated month-end remeasurement reversal at the next period open, settlement still resolves to the same economic result: the payable is derecognized at current carrying value and any residual is recognized as realized FX gain/loss. This repository demonstrates the core carrying-value settlement control; reversal policy remains implementation-specific.
+
 ## Balanced Journal Output (Terminal Evidence)
 
 ```text
@@ -131,12 +159,12 @@ Rendered journal-summary image:
 
 - Total FX loss recognized: USD 300
 - Composition of loss:
- 	- Unrealized at month-end: USD 200
- 	- Realized at settlement: USD 100
+  - Unrealized at month-end: USD 200
+  - Realized at settlement: USD 100
 - Net accounting integrity:
- 	- all posting sets are balanced
- 	- realized and unrealized effects are separated
- 	- every valuation event is linked to provider and rate provenance
+  - all posting sets are balanced
+  - realized and unrealized effects are separated
+  - every valuation event is linked to provider and rate provenance
 
 ## Validation Checklist
 

@@ -101,11 +101,11 @@ If any of these are missing, they must be created before substantial new work.
 
 Standard directories (each must include a `README.md` describing scope):
 
-- `src/` — Source code ([src/README.md](src/README.md))
-- `tests/` — Automated tests mirroring `src/` structure ([tests/README.md](tests/README.md))
-- `docs/` — Documentation ([docs/README.md](docs/README.md))
+- `src/` — Source code ([src/apps/README.md](../src/apps/README.md))
+- `tests/` — Automated tests mirroring `src/` structure ([tests/README.md](../tests/README.md))
+- `docs/` — Documentation ([docs/README.md](README.md))
 - `.github/` — Workflows and templates
-- `scripts/` — Developer tooling ([scripts/README.md](scripts/README.md))
+- `scripts/` — Developer tooling ([scripts/README.md](../scripts/README.md))
 - `assets/` — Small static assets (icons, images) needed at build/runtime
 - `data/` — Small sample/test data only (large datasets belong in storage)
 

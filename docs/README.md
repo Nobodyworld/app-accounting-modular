@@ -44,13 +44,13 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 
 ## Governance
 
-- **[Contributing](../CONTRIBUTING.md)**: Development workflow and standards
+- **[Contributing](CONTRIBUTING.md)**: Development workflow and standards
 - **[Governance Plan](governance/plan.md)**: Project governance and stewardship
 - **[Support](governance/support.md)**: Getting help and incident communication
 
 ## Additional Resources
 
 - **[Main README](../README.md)**: Project overview and quickstart
-- **[AGENTS.md](../AGENTS.md)**: Guidelines for automated contributions
-- **[CHANGELOG.md](../CHANGELOG.md)**: Release history and changes
+- **[AGENTS.md](AGENTS.md)**: Guidelines for automated contributions
+- **[CHANGELOG.md](CHANGELOG.md)**: Release history and changes
 - **[Public Release Audit](../PUBLIC_RELEASE_AUDIT.md)**: Current near-ready verdict, remaining publication blockers, and clean-clone validation requirements

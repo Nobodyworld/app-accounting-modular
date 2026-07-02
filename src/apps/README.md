@@ -8,4 +8,4 @@ The `apps/` directory contains runnable service packages that expose modular-acc
 - `observability/` – Structured logging, tracing, and health instrumentation.
 - `web/` – Streamlit experience for interactive exploration.
 
-Refer to [docs/architecture/overview.md](../docs/architecture/overview.md) for diagrams and module boundaries.
+Refer to [docs/architecture/overview.md](../../docs/architecture/overview.md) for diagrams and module boundaries.

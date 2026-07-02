@@ -30,7 +30,7 @@
   record the tool version, command, commits scanned, findings, false-positive
   disposition, and final result in [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md).
 - Use environment variables (see `config/.env.example`) to configure sensitive settings.
-- Review [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) quarterly for updated
+- Review [`DEPENDENCIES.md`](DEPENDENCIES.md) quarterly for updated
   security posture notes and dependency audit status.
 - Audit startup failure logs for sensitive payloads; `StartupManager` surfaces
   exception metadata for diagnostics, so ensure startup steps raise errors

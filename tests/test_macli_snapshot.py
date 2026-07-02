@@ -285,3 +285,186 @@ scenarios = [
     assert result.exit_code == 0
     assert "Scenario Summary" in result.output
     assert "demo" in result.output
+
+
+def test_snapshot_scenarios_inherits_defaults_when_scenario_values_missing(tmp_path, monkeypatch) -> None:
+    from cli import macli as macli_module
+
+    captured = {}
+    batch = _stub_batch()
+
+    class DummyOrchestrator:
+        def __init__(self, **kwargs):
+            pass
+
+        def run_scenarios(self, scenarios, reset_cache_between_runs: bool = False):
+            captured["scenarios"] = list(scenarios)
+            return batch
+
+    monkeypatch.setattr(macli_module, "SnapshotOrchestrator", DummyOrchestrator)
+
+    plan_path = tmp_path / "defaults-inherit.json"
+    plan_path.write_text(
+        json.dumps(
+            {
+                "defaults": {
+                    "base_currency": "USD",
+                    "commodity_symbols": ["XAU"],
+                    "jurisdictions": ["US"],
+                },
+                "scenarios": [{"name": "from-defaults"}],
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        macli_module.cli,
+        ["snapshot-scenarios", "--plan", str(plan_path), "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    scenario = captured["scenarios"][0]
+    assert scenario.base_currency == "USD"
+    assert scenario.commodity_symbols == ("XAU",)
+    assert scenario.jurisdictions == ("US",)
+
+
+def test_snapshot_scenarios_scenario_values_override_defaults(tmp_path, monkeypatch) -> None:
+    from cli import macli as macli_module
+
+    captured = {}
+    batch = _stub_batch()
+
+    class DummyOrchestrator:
+        def __init__(self, **kwargs):
+            pass
+
+        def run_scenarios(self, scenarios, reset_cache_between_runs: bool = False):
+            captured["scenarios"] = list(scenarios)
+            return batch
+
+    monkeypatch.setattr(macli_module, "SnapshotOrchestrator", DummyOrchestrator)
+
+    plan_path = tmp_path / "defaults-override.json"
+    plan_path.write_text(
+        json.dumps(
+            {
+                "defaults": {
+                    "base_currency": "USD",
+                    "commodity_symbols": ["XAU"],
+                    "jurisdictions": ["US"],
+                },
+                "scenarios": [
+                    {
+                        "name": "override",
+                        "base_currency": "EUR",
+                        "commodity_symbols": ["XAG"],
+                        "jurisdictions": ["DE"],
+                    }
+                ],
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        macli_module.cli,
+        ["snapshot-scenarios", "--plan", str(plan_path), "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    scenario = captured["scenarios"][0]
+    assert scenario.base_currency == "EUR"
+    assert scenario.commodity_symbols == ("XAG",)
+    assert scenario.jurisdictions == ("DE",)
+
+
+def test_snapshot_scenarios_handles_invalid_or_absent_defaults(tmp_path, monkeypatch) -> None:
+    from cli import macli as macli_module
+
+    captured = {}
+    batch = _stub_batch()
+
+    class DummyOrchestrator:
+        def __init__(self, **kwargs):
+            pass
+
+        def run_scenarios(self, scenarios, reset_cache_between_runs: bool = False):
+            captured["scenarios"] = list(scenarios)
+            return batch
+
+    monkeypatch.setattr(macli_module, "SnapshotOrchestrator", DummyOrchestrator)
+
+    plan_path = tmp_path / "invalid-defaults.json"
+    plan_path.write_text(
+        json.dumps(
+            {
+                "defaults": ["not", "a", "mapping"],
+                "scenarios": [
+                    {
+                        "name": "explicit",
+                        "base_currency": "USD",
+                        "commodity_symbols": ["XAU"],
+                    }
+                ],
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        macli_module.cli,
+        ["snapshot-scenarios", "--plan", str(plan_path), "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    scenario = captured["scenarios"][0]
+    assert scenario.base_currency == "USD"
+    assert scenario.commodity_symbols == ("XAU",)
+
+
+def test_snapshot_scenarios_handles_empty_and_malformed_scenarios(tmp_path, monkeypatch) -> None:
+    from cli import macli as macli_module
+
+    captured = {}
+    batch = _stub_batch()
+
+    class DummyOrchestrator:
+        def __init__(self, **kwargs):
+            pass
+
+        def run_scenarios(self, scenarios, reset_cache_between_runs: bool = False):
+            captured["scenarios"] = list(scenarios)
+            return batch
+
+    monkeypatch.setattr(macli_module, "SnapshotOrchestrator", DummyOrchestrator)
+
+    malformed_path = tmp_path / "malformed-scenarios.json"
+    malformed_path.write_text(json.dumps({"scenarios": "not-a-list"}))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        macli_module.cli,
+        ["snapshot-scenarios", "--plan", str(malformed_path), "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    assert captured["scenarios"] == []
+
+
+def test_snapshot_scenarios_deterministic_error_when_base_currency_missing(tmp_path) -> None:
+    from cli import macli as macli_module
+
+    plan_path = tmp_path / "missing-base.json"
+    plan_path.write_text(json.dumps({"scenarios": [{"name": "broken"}]}))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        macli_module.cli,
+        ["snapshot-scenarios", "--plan", str(plan_path), "--format", "json"],
+    )
+
+    assert result.exit_code != 0
+    assert isinstance(result.exception, ValueError)
+    assert str(result.exception) == "base_currency must be a non-empty string"

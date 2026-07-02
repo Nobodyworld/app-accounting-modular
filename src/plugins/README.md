@@ -18,4 +18,4 @@ Each subdirectory exposes a `register` function so the loader can discover and a
 - `tax_oecd_stub/` – OECD-based tax data stub.
 - `tax_us_tables/` – US federal/state tax table stub.
 
-Use `python -m cli.macli scaffold-extension` to generate new plugins with tracing hooks and see [docs/guides/extension_guide.md](../docs/guides/extension_guide.md).
+Use `python -m cli.macli scaffold-extension` to generate new plugins with tracing hooks and see [docs/guides/extension_guide.md](../../docs/guides/extension_guide.md).

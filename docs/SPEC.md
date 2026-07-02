@@ -1,7 +1,7 @@
 # Repository Specification
 
 - **Repository**: `app-accounting-modular`
-- **Maintainers**: Stewardship team (see [docs/governance/support.md](docs/governance/support.md))
+- **Maintainers**: Stewardship team (see [governance/support.md](governance/support.md))
 - **Last Updated**: 2025-05-24
 
 ## Stack Overview
@@ -20,12 +20,12 @@ The repository is organised into documentation-first modules with README files i
 
 - [`src/apps/`](../src/apps/README.md) – Service packages (API, accounting domain, extensions, observability, web).
 - [`src/cli/`](../src/cli/README.md) – Demo and operational CLIs for snapshot orchestration.
-- [`docs/`](docs/README.md) – Architecture, governance, operations, and roadmap references.
+- [`docs/`](README.md) – Architecture, governance, operations, and roadmap references.
 - [`src/plugins/`](../src/plugins/README.md) – Reference adapters and operational extensions.
-- [`tests/`](tests/README.md) – Pytest suites mirroring the runtime packages.
+- [`tests/`](../tests/README.md) – Pytest suites mirroring the runtime packages.
 - [`src/tools/`](../src/tools/README.md) – Audit, release, quality gate, and security automation.
 
-See the root [README](README.md#repository-structure) for a tabular map of all directories.
+See the root [README](../README.md#repository-structure) for a tabular map of all directories.
 
 ## Key Workflows
 
@@ -38,7 +38,7 @@ See the root [README](README.md#repository-structure) for a tabular map of all d
 
 ## Configuration & Environment
 
-- Environment variables documented in [docs/setup.md](docs/setup.md) and mirrored in `config/.env.example`.
+- Environment variables documented in [setup.md](setup.md) and mirrored in `config/.env.example`.
 - Default database is SQLite via `DATABASE_URL`; override for Postgres/MySQL as needed.
 - Observability tracing bootstrap lives in `apps/observability/tracing/configure_tracing` (see [AGENTS.md](AGENTS.md)).
 
@@ -57,13 +57,13 @@ See the root [README](README.md#repository-structure) for a tabular map of all d
 
 ## Documentation Sources
 
-- Central index at [docs/index.md](docs/index.md) with links to setup, architecture, adapters, operations, governance, and roadmap.
+- Central index at [index.md](index.md) with links to setup, architecture, adapters, operations, governance, and roadmap.
 - Directory-specific READMEs explain the intent and cross-link to detailed guides.
-- Stewardship changes recorded in [docs/governance/stewards_report.md](docs/governance/stewards_report.md).
+- Stewardship changes recorded in [governance/stewards_report.md](governance/stewards_report.md).
 
 ## Task Management
 
-- All active initiatives tracked in [TASKLIST.md](TASKLIST.md).
+- All active initiatives tracked in [TASKLIST.md](../TASKLIST.md).
 - Use the `[priority][estimate]` TODO format described in [AGENTS.md](AGENTS.md) for inline annotations.
 
 ## Release Notes
