@@ -22,8 +22,9 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 ## Key Components
 
 - **Backend**: FastAPI application with SQLModel and SQLite
-- **UI**: Streamlit web interface
-- **React UI**: Placeholder React/Vite skeleton under `apps/react-ui/` for teams standardising on React
+- **UI**: Streamlit demonstration interface implemented in `src/apps/web/app.py`
+- **Compatibility launcher**: `apps/web/app.py` shims to `src/apps/web/app.py` for tooling and tests
+- **React UI**: Experimental placeholder under `apps/react-ui/`
 - **Plugins**: Drop-in provider modules for data sources
 - **CLI**: Operational commands for snapshots and health checks
 - **Extensions**: Optional automation packs with observability
@@ -53,4 +54,4 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 - **[Main README](../README.md)**: Project overview and quickstart
 - **[AGENTS.md](AGENTS.md)**: Guidelines for automated contributions
 - **[CHANGELOG.md](CHANGELOG.md)**: Release history and changes
-- **[Public Release Audit](../PUBLIC_RELEASE_AUDIT.md)**: Current near-ready verdict, remaining publication blockers, and clean-clone validation requirements
+- **[Public Release Audit](../PUBLIC_RELEASE_AUDIT.md)**: Authoritative release verdict, hosted CI disposition, and validation evidence

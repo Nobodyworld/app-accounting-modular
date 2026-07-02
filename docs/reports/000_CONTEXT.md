@@ -46,8 +46,8 @@
 
 - `README.md` and `docs/` describe the modular accounting toolkit scope, path
  layout, adapter contracts, CLI workflows, and foreign-currency case study.
-- Public release status is `KEEP PRIVATE - NEAR READY` until final validation
- blockers in `PUBLIC_RELEASE_AUDIT.md` are resolved and recorded.
+- Public release status is tracked in `PUBLIC_RELEASE_AUDIT.md`; use that file
+ as the source of truth for current classification and blockers.
 
 ## Next Steps
 

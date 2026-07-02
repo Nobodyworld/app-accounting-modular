@@ -18,15 +18,11 @@
 
 ## Release Reporting Status
 
-- Current public-release verdict: `KEEP PRIVATE - NEAR READY`.
 - Canonical status source: [`../../PUBLIC_RELEASE_AUDIT.md`](../../PUBLIC_RELEASE_AUDIT.md).
-- Local Python 3.14 quality-gate evidence reports 244 passing tests and 86.15%
- coverage.
-- Hosted GitHub Actions evidence for commit
- `71ff89a17c45e4c2cf09399e6801a0464d951e3d` is not recorded in the audit.
-- Full-history secret scanning and clean-clone validation of the final
- publication commit remain required before the repository should be made
- public.
+- Current verdict, validation totals, and hosted CI disposition are maintained
+ in the audit log so this overview does not drift as commits evolve.
+- Treat this document as process guidance; use the public audit file as the
+ authoritative release-evidence record.
 
 ## Evidence To Record Before Publication
 

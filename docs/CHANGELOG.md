@@ -3,11 +3,9 @@
 ## Unreleased
 
 - 2026-07-02: Finalized public-release validation on commit
-  `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e` with clean-clone quality-gate
-  pass (`253` tests, `86.35%` coverage), full-history Gitleaks pass (no leaks),
-  operational CLI/API/Streamlit smoke validation,
-  and explicit hosted CI disposition (no run evidence for this commit and
-  `workflow_dispatch` unavailable for `CI`).
+  audited in `PUBLIC_RELEASE_AUDIT.md`, including clean-clone quality-gate
+  pass, full-history Gitleaks pass (no leaks), operational CLI/API/Streamlit
+  smoke validation, and hosted CI disposition evidence.
 
 - 2026-07-01: Corrected the Apache-2.0 license text, added `NOTICE`
   attribution, and reframed public-release documentation as `KEEP PRIVATE -
@@ -18,8 +16,8 @@
   concurrency initialization, resolving scheduler/security test isolation
   regressions, removing stale XPASS expectations, upgrading dev security
   dependencies, reviewing Apache-2.0 licensing/docs alignment, and closing the
-  canonical quality gate on Python 3.14 with 244 passing tests at 86.15%
-  coverage.
+  canonical quality gate on Python 3.14 with passing lint/type/test/security
+  controls.
 
 - 2025-05-24: Validated the post-refactor layout by adding directory-level
   READMEs, refreshing repository navigation docs (README, SPEC, STYLE-GUIDE),

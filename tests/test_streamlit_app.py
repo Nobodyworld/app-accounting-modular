@@ -1,23 +1,31 @@
-"""Streamlit app smoke tests verifying dashboard data rendering flows."""
+"""Streamlit AppTest coverage for the primary Snapshot & Controls flow."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
+import streamlit as st
 
 pytest.importorskip("streamlit", reason="streamlit dependencies not available")
 from streamlit.testing.v1 import AppTest  # type: ignore[import-not-found]
 
 
+def _app_test() -> AppTest:
+    st.cache_data.clear()
+    return AppTest.from_file("apps/web/app.py")
+
+
 class DummyResponse:
     """Simple response stub to simulate ``requests`` interactions."""
 
-    def __init__(self, payload: dict, status_code: int = 200):
+    def __init__(self, payload: dict[str, Any], status_code: int = 200):
         self._payload = payload
         self.status_code = status_code
 
-    def json(self) -> dict:
+    def json(self) -> dict[str, Any]:
         return self._payload
 
     def raise_for_status(self) -> None:
@@ -25,147 +33,251 @@ class DummyResponse:
             raise RuntimeError("request failed")
 
 
+@dataclass
+class SnapshotCall:
+    base_currency: str
+    commodity_symbols: list[str]
+    jurisdictions: list[str]
+
+
 @pytest.fixture
-def fake_requests(monkeypatch):
-    """Override requests layer to provide deterministic dashboard responses."""
-    from apps.web import app as streamlit_app
+def fake_runtime(monkeypatch):
+    """Provide deterministic provider/health payloads and snapshot orchestration."""
 
-    calls: dict[str, int] = {"get": 0, "post": 0}
-    budget_payload = {
-        "lines": [
-            {
-                "account_id": 1,
-                "account_code": "5000",
-                "account_name": "Ops",
-                "period_start": "2024-01-01",
-                "budget_amount": 100.0,
-                "actual_amount": 120.0,
-                "variance": 20.0,
-                "burn_rate": 1.2,
-                "forecast": [["2024-02-01", 125.0]],
-            }
-        ],
-        "summary": {
-            "total_budget": 100.0,
-            "total_actual": 120.0,
-            "total_variance": 20.0,
-            "burn_rate": 1.2,
-        },
-        "metadata": {
-            "generated_at": "2024-02-01T00:00:00",
-            "horizon": 30,
-            "plan_id": 1,
-            "budget_id": 1,
-            "organization_id": 1,
-        },
-        "csv_export": "account_id,period_start,amount\n1,2024-01-01,120.0\n",
-    }
+    from apps.api.services import snapshot_service
 
-    cashflow_payload = {
-        "historical": [
-            {"period": "2024-01-01", "amount": -100.0},
-            {"period": "2024-02-01", "amount": -80.0},
-        ],
-        "forecast": [["2024-03-01", -90.0]],
-        "model_order": (1, 0, 0),
-        "metadata": {
-            "generated_at": "2024-02-15T00:00:00",
-            "horizon": 30,
-            "plan_id": 2,
-            "budget_id": None,
-            "organization_id": 1,
-        },
-        "current_cash": -180.0,
-        "average_monthly_flow": -90.0,
-        "csv_export": "period,amount,type\n2024-01-01,-100.0,historical\n",
-    }
+    calls: list[SnapshotCall] = []
 
-    def fake_get(url: str, timeout: int = 5, params: dict | None = None):
-        calls["get"] += 1
+    providers = [
+        {
+            "key": "fx:ecb",
+            "name": "ECB FX",
+            "capabilities": ["fx"],
+        },
+        {
+            "key": "market:commodities_stub",
+            "name": "Commodity Stub",
+            "capabilities": ["market"],
+        },
+        {
+            "key": "tax:oecd_stub",
+            "name": "Tax Stub",
+            "capabilities": ["tax"],
+        },
+    ]
+
+    def fake_get(url: str, timeout: int = 5, params: dict[str, Any] | None = None):
         if url.endswith("/health"):
             return DummyResponse({"status": "ok"})
+        if url.endswith("/health/ready"):
+            return DummyResponse(
+                {
+                    "status": "ok",
+                    "reports": [{"name": "database", "healthy": True, "severity": "critical"}],
+                }
+            )
         if url.endswith("/providers"):
-            return DummyResponse({"providers": []})
+            return DummyResponse({"providers": providers})
         if url.endswith("/reports/budget-vs-actual"):
-            assert params["budget_id"] == 1
-            return DummyResponse(budget_payload)
+            return DummyResponse({"summary": {"total_actual": 120.0}})
         if url.endswith("/reports/cashflow-forecast"):
-            assert params["organization_id"] == 1
-            return DummyResponse(cashflow_payload)
+            return DummyResponse({"current_cash": -180.0, "historical": []})
         return DummyResponse({"ok": True})
 
     def fake_post(
         url: str,
-        params: dict | None = None,
-        json: dict | None = None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
         timeout: int = 5,
     ):
-        calls["post"] += 1
+        if url.endswith("/snapshot/plans/preview"):
+            return DummyResponse({"summary": {"scenario_count": 1}, "plan": {"metadata": {}}})
         return DummyResponse({"ok": True})
 
-    monkeypatch.setattr(
-        streamlit_app,
-        "requests",
-        SimpleNamespace(get=fake_get, post=fake_post),
-    )
+    class FakeSnapshotResult:
+        def as_payload(self) -> dict[str, Any]:
+            return {
+                "fx_rates": [
+                    {
+                        "base_currency": "USD",
+                        "quote_currency": "EUR",
+                        "rate": "0.92",
+                        "as_of": "2026-07-02T00:00:00+00:00",
+                    }
+                ],
+                "commodity_quotes": [
+                    {
+                        "symbol": "XAU",
+                        "price": {"amount": "2350.10", "currency": "USD"},
+                        "as_of": "2026-07-02T00:00:00+00:00",
+                    }
+                ],
+                "tax_rules": [
+                    {
+                        "jurisdiction": "US",
+                        "rate": "0.21",
+                        "description": "corporate",
+                        "effective_from": "2026-01-01",
+                        "effective_to": None,
+                    }
+                ],
+                "diagnostics": {
+                    "fx_max_age_seconds": 120,
+                    "commodity_max_age_seconds": 240,
+                    "active_tax_rule_count": 1,
+                },
+                "providers": {
+                    "fx": "fx:ecb",
+                    "commodity": "market:commodities_stub",
+                    "tax": "tax:oecd_stub",
+                },
+                "cache_stats": {
+                    "fx": {"size": 1, "hits": 0, "misses": 1},
+                    "commodities": {"size": 1, "hits": 0, "misses": 1},
+                    "tax": {"size": 1, "hits": 0, "misses": 1},
+                },
+            }
+
+    class FakeSnapshotOrchestrator:
+        def __init__(
+            self,
+            *,
+            fx_provider_key: str | None = None,
+            commodity_provider_key: str | None = None,
+            tax_provider_key: str | None = None,
+            **_: Any,
+        ) -> None:
+            self.fx_provider_key = fx_provider_key
+            self.commodity_provider_key = commodity_provider_key
+            self.tax_provider_key = tax_provider_key
+
+        def build_snapshot(
+            self,
+            *,
+            base_currency: str,
+            commodity_symbols: list[str] | None = None,
+            jurisdictions: list[str] | None = None,
+        ) -> FakeSnapshotResult:
+            calls.append(
+                SnapshotCall(
+                    base_currency=base_currency,
+                    commodity_symbols=list(commodity_symbols or []),
+                    jurisdictions=list(jurisdictions or []),
+                )
+            )
+            return FakeSnapshotResult()
+
     monkeypatch.setattr("requests.get", fake_get)
     monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.setattr(snapshot_service, "SnapshotOrchestrator", FakeSnapshotOrchestrator)
     monkeypatch.setenv("API_BASE", "http://fake")
     monkeypatch.setenv("STREAMLIT_TESTING", "1")
-    return budget_payload, cashflow_payload, calls
+    return SimpleNamespace(calls=calls)
 
 
-def test_budget_report_flow(fake_requests):
-    at = AppTest.from_file("apps/web/app.py")
-    at.run(timeout=10)
+def test_primary_snapshot_tab_renders(fake_runtime):
+    at = _app_test()
+    at.run(timeout=15)
 
-    at.number_input(key="budget_id_input").set_value(1)
+    labels = [tab.label for tab in at.tabs]
+    assert "Snapshot & Controls" in labels
+    assert "Experimental Utilities" in labels
+    assert "Scenario Plans" in labels
+
+    # Validate provider controls are present and selectable.
+    assert at.selectbox(key="snapshot_fx_provider_select").value == "fx:ecb"
+    assert at.selectbox(key="snapshot_commodity_provider_select").value == "market:commodities_stub"
+    assert at.selectbox(key="snapshot_tax_provider_select").value == "tax:oecd_stub"
+
+
+def test_snapshot_request_execution_and_diagnostics(fake_runtime):
+    at = _app_test()
+    at.run(timeout=15)
+
+    at.text_input(key="snapshot_base_input").set_value("USD")
     at.run(timeout=10)
-    at.number_input(key="budget_horizon_input").set_value(45)
+    at.multiselect(key="snapshot_symbols_multi").set_value(["XAU"])
     at.run(timeout=10)
-    at.checkbox(key="budget_refresh_toggle").check()
+    at.multiselect(key="snapshot_jurisdictions_multi").set_value(["US"])
     at.run(timeout=10)
-    at.button(key="budget_report_button").click()
+    at.button(key="snapshot_generate_button").click()
     at.run(timeout=20)
 
-    assert "budget_report_payload" in at.session_state
-    summary = at.session_state["budget_report_payload"]["summary"]
-    assert summary["total_actual"] == pytest.approx(120.0)
+    assert "snapshot_controls_payload" in at.session_state
+    payload = at.session_state["snapshot_controls_payload"]
+    assert len(payload["fx_rates"]) == 1
+    assert len(payload["commodity_quotes"]) == 1
+    assert len(payload["tax_rules"]) == 1
+    assert payload["providers"]["fx"] == "fx:ecb"
+    assert "snapshot_controls_params" in at.session_state
+    assert fake_runtime.calls
+    assert fake_runtime.calls[0].base_currency == "USD"
 
 
-def test_budget_upload_preview(fake_requests):
-    at = AppTest.from_file("apps/web/app.py")
+def test_invalid_currency_blocks_snapshot(fake_runtime):
+    at = _app_test()
+    at.run(timeout=15)
+
+    at.text_input(key="snapshot_base_input").set_value("US")
     at.run(timeout=10)
 
-    csv_bytes = b"account_id,period_start,amount\n1,2024-01-01,100\n"
-    at.session_state["uploaded_budget_bytes"] = csv_bytes
-    if "uploaded_budget_preview" in at.session_state:
-        del at.session_state["uploaded_budget_preview"]
-    at.run(timeout=10)
-
-    assert "uploaded_budget_preview" in at.session_state
-    preview = at.session_state["uploaded_budget_preview"]
-    assert list(preview.columns) == ["account_id", "period_start", "amount"]
+    assert at.button(key="snapshot_generate_button").disabled is True
+    assert "snapshot_controls_payload" not in at.session_state
 
 
-def test_cashflow_flow(fake_requests):
-    budget_payload, cashflow_payload, calls = fake_requests
-    at = AppTest.from_file("apps/web/app.py")
-    at.run(timeout=10)
+def test_missing_provider_capability_shows_warning(monkeypatch):
+    """When provider capabilities are missing, generation should be disabled with a warning."""
 
-    at.number_input(key="cashflow_org_input").set_value(1)
-    at.run(timeout=10)
-    at.number_input(key="cashflow_horizon_input").set_value(30)
-    at.run(timeout=10)
-    at.checkbox(key="cashflow_refresh_toggle").check()
-    at.run(timeout=10)
-    at.button(key="cashflow_report_button").click()
-    at.run(timeout=20)
+    def fake_get(url: str, timeout: int = 5, params: dict[str, Any] | None = None):
+        if url.endswith("/health"):
+            return DummyResponse({"status": "ok"})
+        if url.endswith("/health/ready"):
+            return DummyResponse({"status": "ok", "reports": []})
+        if url.endswith("/providers"):
+            return DummyResponse(
+                {
+                    "providers": [
+                        {"key": "fx:ecb", "name": "ECB FX", "capabilities": ["fx"]},
+                        {
+                            "key": "market:commodities_stub",
+                            "name": "Commodity Stub",
+                            "capabilities": ["market"],
+                        },
+                    ]
+                }
+            )
+        return DummyResponse({"ok": True})
 
-    assert "cashflow_report_payload" in at.session_state
-    payload = at.session_state["cashflow_report_payload"]
-    assert payload["current_cash"] == pytest.approx(-180.0)
-    assert calls["get"] > 0
+    monkeypatch.setattr("requests.get", fake_get)
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: DummyResponse({"ok": True}))
+    monkeypatch.setenv("API_BASE", "http://fake")
+    monkeypatch.setenv("STREAMLIT_TESTING", "1")
+
+    at = _app_test()
+    at.run(timeout=15)
+
+    assert at.button(key="snapshot_generate_button").disabled is True
+    assert any("Missing provider capabilities" in warning.value for warning in at.warning)
 
 
-# TODO - (web) Exercise real HTTP interactions once API client abstraction lands.
+def test_provider_loading_failure_is_reported(monkeypatch):
+    """Providers API failure should surface a clear primary-flow error state."""
+
+    def fake_get(url: str, timeout: int = 5, params: dict[str, Any] | None = None):
+        if url.endswith("/providers"):
+            raise RuntimeError("providers unavailable")
+        if url.endswith("/health"):
+            return DummyResponse({"status": "ok"})
+        if url.endswith("/health/ready"):
+            return DummyResponse({"status": "ok", "reports": []})
+        return DummyResponse({"ok": True})
+
+    monkeypatch.setattr("requests.get", fake_get)
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: DummyResponse({"ok": True}))
+    monkeypatch.setenv("API_BASE", "http://fake")
+    monkeypatch.setenv("STREAMLIT_TESTING", "1")
+
+    at = _app_test()
+    at.run(timeout=15)
+
+    assert any("Unable to load provider catalog" in err.value for err in at.error)

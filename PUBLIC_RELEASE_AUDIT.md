@@ -28,7 +28,7 @@ release gate for this publication decision.
 - Source and docs alignment: verified (`src/` runtime truth, fixed public docs
   paths, accounting-first narrative preserved).
 - Accounting quality gate in clean clone: passed.
-- Full test suite and coverage in clean clone: `253 passed`, coverage `86.35%`
+- Full test suite and coverage in clean clone: `255 passed`, coverage `86.07%`
   (threshold `>=85%`).
 - Focused accounting control suites: passed (`39 passed`).
 - Dependency integrity: `pip check` passed.
@@ -39,13 +39,13 @@ release gate for this publication decision.
   - `cli.macli snapshot`: passed.
   - `cli.macli inspect-plan` + `cli.macli snapshot-scenarios`: passed.
   - API startup + probes: `/health` and `/health/ready` returned HTTP 200.
-  - Streamlit smoke: `tests/test_streamlit_app.py` passed (`3 passed`).
+  - Streamlit smoke: `tests/test_streamlit_app.py` passed (`5 passed`).
 - Documentation link validation (targeted release collateral): `LINKS_CHECKED 138`,
   `MISSING 0`.
 
 ## Clean-Clone Validation (Final Commit)
 
-- Clone path: `app-accounting-modular-clean-28f340b`
+- Clone path: `app-accounting-modular-clean-final`
 - Python: `3.14`
 - Validated commit in clone: current `origin/main` HEAD
 
@@ -56,7 +56,7 @@ release gate for this publication decision.
   - Ruff check: pass
   - Ruff format --check: pass
   - Mypy (target modules): pass
-  - Pytest + coverage gate: pass (`253 passed`, `86.35%`)
+  - Pytest + coverage gate: pass (`255 passed`, `86.07%`)
   - Focused accounting suites: pass (`39 passed`)
   - `pip check`: pass
   - `pip-audit`: pass (`No known vulnerabilities found`)
@@ -69,14 +69,14 @@ release gate for this publication decision.
 - `python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table` ->
   pass
 - API probe (uvicorn on localhost): `/health` and `/health/ready` both `200`
-- `pytest -q tests/test_streamlit_app.py` -> `3 passed`
+- `pytest -q tests/test_streamlit_app.py` -> `5 passed`
 
 ## Full-History Secret Scan (Final Cycle)
 
 - Tool: Gitleaks
 - Version: `8.30.1`
 - Command:
-  - `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-8c9b357.json`
+  - `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-main.json`
 - Result:
   - Full repository history scanned
   - `no leaks found`
@@ -85,13 +85,12 @@ release gate for this publication decision.
 ## Hosted CI Disposition
 
 - Workflow files present and active in repository metadata: `CI`, `CodeQL`.
-- `gh run list` does not show hosted runs for the audited `main` HEAD commit.
-- Manual dispatch attempt result:
-  - `gh workflow run CI --ref main` -> HTTP 422 (`workflow_dispatch` trigger not configured).
+- `CI` workflow includes `workflow_dispatch` and `push` triggers for `main`.
+- Hosted run evidence is tracked for the audited release candidate commit and
+  reported alongside local clean-clone evidence.
 
-Disposition: Hosted CI evidence for this commit is unavailable from current
-repository workflow trigger policy; clean-clone local validation is treated as
-the authoritative release gate for this audit.
+Disposition: Hosted CI evidence and clean-clone evidence are both required for
+final publication sign-off of the tagged release candidate.
 
 ## Public-Collateral Evidence
 
@@ -112,7 +111,7 @@ the authoritative release gate for this audit.
 - `python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table`
 - `pytest -q tests/test_streamlit_app.py`
 - `gitleaks version`
-- `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-28f340b.json`
+- `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-main.json`
 - `gh workflow list`
 - `gh run list --workflow CI`
 - `gh workflow run CI --ref main`

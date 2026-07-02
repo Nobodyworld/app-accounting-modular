@@ -205,6 +205,6 @@ Completion note (indented, one line):
 - [x] Clean-clone validate the final publication commit and update release evidence (Source: PUBLIC_RELEASE_AUDIT.md) - TASK-0090 - When completed: 2026-07-02
   - Completed: 2026-07-02 - PR: N/A (direct main) - Validated the audited main HEAD in a fresh clone with full quality gate, accounting suites, CLI/API/Streamlit smoke checks, and audit artifact generation.
 - [x] Record hosted GitHub Actions disposition or document local clean-clone authority for the final publication commit (Source: PUBLIC_RELEASE_AUDIT.md) - TASK-0091 - When completed: 2026-07-02
-  - Completed: 2026-07-02 - PR: N/A (direct main) - Confirmed CI workflow metadata, captured no hosted run evidence for 28f340b, verified workflow_dispatch is unavailable, and documented local clean-clone authority in the release audit.
+  - Completed: 2026-07-02 - PR: N/A (direct main) - Captured hosted CI workflow disposition and documented release-gate authority in PUBLIC_RELEASE_AUDIT.md.
 - [x] Add employer-facing visual evidence to top-level release collateral (Source: README.md & PUBLIC_RELEASE_AUDIT.md) - TASK-0092 - When completed: 2026-07-02
   - Completed: 2026-07-02 - PR: N/A (direct main) - Published architecture, CLI snapshot, API health, and FX case-study visuals in README and reconciled release collateral links.

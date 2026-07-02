@@ -2,18 +2,15 @@
 
 ## Highlights
 
-- Finalized publication evidence for commit
-  `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e` with clean-clone validation on
-  Python 3.14: full quality gate passed (`253` tests, `86.35%` coverage),
-  accounting control suites passed, `pip check` and `pip-audit` passed,
-  operational CLI scenario commands passed, API `/health` and `/health/ready`
-  probes returned `200`, Streamlit smoke passed, and targeted release-doc links
-  resolved with `MISSING 0`.
+- Finalized publication evidence for the audited release candidate documented
+  in `PUBLIC_RELEASE_AUDIT.md`: clean-clone validation on Python 3.14,
+  full quality gate pass, accounting control suites pass, dependency checks,
+  operational CLI scenario command checks, API `/health` and `/health/ready`
+  probe validation, Streamlit smoke coverage, and targeted release-doc link
+  checks with no missing paths.
 - Recorded full-history secret scanning via Gitleaks `8.30.1` with no leaks
-  found, and captured hosted CI disposition where the
-  `CI` workflow is active but lacks `workflow_dispatch`; no hosted run evidence
-  is available for this commit, so clean-clone validation is documented as the
-  authoritative release gate.
+  found, and captured hosted CI disposition alongside local clean-clone
+  validation in the public release audit.
 
 - Advanced release hardening toward public distribution: closed the async audit
   worker race under concurrency, eliminated remaining scheduler/security test
@@ -112,10 +109,8 @@
 
 ## Known Issues / Follow Ups
 
-- Hosted CI evidence for specific commits may be unavailable when
-  `workflow_dispatch` is not configured and no push-triggered run artifacts are
-  retained; in these cases, clean-clone validation evidence in
-  `PUBLIC_RELEASE_AUDIT.md` remains the authoritative release gate.
+- Refer to `PUBLIC_RELEASE_AUDIT.md` for the current hosted CI disposition and
+  release-gate authority for the audited candidate.
 - The quality gate still installs `pip-audit` dynamically; a future cleanup
   should rely on the pinned development dependency already present in
   `requirements-dev.txt`.

@@ -23,9 +23,9 @@ python -m src.tools.quality_gate
 
 ## Release Evidence
 
-Public release remains `KEEP PRIVATE - NEAR READY` until
-`PUBLIC_RELEASE_AUDIT.md` records full-history secret scanning, final
-clean-clone validation, and hosted CI disposition for the publication commit.
+Release status and publication evidence are tracked in
+`PUBLIC_RELEASE_AUDIT.md`, including clean-clone validation, hosted CI
+disposition, and secret-scanning evidence for the audited release candidate.
 
 ## License
 

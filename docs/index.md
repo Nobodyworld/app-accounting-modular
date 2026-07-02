@@ -31,5 +31,5 @@ roadmap.
   incident communications.
 - [Directory overviews](../README.md#repository-structure) – quick links to
   per-folder READMEs (architecture, governance, operations, plugins, tests).
-- [Public Release Audit](../PUBLIC_RELEASE_AUDIT.md) – current near-ready verdict,
-  release blockers, path validation, and clean-clone verification requirements.
+- [Public Release Audit](../PUBLIC_RELEASE_AUDIT.md) – authoritative release verdict,
+  hosted CI disposition, and clean-clone verification evidence.

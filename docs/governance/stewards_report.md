@@ -2,20 +2,21 @@
 
 ## Current Verdict
 
-The repository is near public-ready, but should remain private until the release
-evidence gaps in [`../../PUBLIC_RELEASE_AUDIT.md`](../../PUBLIC_RELEASE_AUDIT.md)
-are closed. Current status: `KEEP PRIVATE - NEAR READY`.
+Release classification and evidence are maintained in
+[`../../PUBLIC_RELEASE_AUDIT.md`](../../PUBLIC_RELEASE_AUDIT.md). This report
+summarises stewardship posture and should be interpreted alongside the current
+audit verdict.
 
 ## Metrics Overview
 
 | Metric | Current Evidence | Notes |
 | --- | --- | --- |
-| Local quality gate | Pass | `python -m src.tools.quality_gate` passed in the latest Python 3.14 local run. |
-| Test result | 244 passing tests | Includes the full suite plus focused accounting-control suites. |
-| Coverage | 86.15% | Above the 85% release gate threshold. |
+| Local quality gate | Pass | `python -m src.tools.quality_gate` is the canonical local gate. |
+| Test result | Refer to public audit | Totals are recorded in `PUBLIC_RELEASE_AUDIT.md` to avoid stale snapshots. |
+| Coverage | Refer to public audit | Threshold and latest measured coverage are recorded in the audit. |
 | Python policy | 3.12 minimum, 3.14 primary | Workflow matrix covers Python 3.12, 3.13, and 3.14. |
-| License posture | Apache-2.0 with `NOTICE` attribution | Canonical license text restored in `LICENSE`; attribution moved to `NOTICE`. |
-| Publication status | Keep private | Full-history secret scan and final clean-clone validation are pending. |
+| License posture | Apache-2.0 with `NOTICE` attribution | Canonical license text is in `LICENSE`; attribution is in `NOTICE`. |
+| Publication status | Refer to public audit | Release classification is controlled by the public audit verdict. |
 
 ## Strengths
 
@@ -59,12 +60,11 @@ are closed. Current status: `KEEP PRIVATE - NEAR READY`.
 
 ## Short-Term Roadmap
 
-- Complete TASK-0089 through TASK-0092 in the root `TASKLIST.md`.
 - Replace the dynamic `pip-audit` install in the quality gate with the pinned
   development dependency.
 - Add visual release collateral to the README and case-study entry points.
-- Create a versioned public release only after the audit status moves from
-  `KEEP PRIVATE - NEAR READY` to a verified release-ready state.
+- Create a versioned public release only after the audit verifies hosted CI,
+  clean-clone, and secret-scan evidence for the tagged candidate.
 
 ## Evolvability & Opportunities
 

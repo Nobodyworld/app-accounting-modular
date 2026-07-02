@@ -82,5 +82,5 @@
   <path class="edge" d="M 872 330 C 872 356, 948 356, 948 386"/>
   <path class="edge" d="M 762 492 C 780 492, 790 492, 810 492"/>
 
-  <text class="subtitle" x="56" y="706">Status at audit update: KEEP PRIVATE - NEAR READY (pending full-history scan, clean-clone final SHA, hosted CI disposition)</text>
+  <text class="subtitle" x="56" y="706">Release evidence: clean-clone and hosted-CI validation documented in PUBLIC_RELEASE_AUDIT.md.</text>
 </svg>
