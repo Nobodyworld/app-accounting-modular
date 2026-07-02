@@ -9,8 +9,8 @@
   operational CLI scenario commands passed, API `/health` and `/health/ready`
   probes returned `200`, Streamlit smoke passed, and targeted release-doc links
   resolved with `MISSING 0`.
-- Recorded full-history secret scanning via Gitleaks `8.30.1` across `72`
-  commits with no leaks found, and captured hosted CI disposition where the
+- Recorded full-history secret scanning via Gitleaks `8.30.1` with no leaks
+  found, and captured hosted CI disposition where the
   `CI` workflow is active but lacks `workflow_dispatch`; no hosted run evidence
   is available for this commit, so clean-clone validation is documented as the
   authoritative release gate.
