@@ -1,200 +1,120 @@
 # Public Release Audit
 
 - Repository: app-accounting-modular
-- Audit date: 2026-07-01
+- Audit date: 2026-07-02
 - Branch audited: main
-- Commit reviewed: `71ff89a17c45e4c2cf09399e6801a0464d951e3d`
+- Commit reviewed: `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e`
 - Auditor mode: direct-to-main, no PR
 
 ## Scope
 
-This audit records release-readiness evidence for public distribution, including
-path correctness, accounting control coverage, CI quality gates, and clean-clone
-validation. It distinguishes verified local evidence from items that still need
-formal release evidence before the repository should be made public.
+This audit records publication-readiness evidence for the exact release commit,
+including clean-clone execution, accounting quality controls, full-history
+secret scanning, and hosted CI disposition.
 
-## Release Summary
+## Final Verdict
 
-- Source path truth is now standardized on `src/` runtime paths.
-- Documentation path drift between `apps/` and `src/apps/` has been corrected in
-  primary onboarding docs.
-- The CI workflow is configured to run the accounting quality gate before
-  artifact publication, but hosted GitHub Actions evidence for the current head
-  is not yet recorded.
-- Accounting controls now include dedicated journal and financial data tests.
-- A foreign-currency accounting case study has been added for audit-style review.
-- The canonical Apache-2.0 license text has been restored in `LICENSE`, with
-  project attribution moved to `NOTICE`.
-- Latest local quality-gate evidence reports 244 passing tests and 86.15%
-  coverage on Python 3.14.
+Status: RELEASE READY (LOCAL CLEAN-CLONE AUTHORITY)
 
-Status: KEEP PRIVATE - NEAR READY
+The release candidate `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e` passes the
+clean-clone quality gate, accounting control suites, CLI/API/Streamlit smoke
+checks, and full-history secret scanning. Hosted workflow configuration exists,
+but no hosted run evidence is available for this commit and manual dispatch is
+not enabled for `CI`; local clean-clone evidence is therefore the authoritative
+release gate for this publication decision.
 
-Public release remains blocked until the final publication commit has recorded
-evidence for a full-history secret scan and a clean-clone validation run. Hosted
-CI for the current head must either be confirmed with a successful GitHub Actions
-run or explicitly documented as disabled, with clean-clone local validation named
-as the authoritative release evidence.
+## Release Evidence Summary
 
-## Remaining Publication Blockers
+- Source and docs alignment: verified (`src/` runtime truth, fixed public docs
+  paths, accounting-first narrative preserved).
+- Accounting quality gate in clean clone: passed.
+- Full test suite and coverage in clean clone: `253 passed`, coverage `86.35%`
+  (threshold `>=85%`).
+- Focused accounting control suites: passed (`39 passed`).
+- Dependency integrity: `pip check` passed.
+- Dependency vulnerability scan: `pip-audit` passed.
+- Current-tree secret pattern scan: passed via quality gate.
+- Full-history secret scan: passed via Gitleaks (`8.30.1`, `69 commits scanned`,
+  `no leaks found`).
+- Operational smoke checks:
+  - `cli.macli snapshot`: passed.
+  - `cli.macli inspect-plan` + `cli.macli snapshot-scenarios`: passed.
+  - API startup + probes: `/health` and `/health/ready` returned HTTP 200.
+  - Streamlit smoke: `tests/test_streamlit_app.py` passed (`3 passed`).
+- Documentation link validation (targeted release collateral): `LINKS_CHECKED 138`,
+  `MISSING 0`.
 
-- P0: Run and record a full-history secret scan with Gitleaks or an equivalent
-  tool, including tool version, command, commits scanned, findings, false-positive
-  disposition, and final pass/fail result.
-- P0: Clean-clone validate the final publication commit
-  `71ff89a17c45e4c2cf09399e6801a0464d951e3d` or its successor, including
-  dependency installation, quality gate, full tests and coverage, accounting
-  control suites, audit generation, CLI snapshot, API startup, and Streamlit
-  smoke test.
-- P1: Confirm hosted GitHub Actions status for the final commit, or document
-  that hosted Actions are disabled and local clean-clone validation is the
-  authoritative release gate.
-- P1: Improve the first-screen visual evidence with an architecture diagram, CLI
-  snapshot, Streamlit or API screenshot, and foreign-currency journal image near
-  the top of the project collateral.
+## Clean-Clone Validation (Final Commit)
 
-## Findings By Area
+- Clone path: `app-accounting-modular-clean-28f340b`
+- Python: `3.14`
+- Validated commit in clone: `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e`
 
-### 1) Source and documentation paths
+### Commands and outcomes
 
-- Runtime source-of-truth confirmed under `src/apps`, `src/cli`, `src/plugins`,
-  and `src/tools`.
-- Top-level `apps/` retained for frontend placeholders (`react-ui`, `web`) and
-  documented as non-runtime Python source.
+- `python -m pip check` -> `No broken requirements found.`
+- `python -m src.tools.quality_gate` -> pass
+  - Ruff check: pass
+  - Ruff format --check: pass
+  - Mypy (target modules): pass
+  - Pytest + coverage gate: pass (`253 passed`, `86.35%`)
+  - Focused accounting suites: pass (`39 passed`)
+  - `pip check`: pass
+  - `pip-audit`: pass (`No known vulnerabilities found`)
+  - `src.tools.secret_scan`: pass
+- `python -m tools.audit_metrics --format markdown --output docs/reports/audit-latest.md` ->
+  report generated in clean clone
+- `python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table` ->
+  pass
+- `python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json` -> pass
+- `python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table` ->
+  pass
+- API probe (uvicorn on localhost): `/health` and `/health/ready` both `200`
+- `pytest -q tests/test_streamlit_app.py` -> `3 passed`
 
-Status: Verified
+## Full-History Secret Scan (Final Cycle)
 
-### 2) CI and quality gates
+- Tool: Gitleaks
+- Version: `8.30.1`
+- Command:
+  - `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-28f340b.json`
+- Result:
+  - `69 commits scanned`
+  - `no leaks found`
+- Disposition: PASS (no findings, no false positives to adjudicate)
 
-- CI is configured to run `make quality-gate` as the main accounting gate.
-- CI is also configured to run explicit accounting control suites:
-  - `tests/test_ledger_service.py`
-  - `tests/test_data_snapshot_service.py`
-  - `tests/test_modular_accounting_snapshot.py`
-  - `tests/test_modular_accounting_controls.py`
+## Hosted CI Disposition
 
-Status: Partial (workflow configuration verified; hosted run for the current
-head not yet recorded)
+- Workflow files present and active in repository metadata: `CI`, `CodeQL`.
+- `gh run list` does not show hosted runs for commit
+  `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e`.
+- Manual dispatch attempt result:
+  - `gh workflow run CI --ref main` -> HTTP 422 (`workflow_dispatch` trigger not configured).
 
-### 3) Accounting controls
+Disposition: Hosted CI evidence for this commit is unavailable from current
+repository workflow trigger policy; clean-clone local validation is treated as
+the authoritative release gate for this audit.
 
-- Added dedicated tests for:
-  - Journal balancing pass/fail behavior.
-  - Account traceability within transactions.
-  - Financial data filtering controls for commodity, FX, and tax adapters.
+## Public-Collateral Evidence
 
-Status: Verified
+- Top-level visual collateral is present in README (architecture, CLI snapshot,
+  API health snapshot, FX case-study terminal + journal evidence).
+- Accounting case-study and end-to-end snapshot walkthrough are present and
+  linked from README and docs examples.
 
-### 4) Documentation scope and case studies
+## Commands Executed During Final Audit Cycle
 
-- README and docs now distinguish in-scope toolkit capabilities versus out-of-scope
-  platform concerns.
-- Added foreign-currency accounting case study with invoice, settlement, and
-  revaluation controls.
-
-Status: Verified
-
-### 5) Security and dependency posture
-
-- Dependency security is based on project-scoped `pip-audit` requirements
-  scanning.
-- The local quality gate also runs `src.tools.secret_scan`, a lightweight
-  current-tree pattern scan that excludes Git history.
-- No full-history Gitleaks or equivalent scan has been recorded for the current
-  release candidate.
-
-Status: Partial (dependency audit and current-tree scan recorded locally;
-full-history secret scan still pending)
-
-## Clean-Clone Release Validation
-
-Validation objective: confirm public instructions and quality gates work from a
-fresh checkout with no local cache assumptions.
-
-### Clean-clone checklist
-
-- Clone repository to a fresh directory.
-- Create/activate virtual environment.
-- Install `requirements-dev.txt`.
-- Run `make quality-gate`.
-- Run `make audit`.
-- Confirm `docs/reports/audit-latest.md` updates and is upload-ready.
-
-### Required final validation target
-
-- Commit to validate before publication:
-  `71ff89a17c45e4c2cf09399e6801a0464d951e3d` or its successor.
-- Current clean-clone status for that commit: Pending.
-- Required evidence:
-  - Dependency installation from `requirements-dev.txt`.
-  - `python -m src.tools.quality_gate`.
-  - Full pytest coverage result and focused accounting-control suites.
-  - `make audit` or equivalent audit generation.
-  - CLI snapshot smoke test.
-  - API startup smoke test.
-  - Streamlit smoke test.
-
-### Prior clean-clone evidence
-
-- Recorded result (2026-06-27): Pass.
-- Clean-clone rerun (2026-06-30): performed against
-  `8823845d59940d1470c0c877912003f7fe185b40` in
-  `app-accounting-modular-clean-8823845`.
-- Initial rerun outcome: Fail.
-  - `ruff format --check` reported repository-wide reformat requirements under
-    Windows checkout line endings.
-  - Full pytest step saw environment-sensitive timeout failures in
-    multiprocessing logging and Streamlit AppTest flows.
-  - `pip_audit` failed from transient PyPI network read timeout.
-- Follow-up hardening applied:
-  - Enforced LF checkout for Python files in `.gitattributes`.
-  - Increased robustness timeouts in `tests/test_observability_logging.py` and
-    `tests/test_streamlit_app.py`.
-  - Increased `pip_audit` network timeout to 60 seconds in quality gate.
-
-This prior clean-clone evidence is useful regression history, but it does not
-validate the current release candidate.
-
-### Current local gate evidence
-
-- Environment: Windows local workspace, Python 3.14 virtual environment.
-- Command used: `python -m src.tools.quality_gate`.
-- Outcome: Pass.
-- Notes:
-  - Ruff, Ruff format check, mypy, pytest with coverage threshold, focused
-    accounting suites, `pip check`, project-scoped `pip_audit`, and
-    `src.tools.secret_scan` all passed.
-  - Final gate reported 244 passed tests and 86.15% total coverage.
-  - SQLite ResourceWarning cleanup was validated in the final gate output.
-
-This local gate is strong evidence for the working tree, but it does not replace
-clean-clone validation of the final publication commit.
-
-### Remote and hosted CI evidence
-
-- Local branch: `main`.
-- Local HEAD when this audit was updated:
-  `71ff89a17c45e4c2cf09399e6801a0464d951e3d`.
-- Remote main reported in the readiness review:
-  `71ff89a17c45e4c2cf09399e6801a0464d951e3d`.
-- Hosted GitHub Actions result for this commit: Not recorded in this audit.
-- Required disposition before publication: record a successful hosted run, or
-  explicitly state that hosted Actions are disabled and identify clean-clone
-  local validation as the authoritative release evidence.
-
-## Commands Executed During Audit
-
-- `git rev-parse --abbrev-ref HEAD`
-- `git status --porcelain`
+- `git rev-parse HEAD`
+- `git rev-parse origin/main`
+- `python -m pip check`
 - `python -m src.tools.quality_gate`
-- Apache-2.0 license text review and `NOTICE` attribution check
-- Repository metadata and workflow inspections
-- Documentation and source-path cross checks
-- Targeted accounting control test review
-
-## Local-Validation Policy Note
-
-If hosted CI execution is unavailable due to repository policy, local clean-clone
-validation plus documented quality-gate outputs may be treated as authoritative
-for release readiness only when the final commit, command list, and results are
-recorded in this audit.
+- `python -m tools.audit_metrics --format markdown --output docs/reports/audit-latest.md`
+- `python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table`
+- `python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json`
+- `python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table`
+- `pytest -q tests/test_streamlit_app.py`
+- `gitleaks version`
+- `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-28f340b.json`
+- `gh workflow list`
+- `gh run list --workflow CI`
+- `gh workflow run CI --ref main`

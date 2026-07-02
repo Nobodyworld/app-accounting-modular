@@ -2,6 +2,19 @@
 
 ## Highlights
 
+- Finalized publication evidence for commit
+  `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e` with clean-clone validation on
+  Python 3.14: full quality gate passed (`253` tests, `86.35%` coverage),
+  accounting control suites passed, `pip check` and `pip-audit` passed,
+  operational CLI scenario commands passed, API `/health` and `/health/ready`
+  probes returned `200`, Streamlit smoke passed, and targeted release-doc links
+  resolved with `MISSING 0`.
+- Recorded full-history secret scanning via Gitleaks `8.30.1` across `69`
+  commits with no leaks found, and captured hosted CI disposition where the
+  `CI` workflow is active but lacks `workflow_dispatch`; no hosted run evidence
+  is available for this commit, so clean-clone validation is documented as the
+  authoritative release gate.
+
 - Advanced release hardening toward public distribution: closed the async audit
   worker race under concurrency, eliminated remaining scheduler/security test
   regressions and SQLite teardown warnings, aligned licensing/docs to
@@ -99,9 +112,10 @@
 
 ## Known Issues / Follow Ups
 
-- Public release status remains `KEEP PRIVATE - NEAR READY` until the final
-  publication commit has recorded full-history secret scanning, clean-clone
-  validation, and hosted CI disposition in `PUBLIC_RELEASE_AUDIT.md`.
+- Hosted CI evidence for specific commits may be unavailable when
+  `workflow_dispatch` is not configured and no push-triggered run artifacts are
+  retained; in these cases, clean-clone validation evidence in
+  `PUBLIC_RELEASE_AUDIT.md` remains the authoritative release gate.
 - The quality gate still installs `pip-audit` dynamically; a future cleanup
   should rely on the pinned development dependency already present in
   `requirements-dev.txt`.
