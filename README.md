@@ -32,7 +32,7 @@ Foreign-currency case-study terminal and journal evidence:
 
 - **In scope**: accounting data snapshots, adapter-driven FX/commodity/tax inputs, journal balancing primitives, operational CLI workflows, and extensible provider loading.
 - **Out of scope**: opinionated ERP workflows, custody/treasury execution, and production-grade React UI (the current React surface is a placeholder scaffold).
-- **Validation source of truth**: publication readiness is tracked in [`PUBLIC_RELEASE_AUDIT.md`](PUBLIC_RELEASE_AUDIT.md). Current status is `RELEASE READY (LOCAL CLEAN-CLONE AUTHORITY)` for commit `8c9b35778b2fdfa62246948daefa696d5636b854`, with hosted CI disposition documented in the audit.
+- **Validation source of truth**: publication readiness is tracked in [`PUBLIC_RELEASE_AUDIT.md`](PUBLIC_RELEASE_AUDIT.md). Current status is `RELEASE READY (LOCAL CLEAN-CLONE AUTHORITY)` for the current audited `main` HEAD, with hosted CI disposition documented in the audit.
 
 ## Why
 

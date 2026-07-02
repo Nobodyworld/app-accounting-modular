@@ -3,7 +3,7 @@
 - Repository: app-accounting-modular
 - Audit date: 2026-07-02
 - Branch audited: main
-- Commit reviewed: `8c9b35778b2fdfa62246948daefa696d5636b854`
+- Commit reviewed: current `main` HEAD at audit completion (see command evidence below)
 - Auditor mode: direct-to-main, no PR
 
 ## Scope
@@ -16,7 +16,7 @@ secret scanning, and hosted CI disposition.
 
 Status: RELEASE READY (LOCAL CLEAN-CLONE AUTHORITY)
 
-The release candidate `8c9b35778b2fdfa62246948daefa696d5636b854` passes the
+The release candidate on current `main` HEAD passes the
 clean-clone quality gate, accounting control suites, CLI/API/Streamlit smoke
 checks, and full-history secret scanning. Hosted workflow configuration exists,
 but no hosted run evidence is available for this commit and manual dispatch is
@@ -48,7 +48,7 @@ release gate for this publication decision.
 
 - Clone path: `app-accounting-modular-clean-28f340b`
 - Python: `3.14`
-- Validated commit in clone: `8c9b35778b2fdfa62246948daefa696d5636b854`
+- Validated commit in clone: current `origin/main` HEAD
 
 ### Commands and outcomes
 
@@ -86,8 +86,7 @@ release gate for this publication decision.
 ## Hosted CI Disposition
 
 - Workflow files present and active in repository metadata: `CI`, `CodeQL`.
-- `gh run list` does not show hosted runs for commit
-  `8c9b35778b2fdfa62246948daefa696d5636b854`.
+- `gh run list` does not show hosted runs for the audited `main` HEAD commit.
 - Manual dispatch attempt result:
   - `gh workflow run CI --ref main` -> HTTP 422 (`workflow_dispatch` trigger not configured).
 
