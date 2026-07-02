@@ -201,9 +201,9 @@ Completion note (indented, one line):
 - [x] Pool forecast service instances to reuse expensive model state (Source: src/apps/api/routers/forecast.py) - TASK-0071 - When completed: 2025-11-21
   - Completed: 2025-11-21 - PR: N/A (local) - Forecast routes reuse a shared ForecastService instance to avoid repeated instantiation.
 - [x] Run and record full-history Gitleaks or equivalent secret scan for the final publication commit (Source: PUBLIC_RELEASE_AUDIT.md) - TASK-0089 - When completed: 2026-07-02
-  - Completed: 2026-07-02 - PR: N/A (direct main) - Executed Gitleaks 8.30.1 full-history scan across 69 commits with no leaks and recorded command/results in PUBLIC_RELEASE_AUDIT.md.
+  - Completed: 2026-07-02 - PR: N/A (direct main) - Executed Gitleaks 8.30.1 full-history scan across 70 commits with no leaks and recorded command/results in PUBLIC_RELEASE_AUDIT.md.
 - [x] Clean-clone validate the final publication commit and update release evidence (Source: PUBLIC_RELEASE_AUDIT.md) - TASK-0090 - When completed: 2026-07-02
-  - Completed: 2026-07-02 - PR: N/A (direct main) - Validated commit 28f340b in a fresh clone with full quality gate, accounting suites, CLI/API/Streamlit smoke checks, and audit artifact generation.
+  - Completed: 2026-07-02 - PR: N/A (direct main) - Validated commit 8c9b357 in a fresh clone with full quality gate, accounting suites, CLI/API/Streamlit smoke checks, and audit artifact generation.
 - [x] Record hosted GitHub Actions disposition or document local clean-clone authority for the final publication commit (Source: PUBLIC_RELEASE_AUDIT.md) - TASK-0091 - When completed: 2026-07-02
   - Completed: 2026-07-02 - PR: N/A (direct main) - Confirmed CI workflow metadata, captured no hosted run evidence for 28f340b, verified workflow_dispatch is unavailable, and documented local clean-clone authority in the release audit.
 - [x] Add employer-facing visual evidence to top-level release collateral (Source: README.md & PUBLIC_RELEASE_AUDIT.md) - TASK-0092 - When completed: 2026-07-02

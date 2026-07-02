@@ -3,7 +3,7 @@
 - Repository: app-accounting-modular
 - Audit date: 2026-07-02
 - Branch audited: main
-- Commit reviewed: `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e`
+- Commit reviewed: `8c9b35778b2fdfa62246948daefa696d5636b854`
 - Auditor mode: direct-to-main, no PR
 
 ## Scope
@@ -16,7 +16,7 @@ secret scanning, and hosted CI disposition.
 
 Status: RELEASE READY (LOCAL CLEAN-CLONE AUTHORITY)
 
-The release candidate `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e` passes the
+The release candidate `8c9b35778b2fdfa62246948daefa696d5636b854` passes the
 clean-clone quality gate, accounting control suites, CLI/API/Streamlit smoke
 checks, and full-history secret scanning. Hosted workflow configuration exists,
 but no hosted run evidence is available for this commit and manual dispatch is
@@ -34,7 +34,7 @@ release gate for this publication decision.
 - Dependency integrity: `pip check` passed.
 - Dependency vulnerability scan: `pip-audit` passed.
 - Current-tree secret pattern scan: passed via quality gate.
-- Full-history secret scan: passed via Gitleaks (`8.30.1`, `69 commits scanned`,
+- Full-history secret scan: passed via Gitleaks (`8.30.1`, `70 commits scanned`,
   `no leaks found`).
 - Operational smoke checks:
   - `cli.macli snapshot`: passed.
@@ -48,7 +48,7 @@ release gate for this publication decision.
 
 - Clone path: `app-accounting-modular-clean-28f340b`
 - Python: `3.14`
-- Validated commit in clone: `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e`
+- Validated commit in clone: `8c9b35778b2fdfa62246948daefa696d5636b854`
 
 ### Commands and outcomes
 
@@ -77,9 +77,9 @@ release gate for this publication decision.
 - Tool: Gitleaks
 - Version: `8.30.1`
 - Command:
-  - `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-28f340b.json`
+  - `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-8c9b357.json`
 - Result:
-  - `69 commits scanned`
+  - `70 commits scanned`
   - `no leaks found`
 - Disposition: PASS (no findings, no false positives to adjudicate)
 
@@ -87,7 +87,7 @@ release gate for this publication decision.
 
 - Workflow files present and active in repository metadata: `CI`, `CodeQL`.
 - `gh run list` does not show hosted runs for commit
-  `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e`.
+  `8c9b35778b2fdfa62246948daefa696d5636b854`.
 - Manual dispatch attempt result:
   - `gh workflow run CI --ref main` -> HTTP 422 (`workflow_dispatch` trigger not configured).
 
