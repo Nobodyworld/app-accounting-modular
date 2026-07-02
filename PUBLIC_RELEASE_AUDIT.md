@@ -34,7 +34,7 @@ release gate for this publication decision.
 - Dependency integrity: `pip check` passed.
 - Dependency vulnerability scan: `pip-audit` passed.
 - Current-tree secret pattern scan: passed via quality gate.
-- Full-history secret scan: passed via Gitleaks (`8.30.1`, `70 commits scanned`,
+- Full-history secret scan: passed via Gitleaks (`8.30.1`, `72 commits scanned`,
   `no leaks found`).
 - Operational smoke checks:
   - `cli.macli snapshot`: passed.
@@ -79,7 +79,7 @@ release gate for this publication decision.
 - Command:
   - `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-8c9b357.json`
 - Result:
-  - `70 commits scanned`
+  - `72 commits scanned`
   - `no leaks found`
 - Disposition: PASS (no findings, no false positives to adjudicate)
 

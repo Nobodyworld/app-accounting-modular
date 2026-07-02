@@ -5,7 +5,8 @@
 - 2026-07-02: Finalized public-release validation on commit
   `28f340b4c2663f645b6aaa3539fb5c2342d0ab8e` with clean-clone quality-gate
   pass (`253` tests, `86.35%` coverage), full-history Gitleaks pass (`69`
-  commits scanned, no leaks), operational CLI/API/Streamlit smoke validation,
+  commits scanned at initial run, `72` commits scanned on final-head rerun,
+  both no leaks), operational CLI/API/Streamlit smoke validation,
   and explicit hosted CI disposition (no run evidence for this commit and
   `workflow_dispatch` unavailable for `CI`).
 
