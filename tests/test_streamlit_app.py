@@ -355,18 +355,18 @@ def test_snapshot_provenance_and_diagnostics_rendered(fake_runtime):
     # After successful snapshot, AppTest captures all markdown and dataframe output.
     # Check for provenance section header.
     markdown_content = [el.value for el in at.markdown]
-    assert any(
-        "Provider provenance" in str(el) for el in markdown_content
-    ), "Provider provenance section should be rendered"
-    assert any(
-        "Cache and freshness diagnostics" in str(el) for el in markdown_content
-    ), "Cache diagnostics section should be rendered"
-    assert any(
-        "Health and readiness state" in str(el) for el in markdown_content
-    ), "Health/readiness section should be rendered"
-    assert any(
-        "Journal-control status" in str(el) for el in markdown_content
-    ), "Journal control section should be rendered"
+    assert any("Provider provenance" in str(el) for el in markdown_content), (
+        "Provider provenance section should be rendered"
+    )
+    assert any("Cache and freshness diagnostics" in str(el) for el in markdown_content), (
+        "Cache diagnostics section should be rendered"
+    )
+    assert any("Health and readiness state" in str(el) for el in markdown_content), (
+        "Health/readiness section should be rendered"
+    )
+    assert any("Journal-control status" in str(el) for el in markdown_content), (
+        "Journal control section should be rendered"
+    )
 
     # Verify cache stats dataframe is present (index 5: provider table, FX, commodity, tax, provenance, cache).
     dataframes = at.dataframe
@@ -455,15 +455,15 @@ def test_snapshot_generation_failure_shows_error_state(fake_runtime, monkeypatch
     at.run(timeout=20)
 
     # After snapshot generation failure, error should be displayed.
-    assert any(
-        "Snapshot request failed" in err.value for err in at.error
-    ), "Error state should display 'Snapshot request failed' message"
+    assert any("Snapshot request failed" in err.value for err in at.error), (
+        "Error state should display 'Snapshot request failed' message"
+    )
 
     # Verify that no success message is shown.
     success_msgs = [el.value for el in at.success]
-    assert not any(
-        "Snapshot generated" in str(el) for el in success_msgs
-    ), "Success message should not appear after failed snapshot"
+    assert not any("Snapshot generated" in str(el) for el in success_msgs), (
+        "Success message should not appear after failed snapshot"
+    )
 
 
 def test_stale_success_cleared_after_failed_snapshot(fake_runtime, monkeypatch):
@@ -533,9 +533,9 @@ def test_stale_success_cleared_after_failed_snapshot(fake_runtime, monkeypatch):
     at.run(timeout=20)
 
     # After failed snapshot, error should be visible and success should be cleared.
-    assert any(
-        "Snapshot request failed" in err.value for err in at.error
-    ), "Error state should appear after failed snapshot"
+    assert any("Snapshot request failed" in err.value for err in at.error), (
+        "Error state should appear after failed snapshot"
+    )
 
     # Clear cache and rerun to verify stale state is not persisted.
     st.cache_data.clear()
@@ -544,6 +544,6 @@ def test_stale_success_cleared_after_failed_snapshot(fake_runtime, monkeypatch):
 
     # Confirm initial state has no success message.
     initial_success = [el.value for el in at2.success]
-    assert not any(
-        "Snapshot generated" in str(el) for el in initial_success
-    ), "Fresh run should not have stale success state"
+    assert not any("Snapshot generated" in str(el) for el in initial_success), (
+        "Fresh run should not have stale success state"
+    )
