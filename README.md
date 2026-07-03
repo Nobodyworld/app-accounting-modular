@@ -1,7 +1,5 @@
 # Modular Accounting
 
-[![CI](https://github.com/Nobodyworld/app-accounting-modular/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nobodyworld/app-accounting-modular/actions/workflows/ci.yml)
-
 A modular Python accounting toolkit that separates ledger and financial-control logic from replaceable FX, commodity, and tax-data providers.
 
 ## Streamlit demonstration interface using controlled sample data
@@ -103,4 +101,4 @@ python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json -
 
 This repository is licensed under the [Apache License 2.0](LICENSE). Attribution is recorded in [NOTICE](NOTICE).
 
-Contributions are welcome. Review [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md) before opening a change.
+Contributions are welcome. Review [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md), [docs/CODE_OF_CONDUCT.md](docs/CODE_OF_CONDUCT.md), and [docs/SECURITY.md](docs/SECURITY.md) before opening a change.

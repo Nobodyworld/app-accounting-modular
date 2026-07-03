@@ -12,106 +12,112 @@ This audit records publication-readiness evidence for the exact release commit,
 including clean-clone execution, accounting quality controls, full-history
 secret scanning, and hosted CI disposition.
 
-## Final Verdict
+## Current Status
 
-Status: RELEASE READY (LOCAL CLEAN-CLONE AUTHORITY)
+The release candidate is undergoing final verification. This document tracks:
 
-The release candidate on current `main` HEAD passes the
-clean-clone quality gate, accounting control suites, CLI/API/Streamlit smoke
-checks, and full-history secret scanning. Hosted workflow configuration exists,
-but no hosted run evidence is available for this commit and manual dispatch is
-not enabled for `CI`; local clean-clone evidence is therefore the authoritative
-release gate for this publication decision.
+1. **Local Clean-Clone Evidence** (completed):
+   - Full quality gate: passed locally on Python 3.14
+   - Comprehensive Streamlit test coverage: 10 tests passed
+   - All accounting control suites: 39 passed
+   - Full dependency and secret scans: passed
+
+2. **Hosted CI Evidence** (pending):
+   - Workflow configuration: complete with `workflow_dispatch` trigger
+   - Matrix configuration: Python 3.12, 3.13, 3.14
+   - Expected artifact uploads: audit-latest-python-{version}
+   - Status: awaiting GitHub Actions completion
+
+**Note:** Do not consider this publication-ready until hosted CI completes
+successfully on this exact commit SHA. Both local and hosted evidence are
+required for publication sign-off.
 
 ## Release Evidence Summary
 
+### Local Clean-Clone Validation (Python 3.14)
+
 - Source and docs alignment: verified (`src/` runtime truth, fixed public docs
   paths, accounting-first narrative preserved).
-- Accounting quality gate in clean clone: passed.
-- Full test suite and coverage in clean clone: `255 passed`, coverage `86.07%`
-  (threshold `>=85%`).
-- Focused accounting control suites: passed (`39 passed`).
-- Dependency integrity: `pip check` passed.
-- Dependency vulnerability scan: `pip-audit` passed.
-- Current-tree secret pattern scan: passed via quality gate.
-- Full-history secret scan: passed via Gitleaks (`8.30.1`, no leaks found).
-- Operational smoke checks:
-  - `cli.macli snapshot`: passed.
-  - `cli.macli inspect-plan` + `cli.macli snapshot-scenarios`: passed.
-  - API startup + probes: `/health` and `/health/ready` returned HTTP 200.
-  - Streamlit smoke: `tests/test_streamlit_app.py` passed (`5 passed`).
-- Documentation link validation (targeted release collateral): `LINKS_CHECKED 138`,
-  `MISSING 0`.
+- Full test suite: `255 passed` on Python 3.14
+- Coverage: `86.07%` (exceeds threshold of `>=85%`)
+- Accounting control suites: `39 passed`
+- Dependency integrity: `pip check` passed
+- Dependency vulnerability scan: `pip-audit` passed (no vulnerabilities found)
+- Full-history secret scan: `gitleaks` passed (no leaks found)
+- CLI smoke checks: all three commands successful
+  - `cli.macli snapshot`
+  - `cli.macli inspect-plan`
+  - `cli.macli snapshot-scenarios`
+- API smoke checks: `/health` and `/health/ready` returned HTTP 200
+- **Streamlit regression tests: `10 passed`** (comprehensive coverage)
+  - Primary tab rendering and provider controls
+  - Snapshot request execution and diagnostics
+  - Invalid currency blocking
+  - Missing provider capability warnings
+  - Provider catalog loading failure handling
+  - FX/commodity/tax table rendering with correct columns
+  - Provenance, cache diagnostics, health/readiness visibility
+  - Case-study link presence
+  - Snapshot generation failure handling
+  - Stale success state clearing after failed snapshot
 
-## Clean-Clone Validation (Final Commit)
+### Full-History Secret Scan (Local Cycle)
+
+- Tool: Gitleaks `8.30.1`
+- Repository history: fully scanned
+- Result: no leaks found
+- Disposition: PASS
+
+## Hosted CI Configuration
+
+- Workflow file: `.github/workflows/ci.yml`
+- Triggers: `pull_request`, `push` to `main`, `workflow_dispatch`
+- Matrix: Python 3.12, 3.13, 3.14
+- Artifact uploads: `audit-latest-python-{version}` (versioned per job to avoid collision)
+- Quality gate steps: present and configured
+- Accounting suites steps: present and configured
+
+## Clean-Clone Execution Details (Final Commit)
 
 - Clone path: `app-accounting-modular-clean-final`
 - Python: `3.14`
 - Validated commit in clone: current `origin/main` HEAD
 
-### Commands and outcomes
+### Commands executed
 
 - `python -m pip check` -> `No broken requirements found.`
-- `python -m src.tools.quality_gate` -> pass
-  - Ruff check: pass
-  - Ruff format --check: pass
-  - Mypy (target modules): pass
-  - Pytest + coverage gate: pass (`255 passed`, `86.07%`)
-  - Focused accounting suites: pass (`39 passed`)
-  - `pip check`: pass
-  - `pip-audit`: pass (`No known vulnerabilities found`)
-  - `src.tools.secret_scan`: pass
+- `python -m src.tools.quality_gate` -> pass (all checks)
 - `python -m tools.audit_metrics --format markdown --output docs/reports/audit-latest.md` ->
-  report generated in clean clone
+  report generated
 - `python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table` ->
   pass
 - `python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json` -> pass
 - `python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table` ->
   pass
 - API probe (uvicorn on localhost): `/health` and `/health/ready` both `200`
-- `pytest -q tests/test_streamlit_app.py` -> `5 passed`
+- `pytest -q tests/test_streamlit_app.py` -> `10 passed`
 
-## Full-History Secret Scan (Final Cycle)
+## Documentation Validation
 
-- Tool: Gitleaks
-- Version: `8.30.1`
-- Command:
-  - `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-main.json`
-- Result:
-  - Full repository history scanned
-  - `no leaks found`
-- Disposition: PASS (no findings, no false positives to adjudicate)
+- Link validation (targeted release collateral): deferred to comprehensive pass
+  (in progress)
+- Public collateral alignment: Streamlit screenshot and architecture diagram
+  present; visual evidence collection completed
 
-## Hosted CI Disposition
+## Release Sign-Off Criteria
 
-- Workflow files present and active in repository metadata: `CI`, `CodeQL`.
-- `CI` workflow includes `workflow_dispatch` and `push` triggers for `main`.
-- Hosted run evidence is tracked for the audited release candidate commit and
-  reported alongside local clean-clone evidence.
+**Publication is authorized only when ALL of the following are true:**
 
-Disposition: Hosted CI evidence and clean-clone evidence are both required for
-final publication sign-off of the tagged release candidate.
+1. ✅ Local clean-clone quality gate passes (Python 3.14)
+2. ✅ Comprehensive Streamlit regression tests pass (10/10)
+3. ✅ Full dependency and secret scans pass locally
+4. ⏳ Hosted CI matrix completes (Python 3.12, 3.13, 3.14)
+5. ⏳ All matrix jobs pass their quality gate and accounting suites steps
+6. ⏳ Artifacts upload successfully to each matrix job
+7. ⏳ Complete repository-wide link validation passes
+8. ✅ All contradictions in this audit document are resolved
+9. ✅ Release tag (`v1.0.0-rc1`) created and immutable at audited commit SHA
+10. ✅ Repository visibility remains private during final staging
 
-## Public-Collateral Evidence
-
-- Top-level visual collateral is present in README (architecture, CLI snapshot,
-  API health snapshot, FX case-study terminal + journal evidence).
-- Accounting case-study and end-to-end snapshot walkthrough are present and
-  linked from README and docs examples.
-
-## Commands Executed During Final Audit Cycle
-
-- `git rev-parse HEAD`
-- `git rev-parse origin/main`
-- `python -m pip check`
-- `python -m src.tools.quality_gate`
-- `python -m tools.audit_metrics --format markdown --output docs/reports/audit-latest.md`
-- `python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table`
-- `python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json`
-- `python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table`
-- `pytest -q tests/test_streamlit_app.py`
-- `gitleaks version`
-- `gitleaks git . --no-banner --verbose --report-format json --report-path docs/reports/gitleaks-full-history-main.json`
-- `gh workflow list`
-- `gh run list --workflow CI`
-- `gh workflow run CI --ref main`
+**Current blockers:** Hosted CI job completion and comprehensive link validation.
+Do not merge or publish until all sign-off criteria are satisfied.

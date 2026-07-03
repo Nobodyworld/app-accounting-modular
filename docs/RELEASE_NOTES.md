@@ -114,10 +114,11 @@
 - The quality gate still installs `pip-audit` dynamically; a future cleanup
   should rely on the pinned development dependency already present in
   `requirements-dev.txt`.
-- Employer-facing visual evidence should be improved with an architecture
-  diagram, CLI snapshot, API or Streamlit screenshot, and foreign-currency
-  journal image near the top-level project collateral.
+- Streamlit deprecation warnings for `use_container_width` should be addressed
+  by replacing with `width` parameter in future maintenance.
 - Legacy TODOs still require priority/effort tags; future cleanup will align
   the remaining backlog with the new convention.
 - OTLP export is optional; install the OpenTelemetry extras noted above to ship
   traces to a collector.
+- Comprehensive link validation across all documentation should be run
+  periodically to ensure release collateral remains current as code evolves.
