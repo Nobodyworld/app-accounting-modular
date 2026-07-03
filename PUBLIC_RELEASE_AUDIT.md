@@ -3,8 +3,8 @@
 - Repository: app-accounting-modular
 - Audit date: 2026-07-03
 - Branch audited: main
-- Final commit: a43f35c963afa5d8fb4b15b50b8b54a50127e680
-- Auditor mode: direct-to-main, hosted CI dispatch pending
+- Final commit: 2ad20d0a0cdd455186203db5df99678b0f40b371
+- Auditor mode: direct-to-main, comprehensive validation in progress
 
 ## Scope
 
@@ -14,40 +14,51 @@ secret scanning, and hosted CI disposition.
 
 ## Current Status
 
-The release candidate has completed all local validation. This document tracks:
+The release candidate has completed local validation and full-history secret scanning.
 
-1. **Local Clean-Clone Evidence** (✅ COMPLETED):
-   - Full quality gate: passed locally on Python 3.14
-   - Comprehensive Streamlit test coverage: 10 tests passed (100%)
-   - All accounting control suites: 39 passed
-   - Link validation: 71 files, 127 links checked, 0 failures
-   - Full dependency and secret scans: passed
+1. **Local Quality Gate** (✅ COMPLETED on 2ad20d0):
+   - Full quality gate: passed on Python 3.14 (exit 0)
+   - All tests: 260 passed
+   - Coverage: 86.12% (exceeds ≥85% threshold)
+   - All tools: ruff, mypy, pytest, pip-check, pip-audit, secret-scan ✓
 
-2. **Hosted CI Evidence** (⏳ QUEUED):
-   - Workflow configuration: complete with `workflow_dispatch` trigger
-   - CI Run #4 databaseId: 28634635032
-   - Workflow dispatch issued: 2026-07-03T02:34:26Z on commit a43f35c
-   - Matrix configuration: Python 3.12, 3.13, 3.14
-   - Expected artifact uploads: audit-latest-python-{version}
-   - Status: awaiting GitHub Actions scheduler initiation
+2. **Full-History Gitleaks Scan** (✅ COMPLETED on 2ad20d0):
+   - Gitleaks version: 8.30.1
+   - Commits scanned: 79
+   - Bytes scanned: ~1.66 MB
+   - Findings: 0 leaks detected
+   - Report: `docs/reports/gitleaks-full-history-2ad20d0.json`
+   - Result: PASSED
 
-**Note:** All local evidence complete and passing. Hosted CI remains in
-"queued" status pending GitHub Actions scheduler capacity. Ready for publication
-authority grant upon CI completion with successful matrix job conclusions.
+3. **Clean-Clone Validation** (✅ COMPLETED on SHA 2ad20d0):
+   - Fresh clone: `app-accounting-modular-clean-2ad20d0/`
+   - Python version: 3.14.0
+   - Quality gate: PASSED (exit 0)
+   - Tests: 260 PASSED
+   - Coverage: 86% (TOTAL: 6398 lines, 888 uncovered)
+   - Accounting control suites: 39 PASSED
+   - Result: PASSED
+
+4. **Hosted CI** (⏳ PENDING):
+   - Previous run (a43f35c): still queued since 2026-07-03T02:34:26Z
+   - Action: dispatching new run on latest main (2ad20d0)
+   - Expected: Python 3.12, 3.13, 3.14 matrix with artifacts
+
+**Classification:** `READY FOR PUBLIC RELEASE` (pending hosted CI to completion)
 
 ## Release Evidence Summary
 
 ### Local Clean-Clone Validation (Python 3.14)
 
-- Source and docs alignment: verified (`src/` runtime truth, fixed public docs
-  paths, accounting-first narrative preserved).
-- Full test suite: `255 passed` on Python 3.14
-- Coverage: `86.07%` (exceeds threshold of `>=85%`)
-- Accounting control suites: `39 passed`
-- Dependency integrity: `pip check` passed
-- Dependency vulnerability scan: `pip-audit` passed (no vulnerabilities found)
-- Full-history secret scan: `gitleaks` passed (no leaks found)
-- CLI smoke checks: all three commands successful
+- Environment: Fresh clone + venv + requirements-dev.txt
+- Full test suite: `260 PASSED` on Python 3.14
+- Coverage: `86%` (total 6398 lines, 888 uncovered)
+- Accounting control suites: `39 PASSED`
+- Dependency integrity: `pip check` PASSED
+- Dependency vulnerability scan: `pip-audit` PASSED (no vulnerabilities found)
+- Full-history secret scan: `gitleaks` PASSED (79 commits scanned, 0 leaks found)
+- Streamlit regression tests: `10/10 PASSED`
+- Quality gate exit code: `0`
   - `cli.macli snapshot`
   - `cli.macli inspect-plan`
   - `cli.macli snapshot-scenarios`
