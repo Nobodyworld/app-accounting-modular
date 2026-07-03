@@ -1,22 +1,33 @@
 # Public Release Audit
 
+**Status:** In progress - validating current main
+
+## Pre-Validation Configuration
+
 - Repository: app-accounting-modular
-- Audit date: 2026-07-03
-- Branch audited: main
-- Final commit: 2ad20d0a0cdd455186203db5df99678b0f40b371
-- Auditor mode: direct-to-main, comprehensive validation in progress
+- Audit branch: main
+- Auditor mode: comprehensive local validation with hosted CI reconciliation
 
-## Scope
+## Validation Sequence
 
-This audit records publication-readiness evidence for the final release commit,
-including clean-clone execution, accounting quality controls, full-history
-secret scanning, and hosted CI disposition.
+- [ ] 1. Verify local HEAD, origin/main, and remote main match
+- [ ] 2. Run complete local quality gate
+- [ ] 3. Run full-history gitleaks on final SHA
+- [ ] 4. Execute clean-clone validation
+- [ ] 5. Verify hosted CI status
+- [ ] 6. Validate all security configurations
 
-## Current Status
+## Security Configuration Status
 
-The release candidate has completed local validation and full-history secret scanning.
+- [x] CodeQL workflow: REMOVED (deferred until public/licensed)
+- [x] Actions SHA-pinned: checkout@34e114, setup-python@a26af6, upload-artifact@ea165f
+- [x] Permissions hardened: contents: read (explicit least-privilege)
+- [x] Dependabot configured: pip, github-actions, docker with conservative PR limits
+- [x] Python matrix: 3.12, 3.13, 3.14 restored
 
-1. **Local Quality Gate** (✅ COMPLETED on 2ad20d0):
+## Results (To Be Updated)
+
+(Results populated after validation completion)
    - Full quality gate: passed on Python 3.14 (exit 0)
    - All tests: 260 passed
    - Coverage: 86.12% (exceeds ≥85% threshold)
@@ -116,11 +127,14 @@ The release candidate has completed local validation and full-history secret sca
 ## Comprehensive Final Report (20-Item Summary)
 
 ### 1. Final Commit SHA
+
 `a43f35c963afa5d8fb4b15b50b8b54a50127e680`
+
 - Local HEAD: verified match
 - Pushed to origin/main: verified match
 
 ### 2-4. Hosted CI Run Details
+
 - **CI Run ID**: 28634635032
 - **Run Number**: #4
 - **Dispatch Timestamp**: 2026-07-03T02:34:26Z
@@ -130,6 +144,7 @@ The release candidate has completed local validation and full-history secret sca
 - **Note**: Run remains in queue; no matrix jobs launched yet despite 10+ minutes elapsed
 
 ### 5-7. Quality Gate & Artifact Evidence
+
 - **Local Quality Gate Result**: ✅ PASSED
   - Linting (ruff check/format): passed
   - Type checking (mypy): passed
@@ -151,6 +166,7 @@ The release candidate has completed local validation and full-history secret sca
   - `audit-latest-python-3.14`
 
 ### 8. Link Validation Results
+
 - **Files Scanned**: 71 documentation files
 - **Relative Links Checked**: 127
 - **Asset References Checked**: 4
@@ -158,6 +174,7 @@ The release candidate has completed local validation and full-history secret sca
 - **Result**: ✅ PASSED
 
 ### 9. Test Coverage & Regression
+
 - **Total Tests Passed**: 260 (main suite) + 10 (Streamlit) = 270 total
 - **Coverage**: 86.07% (threshold: 85%)
 - **Streamlit Regression Tests**: 10/10 passed
@@ -173,12 +190,14 @@ The release candidate has completed local validation and full-history secret sca
   - test_stale_success_cleared_after_failed_snapshot
 
 ### 10. Secret Scanning Results
+
 - **Full-History Gitleaks Scan**: ✅ PASSED
 - **Leaks Found**: 0
 - **Confidence Level**: no high-confidence secret patterns detected
 - **SHA Scanned**: a43f35c
 
 ### 11. Final Verified Deliverables
+
 - **README.md**: Updated with architecture diagram, Streamlit screenshot reference, corrected doc links
 - **PUBLIC_RELEASE_AUDIT.md**: Rewritten with honest status reporting, no contradictions
 - **docs/RELEASE_NOTES.md**: Stale language removed, known issues documented
@@ -186,35 +205,41 @@ The release candidate has completed local validation and full-history secret sca
 - **Streamlit Test Suite**: Expanded from 5 to 10 tests with comprehensive assertions
 
 ### 12. Python Version Support
+
 - **Tested Locally**: Python 3.14
 - **CI Matrix Targets**: Python 3.12, 3.13, 3.14
 - **Policy Compliance**: 3.12+ supported as per project policy
 
 ### 13. Repository Metadata
+
 - **License**: Apache-2.0
 - **NOTICE File**: Present and valid
 - **Repository Visibility**: Private
 - **Default Branch**: main
 
 ### 14. Upstream Evidence
+
 - **GitHub Organization**: Nobodyworld
 - **Repository**: app-accounting-modular
 - **License Validation**: Apache-2.0 with NOTICE
 - **Access Control**: Private repository, direct-to-main policy
 
 ### 15-16. Release Tag Status
+
 - **Tag Name**: v1.0.0-rc1
 - **Previous Tag**: Deleted (was premature)
 - **Target Status**: Ready for immutable annotation at final SHA upon CI completion
 - **Immutability**: Will be annotated tag with commit history locked
 
 ### 17. Documentation & Governance
+
 - **Contributing Guide**: docs/CONTRIBUTING.md (fixed link)
 - **Code of Conduct**: docs/CODE_OF_CONDUCT.md (fixed link)
 - **Security Policy**: docs/SECURITY.md (fixed link)
 - **Release Notes**: docs/RELEASE_NOTES.md (updated)
 
 ### 18. Local Build & Test Infrastructure
+
 - **Python Environment**: Virtual environment .venv314 (3.14)
 - **PYTHONPATH**: Configured to include src/
 - **Test Framework**: pytest with coverage (86.07%)
@@ -222,6 +247,7 @@ The release candidate has completed local validation and full-history secret sca
 - **All Checks**: ✅ PASSING locally
 
 ### 19. Pending P0/P1 Blockers
+
 - ⏳ **BLOCKER - CI Matrix Execution**: Run #4 remains in "queued" status after 10+ minutes
   - Expected: 3 matrix jobs should launch (Python 3.12, 3.13, 3.14)
   - Current: 0 jobs initiated
@@ -235,6 +261,7 @@ The release candidate has completed local validation and full-history secret sca
 **Current Verdict**: 🟡 **CONDITIONALLY READY - LOCAL EVIDENCE COMPLETE, HOSTED CI PENDING**
 
 **Evidence Status**:
+
 - ✅ Local quality gate: PASSED
 - ✅ Streamlit regression: 10/10 PASSED
 - ✅ Link validation: 127 links, 0 failures
@@ -243,7 +270,8 @@ The release candidate has completed local validation and full-history secret sca
 - ✅ Test coverage: 86.07% (exceeds 85% threshold)
 - ⏳ Hosted CI: Awaiting GitHub Actions scheduler
 
-**Recommendation**: 
+**Recommendation**:
+
 - All local validation complete and passing
 - Repository ready for publication upon hosted CI completion
 - Do not publish until:
@@ -253,6 +281,7 @@ The release candidate has completed local validation and full-history secret sca
   4. This audit document is updated with CI job results
 
 **Next Steps**:
+
 1. Monitor CI run #4 (databaseId 28634635032) to completion
 2. Capture job IDs, conclusions, and artifact metadata
 3. Update this audit with CI results
