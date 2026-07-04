@@ -9,13 +9,12 @@ updates:
       time: "03:00"
     open-pull-requests-limit: 3
     groups:
-      minor-patch:
-        dependency-type: "minor-or-patch"
-      major:
-        dependency-type: major
-    allow:
-      - dependency-type: direct
-    auto-merge: false
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions updates
   - package-ecosystem: github-actions
@@ -26,13 +25,12 @@ updates:
       time: "03:00"
     open-pull-requests-limit: 2
     groups:
-      minor-patch:
-        dependency-type: "minor-or-patch"
-      major:
-        dependency-type: major
-    allow:
-      - dependency-type: direct
-    auto-merge: false
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Docker image updates
   - package-ecosystem: docker
@@ -43,10 +41,9 @@ updates:
       time: "03:00"
     open-pull-requests-limit: 1
     groups:
-      minor-patch:
-        dependency-type: "minor-or-patch"
-      major:
-        dependency-type: major
-    allow:
-      - dependency-type: direct
-    auto-merge: false
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

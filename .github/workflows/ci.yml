@@ -54,4 +54,4 @@ jobs:
         with:
           name: audit-latest-python-${{ matrix.python-version }}
           path: docs/reports/audit-latest.md
-          if-no-files-found: warn
+          if-no-files-found: error
