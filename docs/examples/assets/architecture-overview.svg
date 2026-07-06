@@ -41,7 +41,7 @@
   <rect x="0" y="0" width="1280" height="760" fill="url(#bg)"/>
 
   <text class="title" x="54" y="66">Modular Accounting - High-Level Architecture</text>
-  <text class="subtitle" x="54" y="94">Controlled demo topology for employer review and release-readiness documentation</text>
+  <text class="subtitle" x="54" y="94">Controlled demo topology for portfolio review and release-readiness documentation</text>
 
   <rect x="56" y="140" rx="14" ry="14" width="260" height="170" fill="#dff1ff" stroke="#86b3c9"/>
   <g clip-path="url(#entry-points-clip)">

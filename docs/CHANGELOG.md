@@ -8,8 +8,8 @@
   smoke validation, and hosted CI disposition evidence.
 
 - 2026-07-01: Corrected the Apache-2.0 license text, added `NOTICE`
-  attribution, and reframed public-release documentation as `KEEP PRIVATE -
-  NEAR READY` pending full-history secret scanning, final clean-clone
+  attribution, and reframed public-release documentation as pre-release
+  readiness pending full-history secret scanning, final clean-clone
   validation, hosted CI disposition, and visual evidence improvements.
 
 - 2026-06-30: Advanced public-readiness hardening by fixing async audit worker

@@ -40,7 +40,7 @@
 - Current-tree secret scanning is useful but does not inspect historical commits.
 - CI configuration is credible, but configuration alone is not the same as a
  recorded hosted run for the release candidate.
-- Visual evidence remains thin for employer review; top-level collateral should
+- Visual evidence remains thin for portfolio review; top-level collateral should
  add architecture, CLI, API or Streamlit, and foreign-currency journal images.
 
 ## Verification Baseline
