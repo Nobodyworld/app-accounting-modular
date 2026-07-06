@@ -6,6 +6,21 @@
       <stop offset="0%" stop-color="#f0f4f8"/>
       <stop offset="100%" stop-color="#d9e2ec"/>
     </linearGradient>
+    <clipPath id="col-stage-body">
+      <rect x="80" y="204" width="210" height="256"/>
+    </clipPath>
+    <clipPath id="col-debits-body">
+      <rect x="294" y="204" width="230" height="256"/>
+    </clipPath>
+    <clipPath id="col-credits-body">
+      <rect x="534" y="204" width="220" height="256"/>
+    </clipPath>
+    <clipPath id="col-rate-body">
+      <rect x="764" y="204" width="150" height="256"/>
+    </clipPath>
+    <clipPath id="col-provider-body">
+      <rect x="924" y="204" width="200" height="256"/>
+    </clipPath>
   </defs>
   <rect x="0" y="0" width="1200" height="760" fill="url(#bg2)"/>
   <rect x="40" y="34" width="1120" height="692" rx="14" fill="#ffffff" stroke="#bcccdc" stroke-width="2"/>
@@ -21,28 +36,39 @@
   <text x="930" y="175" fill="#f0f4f8" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">Provider</text>
 
   <rect x="68" y="204" width="1064" height="80" fill="#f8fafc"/>
-  <text x="86" y="235" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">Invoice recognition</text>
-  <text x="86" y="258" fill="#334e68" font-family="'Segoe UI', Arial, sans-serif" font-size="14">Dr Inventory 11,000</text>
-  <text x="300" y="246" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">11,000.00</text>
-  <text x="540" y="246" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">11,000.00</text>
-  <text x="770" y="246" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">EUR/USD 1.10</text>
-  <text x="930" y="246" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">fx_openexchangerates</text>
-
   <rect x="68" y="292" width="1064" height="80" fill="#eef2f7"/>
-  <text x="86" y="323" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">Month-end remeasurement</text>
-  <text x="86" y="346" fill="#334e68" font-family="'Segoe UI', Arial, sans-serif" font-size="14">Dr Unrealized FX Loss 200</text>
-  <text x="300" y="334" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">200.00</text>
-  <text x="540" y="334" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">200.00</text>
-  <text x="770" y="334" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">EUR/USD 1.12</text>
-  <text x="930" y="334" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">fx_openexchangerates</text>
-
   <rect x="68" y="380" width="1064" height="80" fill="#f8fafc"/>
-  <text x="86" y="411" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">Settlement</text>
-  <text x="86" y="434" fill="#334e68" font-family="'Segoe UI', Arial, sans-serif" font-size="14">Dr AP 11,200 + Dr Realized FX Loss 100</text>
-  <text x="300" y="422" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">11,300.00</text>
-  <text x="540" y="422" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">11,300.00</text>
-  <text x="770" y="422" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">EUR/USD 1.13</text>
-  <text x="930" y="422" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">fx_openexchangerates</text>
+  <g clip-path="url(#col-stage-body)">
+    <text x="86" y="235" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">Invoice recognition</text>
+    <text x="86" y="258" fill="#334e68" font-family="'Segoe UI', Arial, sans-serif" font-size="14">Dr Inventory 11,000</text>
+    <text x="86" y="323" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">Month-end remeasurement</text>
+    <text x="86" y="346" fill="#334e68" font-family="'Segoe UI', Arial, sans-serif" font-size="14">Dr Unrealized FX Loss 200</text>
+    <text x="86" y="411" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">Settlement</text>
+    <text x="86" y="434" fill="#334e68" font-family="'Segoe UI', Arial, sans-serif" font-size="14">
+      <tspan x="86" dy="0">Dr AP 11,200 +</tspan>
+      <tspan x="86" dy="17">Dr Realized FX Loss 100</tspan>
+    </text>
+  </g>
+  <g clip-path="url(#col-debits-body)">
+    <text x="300" y="246" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">11,000.00</text>
+    <text x="300" y="334" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">200.00</text>
+    <text x="300" y="422" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">11,300.00</text>
+  </g>
+  <g clip-path="url(#col-credits-body)">
+    <text x="540" y="246" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">11,000.00</text>
+    <text x="540" y="334" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">200.00</text>
+    <text x="540" y="422" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">11,300.00</text>
+  </g>
+  <g clip-path="url(#col-rate-body)">
+    <text x="770" y="246" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">EUR/USD 1.10</text>
+    <text x="770" y="334" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">EUR/USD 1.12</text>
+    <text x="770" y="422" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">EUR/USD 1.13</text>
+  </g>
+  <g clip-path="url(#col-provider-body)">
+    <text x="930" y="246" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">fx_openexchangerates</text>
+    <text x="930" y="334" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">fx_openexchangerates</text>
+    <text x="930" y="422" fill="#102a43" font-family="'Segoe UI', Arial, sans-serif" font-size="16">fx_openexchangerates</text>
+  </g>
 
   <rect x="68" y="490" width="1064" height="146" rx="10" fill="#102a43"/>
   <text x="90" y="526" fill="#f0f4f8" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700">Control Outcome</text>
