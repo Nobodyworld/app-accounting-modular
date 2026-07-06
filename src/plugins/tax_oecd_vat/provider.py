@@ -18,7 +18,7 @@ class OECDEVATProvider:
         yield TaxRule(
             jurisdiction="EU-FR",
             scope="vat",
-            expression={"rate": 0.20},
+            expression='{"rate": 0.20}',
             valid_from=today.replace(month=1, day=1),
             source=self.name,
             precedence=100,
@@ -27,7 +27,7 @@ class OECDEVATProvider:
         yield TaxRule(
             jurisdiction="EU-DE",
             scope="vat",
-            expression={"rate": 0.19},
+            expression='{"rate": 0.19}',
             valid_from=today.replace(month=1, day=1),
             source=self.name,
             precedence=100,
@@ -36,7 +36,7 @@ class OECDEVATProvider:
         yield TaxRule(
             jurisdiction="EU-IE",
             scope="vat",
-            expression={"rate": 0.23},
+            expression='{"rate": 0.23}',
             valid_from=today.replace(month=1, day=1),
             source=self.name,
             precedence=100,

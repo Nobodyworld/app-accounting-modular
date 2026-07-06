@@ -49,10 +49,18 @@ class ScenarioPlanFormatError(ScenarioPlanError):
     """Raised when the raw plan bytes cannot be decoded."""
 
 
-def _coerce_to_str(value: str | bytes) -> str:
+def _coerce_to_str(value: object) -> str:
     """Return a text representation, decoding byte sequences when needed."""
 
-    return value.decode() if isinstance(value, bytes) else value
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bytes):
+        return value.decode()
+    if isinstance(value, bytearray):
+        return bytes(value).decode()
+    if isinstance(value, memoryview):
+        return bytes(value).decode()
+    raise TypeError("Expected string-like value")
 
 
 def _normalise_tags(tags: Iterable[str] | None) -> tuple[str, ...]:

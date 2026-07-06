@@ -52,7 +52,7 @@ warn_unreachable = true
 show_error_codes = true
 pretty = true
 color_output = true
-mypy_path = ["."]
+mypy_path = ["src", "."]
 files = [
   "src/apps/api/config.py",
   "src/apps/api/services/forecast_service.py",

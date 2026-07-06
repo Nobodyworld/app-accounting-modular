@@ -210,7 +210,7 @@ def format_scenario_batch_table(batch: ScenarioBatchResult) -> str:
 def snapshot_to_payload(snapshot: DataSnapshot, diagnostics: SnapshotDiagnostics | None = None) -> dict[str, object]:
     """Convert snapshot data into a JSON-serialisable payload."""
 
-    payload = {
+    payload: dict[str, object] = {
         "fx_rates": [
             {
                 "base_currency": rate.base_currency,

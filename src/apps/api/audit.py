@@ -17,7 +17,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session
 
 # Import audit models
-from .models import AuditAction, AuditLog
+from .models.models import AuditAction, AuditLog
 
 __all__ = [
     "AuditAction",

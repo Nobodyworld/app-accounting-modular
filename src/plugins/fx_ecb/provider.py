@@ -32,5 +32,5 @@ class ECBFXProvider:
         return out
 
 
-def provider():
+def provider() -> ECBFXProvider:
     return ECBFXProvider()

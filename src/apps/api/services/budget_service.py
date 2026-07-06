@@ -527,10 +527,19 @@ class BudgetService:
         forecast_points = output.summary.get("forecast", [])
         forecast_result = None
         if forecast_points:
+            model_order_raw = output.summary.get("model_order", (0, 0, 0))
+            if isinstance(model_order_raw, (list, tuple)) and len(model_order_raw) >= 3:
+                model_order: tuple[int, int, int] = (
+                    int(model_order_raw[0]),
+                    int(model_order_raw[1]),
+                    int(model_order_raw[2]),
+                )
+            else:
+                model_order = (0, 0, 0)
             forecast_result = ForecastResult(
                 horizon=output.summary.get("horizon", 0),
                 points=[(point[0], float(point[1])) for point in forecast_points],
-                model_order=tuple(output.summary.get("model_order", (0, 0, 0))),
+                model_order=model_order,
                 diagnostics=output.summary.get("diagnostics"),
                 timezone=output.summary.get("timezone"),
                 model=output.summary.get("model", "arima"),
@@ -589,8 +598,10 @@ class BudgetService:
             context = self._serialise_metadata(payload.metadata)
             csv_data = payload.csv_export
 
+        plan_id = self._require_int(plan.id, "forecast plan")
+
         output = ForecastOutput(
-            plan_id=plan.id,
+            plan_id=plan_id,
             report_type=report_type,
             summary=summary,
             context=context,
@@ -648,7 +659,7 @@ class BudgetService:
         writer = csv.writer(buffer)
         writer.writerow(["period", "amount", "type"])
         for period, amount in historical:
-            label: str = period.isoformat() if hasattr(period, "isoformat") else str(period)
+            label = period.isoformat() if isinstance(period, date) else str(period)
             writer.writerow([label, f"{amount:.2f}", "historical"])
         if forecast:
             for period, amount in forecast.points:

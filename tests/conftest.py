@@ -14,7 +14,7 @@ def _ensure_multipart_dependency() -> None:
     """Ensure python-multipart is importable; fall back to stub when absent."""
 
     try:
-        import python_multipart  # type: ignore  # noqa: F401
+        import python_multipart  # noqa: F401
 
         return
     except ImportError:

@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import ExitStack, asynccontextmanager, contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
+from importlib import import_module
 from typing import Any
 from uuid import uuid4
 
@@ -162,20 +163,21 @@ def configure_tracing(
         return _CONFIG
 
     try:  # pragma: no cover - exercised when OpenTelemetry is installed
-        from opentelemetry import trace
-        from opentelemetry.sdk.resources import Resource
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import (
-            BatchSpanProcessor,
-            ConsoleSpanExporter,
-        )
+        trace = import_module("opentelemetry.trace")
+        resources_module = import_module("opentelemetry.sdk.resources")
+        trace_module = import_module("opentelemetry.sdk.trace")
+        export_module = import_module("opentelemetry.sdk.trace.export")
+
+        Resource = resources_module.Resource
+        TracerProvider = trace_module.TracerProvider
+        BatchSpanProcessor = export_module.BatchSpanProcessor
+        ConsoleSpanExporter = export_module.ConsoleSpanExporter
 
         provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
         if exporter == "otlp":
             try:
-                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-                    OTLPSpanExporter,
-                )
+                otlp_module = import_module("opentelemetry.exporter.otlp.proto.http.trace_exporter")
+                OTLPSpanExporter = otlp_module.OTLPSpanExporter
 
                 otlp_kwargs: dict[str, Any] = {"endpoint": otel_endpoint} if otel_endpoint else {}
                 provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(**otlp_kwargs)))

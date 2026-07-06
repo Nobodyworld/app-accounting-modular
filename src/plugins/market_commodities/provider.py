@@ -28,7 +28,7 @@ class CommodityFuturesProvider:
         idx = 0
         while current <= end:
             yield Price(
-                instrument_id=None,
+                instrument_id=0,  # overwritten by MarketService before persistence
                 date=current,
                 close=round(self.base_price + idx * self.daily_drift, 4),
                 provider=self.name,

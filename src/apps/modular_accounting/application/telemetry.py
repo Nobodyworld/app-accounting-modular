@@ -17,11 +17,17 @@ class SnapshotTelemetry(Protocol):
     def cache_observer(self, cache_name: str) -> CacheObserver:
         """Return a cache observer that records metrics for ``cache_name``."""
 
+        ...
+
     def record_latency(self, *, status: str, duration: float) -> None:
         """Record the time spent building a snapshot with ``status`` outcome."""
 
+        ...
+
     def record_failure(self, *, stage: str) -> None:
         """Increment failure counters for the orchestration ``stage``."""
+
+        ...
 
 
 _logger = logging.getLogger(__name__)

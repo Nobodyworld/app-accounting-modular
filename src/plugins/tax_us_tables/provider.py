@@ -18,7 +18,7 @@ class USTaxTableProvider:
         yield TaxRule(
             jurisdiction="US-FED",
             scope="income",
-            expression={"rate": 0.21},
+            expression='{"rate": 0.21}',
             valid_from=today.replace(month=1, day=1),
             source=self.name,
             precedence=50,
@@ -27,7 +27,7 @@ class USTaxTableProvider:
         yield TaxRule(
             jurisdiction="US-CA",
             scope="income",
-            expression={"rate": 0.0884},
+            expression='{"rate": 0.0884}',
             valid_from=today.replace(month=1, day=1),
             source=self.name,
             precedence=60,
@@ -36,7 +36,7 @@ class USTaxTableProvider:
         yield TaxRule(
             jurisdiction="US-NY",
             scope="income",
-            expression={"rate": 0.0785},
+            expression='{"rate": 0.0785}',
             valid_from=today.replace(month=1, day=1),
             source=self.name,
             precedence=60,

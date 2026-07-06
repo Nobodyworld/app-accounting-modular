@@ -103,6 +103,9 @@ venv/
 .venv313
 .venv313/
 venv313
+.venv314
+.venv-clean
+
 ENV/
 env.bak/
 venv.bak/
@@ -713,4 +716,8 @@ runs/
 #########################################
 
 # Add project-specific patterns below this line
+.ruff_cache/
+.pytest_cache_runtime/
+.venv314/
+modacct.db
 

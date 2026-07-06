@@ -11,7 +11,7 @@ class _TelemetryStub:
     def __init__(self) -> None:
         self.records: list[dict[str, object]] = []
 
-    def record_evaluation(self, **payload: object) -> None:  # type: ignore[override]
+    def record_evaluation(self, **payload: object) -> None:
         self.records.append(payload)
 
 

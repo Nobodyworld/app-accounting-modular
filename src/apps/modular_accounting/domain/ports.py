@@ -15,6 +15,8 @@ class FXDataPort(Protocol):
     def get_rates(self, base_currency: str) -> Iterable[FXRate]:
         """Fetch FX rates expressed against ``base_currency``."""
 
+        ...
+
 
 @runtime_checkable
 class CommodityDataPort(Protocol):
@@ -22,6 +24,8 @@ class CommodityDataPort(Protocol):
 
     def get_quotes(self, symbols: Sequence[str]) -> Iterable[CommodityQuote]:
         """Fetch commodity quotes for the provided symbols."""
+
+        ...
 
 
 @runtime_checkable
@@ -35,3 +39,5 @@ class TaxDataPort(Protocol):
         calling the port and passes ``None`` when the default/global rules are
         desired.
         """
+
+        ...

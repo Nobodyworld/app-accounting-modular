@@ -429,7 +429,7 @@ class MetricsRegistry:
         """Return the Prometheus exposition for the registry."""
         # Prefer the native prometheus client renderer when available.
         try:
-            import prometheus_client  # type: ignore[import-not-found]
+            import prometheus_client
 
             if not hasattr(self.registry, "metrics"):
                 return prometheus_client.generate_latest(self.registry)
