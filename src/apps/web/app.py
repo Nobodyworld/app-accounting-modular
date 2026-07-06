@@ -356,31 +356,35 @@ with snapshot_tab:
             disabled=not can_generate,
             type="primary",
         ):
-            snapshot_payload, snapshot_error = _build_snapshot(
-                base_currency=base_currency,
-                commodity_symbols=commodity_symbols,
-                jurisdictions=jurisdictions,
-                fx_provider_key=fx_provider,
-                commodity_provider_key=commodity_provider,
-                tax_provider_key=tax_provider,
-            )
-            if snapshot_error:
-                st.session_state["snapshot_controls_error"] = snapshot_error
+            if fx_provider is None or commodity_provider is None or tax_provider is None:
+                st.session_state["snapshot_controls_error"] = "Provider selection is incomplete."
                 st.session_state.pop("snapshot_controls_payload", None)
             else:
-                st.session_state["snapshot_controls_payload"] = snapshot_payload
-                st.session_state.pop("snapshot_controls_error", None)
-                st.session_state["snapshot_controls_params"] = {
-                    "base_currency": base_currency,
-                    "commodity_symbols": commodity_symbols,
-                    "jurisdictions": jurisdictions,
-                    "providers": {
-                        "fx": fx_provider,
-                        "commodity": commodity_provider,
-                        "tax": tax_provider,
-                    },
-                    "generated_at": datetime.now(tz=UTC).isoformat(),
-                }
+                built_snapshot_payload, snapshot_error = _build_snapshot(
+                    base_currency=base_currency,
+                    commodity_symbols=commodity_symbols,
+                    jurisdictions=jurisdictions,
+                    fx_provider_key=fx_provider,
+                    commodity_provider_key=commodity_provider,
+                    tax_provider_key=tax_provider,
+                )
+                if snapshot_error:
+                    st.session_state["snapshot_controls_error"] = snapshot_error
+                    st.session_state.pop("snapshot_controls_payload", None)
+                else:
+                    st.session_state["snapshot_controls_payload"] = built_snapshot_payload
+                    st.session_state.pop("snapshot_controls_error", None)
+                    st.session_state["snapshot_controls_params"] = {
+                        "base_currency": base_currency,
+                        "commodity_symbols": commodity_symbols,
+                        "jurisdictions": jurisdictions,
+                        "providers": {
+                            "fx": fx_provider,
+                            "commodity": commodity_provider,
+                            "tax": tax_provider,
+                        },
+                        "generated_at": datetime.now(tz=UTC).isoformat(),
+                    }
 
     if "snapshot_controls_error" in st.session_state:
         st.error(f"Snapshot request failed: {st.session_state['snapshot_controls_error']}")
@@ -388,7 +392,11 @@ with snapshot_tab:
         st.info("Set controls and click 'Generate consolidated snapshot' to run the primary toolkit flow.")
     else:
         st.success("Snapshot generated using the selected provider controls.")
-        snapshot_payload = st.session_state["snapshot_controls_payload"]
+        snapshot_payload_state = st.session_state["snapshot_controls_payload"]
+        if not isinstance(snapshot_payload_state, dict):
+            st.error("Snapshot payload is unavailable or malformed.")
+            st.stop()
+        snapshot_payload: dict[str, Any] = snapshot_payload_state
         _render_snapshot_tables(snapshot_payload)
 
         st.markdown("#### Provider provenance")
@@ -537,12 +545,12 @@ with utility_tab:
 
         if st.button("Generate Budget Report", key="budget_report_button"):
             try:
-                params = {
+                budget_params = {
                     "budget_id": int(budget_id),
                     "horizon": int(budget_horizon),
                     "refresh": budget_refresh,
                 }
-                response = requests.get(f"{API}/reports/budget-vs-actual", params=params, timeout=60)
+                response = requests.get(f"{API}/reports/budget-vs-actual", params=budget_params, timeout=60)
                 response.raise_for_status()
                 st.session_state["budget_report_payload"] = response.json()
                 st.success("Budget report loaded")
@@ -559,12 +567,12 @@ with utility_tab:
 
         if st.button("Generate Cashflow Forecast", key="cashflow_report_button"):
             try:
-                params = {
+                cashflow_params = {
                     "organization_id": int(org_id),
                     "horizon": int(cashflow_horizon),
                     "refresh": cashflow_refresh,
                 }
-                response = requests.get(f"{API}/reports/cashflow-forecast", params=params, timeout=60)
+                response = requests.get(f"{API}/reports/cashflow-forecast", params=cashflow_params, timeout=60)
                 response.raise_for_status()
                 st.session_state["cashflow_report_payload"] = response.json()
                 st.success("Cashflow forecast generated")
@@ -607,8 +615,8 @@ with utility_tab:
 
         if st.button("Sync FX Now", disabled=provider_key is None, key="fx_sync_button"):
             try:
-                params: dict[str, Any] = {"base": base, "provider_key": provider_key}
-                response = requests.post(f"{API}/fx/sync", params=params, timeout=30)
+                fx_sync_params: dict[str, Any] = {"base": base, "provider_key": provider_key}
+                response = requests.post(f"{API}/fx/sync", params=fx_sync_params, timeout=30)
                 response.raise_for_status()
                 st.success(response.json())
             except Exception as exc:  # pragma: no cover - runtime feedback
@@ -633,13 +641,13 @@ with utility_tab:
 
         if st.button("Sync Prices", disabled=market_provider is None, key="market_sync_button"):
             try:
-                params: dict[str, Any] = {
+                market_sync_params: dict[str, Any] = {
                     "symbol": symbol,
                     "start": start,
                     "end": end,
                     "provider_key": market_provider,
                 }
-                response = requests.post(f"{API}/market/sync", params=params, timeout=30)
+                response = requests.post(f"{API}/market/sync", params=market_sync_params, timeout=30)
                 response.raise_for_status()
                 st.success(response.json())
             except Exception as exc:  # pragma: no cover - runtime feedback

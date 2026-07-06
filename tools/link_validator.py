@@ -202,7 +202,7 @@ def validate_file_links(file_path: Path, root: Path) -> list[LinkIssue]:
     return issues
 
 
-def main() -> None:
+def main() -> int:
     """Run comprehensive link validation."""
     root = Path(__file__).parent.parent
     all_files = find_documentation_files()
@@ -247,7 +247,7 @@ def main() -> None:
     print(f"Asset references checked: {assets_checked}")
 
     # Categorize issues
-    issues_by_type = {}
+    issues_by_type: dict[str, list[LinkIssue]] = {}
     for issue in all_issues:
         issues_by_type.setdefault(issue.issue_type, []).append(issue)
 

@@ -66,6 +66,7 @@ class HealthRegistry:
             metadata = self._metadata.get(name, {})
             severity_hint = metadata.get("severity", "critical")
             status = "completed"
+            report = HealthReport(name=name, healthy=False, severity=severity_hint)
             start = time.perf_counter()
             try:
                 result = check()

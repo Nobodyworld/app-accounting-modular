@@ -8,7 +8,7 @@ def test_plaid_provider_lists_accounts() -> None:
     accounts = provider.list_accounts()
     assert accounts
     assert accounts[0]["id"] == "acc_001"
-    assert accounts[0]["balance"] > 0
+    assert float(accounts[0]["balance"]) > 0
 
 
 def test_plaid_provider_fetches_transactions() -> None:

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any, cast
 
 from cli.macli import cli
 from click.testing import CliRunner
@@ -26,14 +27,15 @@ def test_inspect_plan_command_outputs_summary(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     output_lines = [line for line in result.output.splitlines() if line.strip()]
-    payload: dict[str, object]
+    payload: dict[str, Any]
     try:
         start = next(i for i, line in enumerate(output_lines) if line.strip() == "{")
     except StopIteration:
         payload = json.loads(output_lines[-1])
     else:
         json_block = "\n".join(output_lines[start:])
-        payload, _ = json.JSONDecoder().raw_decode(json_block)
+        decoded, _ = json.JSONDecoder().raw_decode(json_block)
+        payload = cast(dict[str, Any], decoded)
     assert payload["plan"]["metadata"]["name"] == "QA"
     assert payload["summary"]["scenario_count"] == 2
     assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]

@@ -1,4 +1,5 @@
 import json
+from typing import Any, cast
 
 import pytest
 from apps.modular_accounting.application.plans import (
@@ -8,7 +9,7 @@ from apps.modular_accounting.application.plans import (
 )
 
 
-def _plan_bytes(payload: dict[str, object]) -> bytes:
+def _plan_bytes(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload).encode("utf-8")
 
 
@@ -92,7 +93,7 @@ def test_duplicate_scenario_names_raise_validation_error() -> None:
 def test_plan_normalises_byte_tags() -> None:
     plan = ScenarioPlan.from_components(
         name="Bytes everywhere",
-        tags=[b"ops", b"ops"],
+        tags=cast(Any, [b"ops", b"ops"]),
         defaults={
             "base_currency": "usd",
             "tags": [b"default", " default "],

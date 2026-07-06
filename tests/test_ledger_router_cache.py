@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from apps.api.routers import ledger
 from sqlmodel import Session
 
@@ -10,11 +11,11 @@ class _DummyService:
         self.organization_id = organization_id
 
 
-def test_service_cache_reuses_instance_per_request(monkeypatch):
+def test_service_cache_reuses_instance_per_request(monkeypatch: pytest.MonkeyPatch) -> None:
     session = Session(expire_on_commit=False)
     created: list[int] = []
 
-    def factory(sess: Session, organization_id: int):
+    def factory(sess: Session, organization_id: int) -> _DummyService:
         created.append(organization_id)
         return _DummyService(sess, organization_id)
 

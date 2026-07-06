@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, datetime
 
-import yfinance as yf
+import yfinance as yf  # type: ignore[import-untyped]
 from apps.api.models.models import Price
 
 __all__ = ["YFinanceMarketProvider", "provider"]
@@ -29,10 +29,16 @@ class YFinanceMarketProvider:
 
         prices: list[Price] = []
         for idx, row in df.iterrows():
+            if isinstance(idx, datetime):
+                idx_date = idx.date()
+            elif isinstance(idx, date):
+                idx_date = idx
+            else:
+                idx_date = date.fromisoformat(str(idx)[:10])
             prices.append(
                 Price(
                     instrument_id=0,  # overwritten by MarketService
-                    date=idx.date(),
+                    date=idx_date,
                     close=float(row["Close"]),
                     provider=self.name,
                 )

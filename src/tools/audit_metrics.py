@@ -28,13 +28,13 @@ class CommandResult:
 
 def _run_command(*args: str, raise_on_error: bool = True) -> CommandResult:
     start = time.perf_counter()
+    returncode: int
     try:
         completed = subprocess.run(args, check=raise_on_error)
         returncode = completed.returncode
     except subprocess.CalledProcessError as exc:
         if raise_on_error:
             raise
-        completed = exc
         returncode = exc.returncode
     duration = time.perf_counter() - start
     return CommandResult(command=tuple(args), returncode=returncode, duration=duration)
@@ -121,7 +121,7 @@ def _compute_complexity(modules: Iterable[Path]) -> dict[str, dict[str, float]]:
         def __init__(self) -> None:
             self.complexity = 0
 
-        def generic_visit(self, node):  # type: ignore[override]
+        def generic_visit(self, node: ast.AST) -> None:
             if isinstance(
                 node,
                 ast.If | ast.For | ast.While | ast.With | ast.AsyncWith | ast.Try | ast.Match,
@@ -192,9 +192,13 @@ def _dependency_profile(modules: Iterable[Path]) -> dict[str, dict[str, float]]:
 
 
 def _render_markdown(metrics: Mapping[str, object]) -> str:
-    coverage = metrics.get("coverage", {})
+    coverage_raw = metrics.get("coverage", {})
+    if not isinstance(coverage_raw, Mapping):
+        coverage_raw = {}
     lines = ["| Package | Coverage | Executed | Missing |", "| --- | --- | --- | --- |"]
-    for name, values in coverage.items():
+    for name, values in coverage_raw.items():
+        if not isinstance(values, Mapping):
+            continue
         pct = values.get("coverage_percent", 0)
         executed = values.get("executed", 0)
         missing = values.get("missing", 0)

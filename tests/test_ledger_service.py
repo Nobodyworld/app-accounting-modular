@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
+from typing import Any, cast
 
 import pytest
 from apps.api.models.models import JournalEntry, Organization, Rate, Transaction
@@ -47,7 +48,8 @@ def test_trial_balance_totals_balance() -> None:
         )
 
         trial_balance = ledger.trial_balance()
-        rows = {row.account_code: row for row in trial_balance["rows"]}
+        tb_rows = cast(list[TrialBalanceRow], trial_balance["rows"])
+        rows = {row.account_code: row for row in tb_rows}
 
         assert isinstance(rows["1000"], TrialBalanceRow)
         assert rows["1000"].debit == Decimal("150.0")
@@ -108,7 +110,8 @@ def test_trial_balance_includes_zero_activity_accounts() -> None:
         )
 
         trial_balance = ledger.trial_balance()
-        rows = {row.account_code: row for row in trial_balance["rows"]}
+        tb_rows = cast(list[TrialBalanceRow], trial_balance["rows"])
+        rows = {row.account_code: row for row in tb_rows}
         assert "3000" in rows
         assert rows["3000"].debit == Decimal("0")
         assert rows["3000"].credit == Decimal("0")
@@ -133,7 +136,7 @@ def test_trial_balance_filters_and_converts_currency() -> None:
             ]
         )
         session.commit()
-        txns = session.exec(select(Transaction).order_by(Transaction.date)).all()
+        txns = session.exec(select(Transaction).order_by(cast(Any, Transaction.date))).all()
         session.add_all(
             [
                 JournalEntry(transaction_id=txns[0].id, account_id=usd.id, debit=100, credit=0, currency="USD"),
@@ -144,7 +147,8 @@ def test_trial_balance_filters_and_converts_currency() -> None:
         session.commit()
 
         tb = ledger.trial_balance(start_date=date(2024, 1, 2), currency="USD")
-        rows = {row.account_code: row for row in tb["rows"]}
+        tb_rows = cast(list[TrialBalanceRow], tb["rows"])
+        rows = {row.account_code: row for row in tb_rows}
         assert "USD" in rows
         assert "EUR" in rows
         assert rows["USD"].balance == Decimal("0")
@@ -252,7 +256,8 @@ def test_post_transaction_supports_reversing_entries() -> None:
         )
         assert reversing.external_ref == str(txn.id)
         tb = ledger.trial_balance()
-        rows = {row.account_code: row for row in tb["rows"]}
+        tb_rows = cast(list[TrialBalanceRow], tb["rows"])
+        rows = {row.account_code: row for row in tb_rows}
         assert rows["1000"].balance == Decimal("0")
         assert rows["4000"].balance == Decimal("0")
 
@@ -284,7 +289,9 @@ def test_multi_org_postings_isolated() -> None:
 
         tb1 = ledger1.trial_balance()
         tb2 = ledger2.trial_balance()
-        codes1 = {row.account_code for row in tb1["rows"]}
-        codes2 = {row.account_code for row in tb2["rows"]}
+        rows1 = cast(list[TrialBalanceRow], tb1["rows"])
+        rows2 = cast(list[TrialBalanceRow], tb2["rows"])
+        codes1 = {row.account_code for row in rows1}
+        codes2 = {row.account_code for row in rows2}
         assert "C1" in codes1 and "C1" not in codes2
         assert "C2" in codes2 and "C2" not in codes1

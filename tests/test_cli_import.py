@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
+from typing import Any, cast
 
 import click
 import pytest
@@ -40,7 +41,7 @@ def write_csv(tmp_path: Path, rows: list[dict[str, str]]) -> Path:
     return file_path
 
 
-def test_load_transactions_from_csv_creates_missing_account(tmp_path) -> None:
+def test_load_transactions_from_csv_creates_missing_account(tmp_path: Path) -> None:
     with create_session() as session:
         ledger = LedgerService(session)
         ledger.create_account(name="Cash", type="ASSET", code="1000")
@@ -73,19 +74,21 @@ def test_load_transactions_from_csv_creates_missing_account(tmp_path) -> None:
 
         transactions = _load_transactions_from_csv(ledger, csv_path)
         assert len(transactions) == 1
-        txn = transactions[0]
+        txn = cast(dict[str, Any], transactions[0])
         assert txn["date"] == date(2024, 1, 1)
-        assert len(txn["postings"]) == 2
+        postings = cast(list[dict[str, Any]], txn["postings"])
+        assert len(postings) == 2
 
         workflow = WorkflowService(session)
         staged = workflow.ingest_transactions(transactions, source="test_csv")
-        results = workflow.process_transactions([item.id for item in staged])
+        staged_ids = [item.id for item in staged if item.id is not None]
+        results = workflow.process_transactions(staged_ids)
         assert results[0].status == WorkflowStatus.POSTED
         trial_balance = ledger.trial_balance()
         assert trial_balance["total_debit"] == trial_balance["total_credit"]
 
 
-def test_load_transactions_from_csv_rejects_unbalanced(tmp_path) -> None:
+def test_load_transactions_from_csv_rejects_unbalanced(tmp_path: Path) -> None:
     with create_session() as session:
         ledger = LedgerService(session)
         ledger.create_account(name="Cash", type="ASSET", code="1000")
@@ -121,7 +124,7 @@ def test_load_transactions_from_csv_rejects_unbalanced(tmp_path) -> None:
             _load_transactions_from_csv(ledger, csv_path)
 
 
-def test_load_transactions_from_csv_handles_multi_currency(tmp_path) -> None:
+def test_load_transactions_from_csv_handles_multi_currency(tmp_path: Path) -> None:
     with create_session() as session:
         ledger = LedgerService(session)
         ledger.create_account(name="Cash", type="ASSET", code="1000", currency="USD")
@@ -155,9 +158,12 @@ def test_load_transactions_from_csv_handles_multi_currency(tmp_path) -> None:
 
         transactions = _load_transactions_from_csv(ledger, csv_path)
         assert len(transactions) == 1
-        assert transactions[0]["postings"][1]["currency"] == "EUR"
+        txn = cast(dict[str, Any], transactions[0])
+        postings = cast(list[dict[str, Any]], txn["postings"])
+        assert postings[1]["currency"] == "EUR"
         # Ensure workflow ingestion still succeeds with multi-currency postings.
         workflow = WorkflowService(session)
         staged = workflow.ingest_transactions(transactions, source="test_csv_fx")
-        results = workflow.process_transactions([item.id for item in staged])
+        staged_ids = [item.id for item in staged if item.id is not None]
+        results = workflow.process_transactions(staged_ids)
         assert results[0].status in (WorkflowStatus.POSTED, WorkflowStatus.FAILED)

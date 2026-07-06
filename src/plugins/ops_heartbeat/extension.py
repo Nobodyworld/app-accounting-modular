@@ -7,7 +7,8 @@ from typing import Protocol
 
 from apps.extensions import ExtensionManifest, ExtensionRegistry
 from apps.observability.health import HealthReport
-from apps.observability.metrics import Gauge, metrics_registry
+from apps.observability.metrics import metrics_registry
+from prometheus_client import Gauge
 
 
 class _GaugeHandle(Protocol):

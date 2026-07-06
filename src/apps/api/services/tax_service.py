@@ -232,12 +232,16 @@ def default_tax_providers() -> dict[str, BaseTaxProvider]:
                     TaxRule(
                         jurisdiction=payload["jurisdiction"],
                         scope=payload["scope"],
-                        expression={"rate": rate},
+                        expression=dumps({"rate": rate}, sort_keys=True),
                         valid_from=payload.get("valid_from"),
                         valid_to=payload.get("valid_to"),
-                        description=payload.get("description"),
                         source=payload.get("source", self.name),
                         precedence=payload.get("precedence", 100),
+                        rule_metadata=(
+                            {"description": payload.get("description")}
+                            if payload.get("description") is not None
+                            else None
+                        ),
                     )
                 )
             return rules

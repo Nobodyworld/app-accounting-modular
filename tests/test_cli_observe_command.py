@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from apps.observability.diagnostics import ObservabilitySnapshot
 from cli.macli import cli
 from click.testing import CliRunner
 
 
-def test_cli_observe_json(monkeypatch) -> None:
+def test_cli_observe_json(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = CliRunner()
 
     snapshot = ObservabilitySnapshot(

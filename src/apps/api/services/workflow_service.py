@@ -75,15 +75,15 @@ class WorkflowService:
 
             raw_description = payload.get("description")
             description = str(raw_description or "")
+            payload_source_reference = payload.get("source_reference")
+            resolved_source_reference: str | None = (
+                payload_source_reference if isinstance(payload_source_reference, str) else source_reference
+            )
             staged = StagedTransaction(
                 date=txn_date,
                 description=description,
                 source=source,
-                source_reference=(
-                    payload.get("source_reference")
-                    if isinstance(payload.get("source_reference"), str)
-                    else source_reference
-                ),
+                source_reference=resolved_source_reference,
                 source_metadata=txn_metadata,
             )
             self.s.add(staged)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from types import SimpleNamespace
 
 import pytest
@@ -11,7 +12,7 @@ from click.testing import CliRunner
 
 
 @pytest.fixture(autouse=True)
-def clear_extension_registry() -> None:
+def clear_extension_registry() -> Iterator[None]:
     from apps.extensions import extension_registry
 
     extension_registry.clear()

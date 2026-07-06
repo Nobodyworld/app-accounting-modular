@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
 from threading import Barrier
+from typing import Any, Literal, cast
 
 import pytest
 from apps.api.audit import AuditActor, AuditLogger, use_actor
@@ -68,25 +69,25 @@ def _seed_actor(session: Session) -> AuditActor:
     )
 
 
-class _StubFXProvider(BaseFXProvider):
+class _StubFXProvider:
     name = "stubfx"
 
-    def sync_daily_rates(self, base: str = "USD", date_: date | None = None):
-        yield Rate(base=base, quote="EUR", date=date(2024, 1, 1), value=1.1, provider=self.name)
+    def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> list[Rate]:
+        return [Rate(base=base, quote="EUR", date=date(2024, 1, 1), value=1.1, provider=self.name)]
 
 
-class _StubMarketProvider(BaseMarketProvider):
+class _StubMarketProvider:
     name = "stubmarket"
 
-    def fetch_prices(self, symbol: str, start: date, end: date):
-        yield Price(date=start, close=101.5, provider=self.name)
+    def fetch_prices(self, symbol: str, start: date, end: date) -> list[Price]:
+        return [Price(instrument_id=0, date=start, close=101.5, provider=self.name)]
 
 
-class _StubTaxProvider(BaseTaxProvider):
+class _StubTaxProvider:
     name = "stubtax"
 
-    def upsert_rules(self):
-        yield TaxRule(jurisdiction="US-FED", scope="vat", expression="rate * 0.2")
+    def upsert_rules(self) -> list[TaxRule]:
+        return [TaxRule(jurisdiction="US-FED", scope="vat", expression="rate * 0.2")]
 
 
 # TODO - (audit) Simulate concurrent writes to verify audit log race condition handling.
@@ -126,7 +127,7 @@ def test_async_audit_worker_single_initialization_under_concurrency() -> None:
             worker_starts += 1
             original_worker_loop()
 
-        logger._worker_loop = types.MethodType(_wrapped_worker_loop, logger)  # type: ignore[method-assign]
+        logger._worker_loop = types.MethodType(_wrapped_worker_loop, logger)
 
         submissions = 60
         concurrency = 12
@@ -178,7 +179,7 @@ def test_ledger_post_transaction_creates_audit_entry() -> None:
                 ],
             )
 
-        stmt = select(AuditLog).where(AuditLog.entity_name == "Transaction").order_by(AuditLog.ts.desc())
+        stmt = select(AuditLog).where(AuditLog.entity_name == "Transaction").order_by(cast(Any, AuditLog.ts).desc())
         log = session.exec(stmt).first()
         assert log is not None
         assert log.action == AuditAction.CREATE
@@ -192,11 +193,11 @@ def test_fx_sync_produces_audit_entry() -> None:
         actor = _seed_actor(session)
         provider = _StubFXProvider()
         with use_actor(actor):
-            svc = FXService(session, provider)
+            svc = FXService(session, cast(BaseFXProvider, provider))
             count = svc.sync(base="USD")
 
         assert count == 1
-        stmt = select(AuditLog).where(AuditLog.entity_name == "Rate").order_by(AuditLog.ts.desc())
+        stmt = select(AuditLog).where(AuditLog.entity_name == "Rate").order_by(cast(Any, AuditLog.ts).desc())
         log = session.exec(stmt).first()
         assert log is not None
         assert log.after_state is not None
@@ -208,11 +209,11 @@ def test_market_sync_produces_audit_entry() -> None:
         actor = _seed_actor(session)
         provider = _StubMarketProvider()
         with use_actor(actor):
-            svc = MarketService(session, provider)
+            svc = MarketService(session, cast(BaseMarketProvider, provider))
             count = svc.sync_prices("TEST", date(2024, 1, 1), date(2024, 1, 1))
 
         assert count == 1
-        stmt = select(AuditLog).where(AuditLog.entity_name == "Price").order_by(AuditLog.ts.desc())
+        stmt = select(AuditLog).where(AuditLog.entity_name == "Price").order_by(cast(Any, AuditLog.ts).desc())
         log = session.exec(stmt).first()
         assert log is not None
         assert log.after_state is not None
@@ -224,11 +225,11 @@ def test_tax_sync_produces_audit_entry() -> None:
         actor = _seed_actor(session)
         provider = _StubTaxProvider()
         with use_actor(actor):
-            svc = TaxService(session, provider)
+            svc = TaxService(session, cast(BaseTaxProvider, provider))
             count = svc.sync_rules()
 
         assert count == 1
-        stmt = select(AuditLog).where(AuditLog.entity_name == "TaxRule").order_by(AuditLog.ts.desc())
+        stmt = select(AuditLog).where(AuditLog.entity_name == "TaxRule").order_by(cast(Any, AuditLog.ts).desc())
         log = session.exec(stmt).first()
         assert log is not None
         assert log.after_state is not None
@@ -238,7 +239,7 @@ def test_tax_sync_produces_audit_entry() -> None:
 def test_fx_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     with _create_session() as session:
         provider = _StubFXProvider()
-        svc = FXService(session, provider)
+        svc = FXService(session, cast(BaseFXProvider, provider))
 
         original_rollback = session.rollback
         rollback_called = False
@@ -271,7 +272,7 @@ def test_market_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatc
         session.commit()
         session.refresh(instrument)
 
-        svc = MarketService(session, provider)
+        svc = MarketService(session, cast(BaseMarketProvider, provider))
 
         original_rollback = session.rollback
         rollback_called = False
@@ -297,7 +298,7 @@ def test_market_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatc
 def test_tax_sync_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     with _create_session() as session:
         provider = _StubTaxProvider()
-        svc = TaxService(session, provider)
+        svc = TaxService(session, cast(BaseTaxProvider, provider))
 
         original_rollback = session.rollback
         rollback_called = False
@@ -342,10 +343,10 @@ def test_async_audit_logging_handles_flush_errors(monkeypatch: pytest.MonkeyPatc
         logger = AuditLogger(session)
 
         class FailingSession:
-            def __enter__(self):
+            def __enter__(self) -> FailingSession:
                 return self
 
-            def __exit__(self, exc_type, exc_val, exc_tb):
+            def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> Literal[False]:
                 return False
 
             def add(self, _: object) -> None:
@@ -355,6 +356,6 @@ def test_async_audit_logging_handles_flush_errors(monkeypatch: pytest.MonkeyPatc
                 raise RuntimeError("boom")
 
         logger.log(AuditAction.CREATE, "Entity", 1, asynchronous=True)
-        logger._session_factory = lambda: FailingSession()  # type: ignore[assignment]
+        logger._session_factory = cast(Any, lambda: FailingSession())
         logger.flush()
         logger.close()

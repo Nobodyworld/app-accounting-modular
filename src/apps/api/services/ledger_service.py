@@ -160,13 +160,16 @@ class LedgerService:
         apply_creation_metadata(txn)
         self.s.add(txn)
         self.s.flush()
+        txn_id = txn.id
+        if txn_id is None:
+            raise ValueError("transaction missing identifier after flush")
         for posting in normalised:
             account_id_value = cast(Any, posting["account_id"])
             debit_value = cast(Any, posting["debit"])
             credit_value = cast(Any, posting["credit"])
             currency_value = cast(Any, posting["currency"])
             je = JournalEntry(
-                transaction_id=txn.id,
+                transaction_id=txn_id,
                 account_id=int(account_id_value),
                 debit=float(debit_value),
                 credit=float(credit_value),
