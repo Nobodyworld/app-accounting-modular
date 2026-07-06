@@ -6,6 +6,24 @@
       <stop offset="0%" stop-color="#f6fbff"/>
       <stop offset="100%" stop-color="#eef6ef"/>
     </linearGradient>
+    <clipPath id="entry-points-clip">
+      <rect x="72" y="160" width="228" height="134"/>
+    </clipPath>
+    <clipPath id="orchestration-clip">
+      <rect x="378" y="140" width="282" height="174"/>
+    </clipPath>
+    <clipPath id="domain-ports-clip">
+      <rect x="734" y="140" width="212" height="174"/>
+    </clipPath>
+    <clipPath id="providers-extensions-clip">
+      <rect x="1018" y="140" width="188" height="174"/>
+    </clipPath>
+    <clipPath id="ops-assurance-clip">
+      <rect x="380" y="406" width="360" height="182"/>
+    </clipPath>
+    <clipPath id="release-evidence-clip">
+      <rect x="830" y="406" width="380" height="150"/>
+    </clipPath>
     <style>
       .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #1a2a33; }
       .subtitle { font: 500 16px 'Segoe UI', Arial, sans-serif; fill: #3b4f5a; }
@@ -26,54 +44,66 @@
   <text class="subtitle" x="54" y="94">Controlled demo topology for employer review and release-readiness documentation</text>
 
   <rect x="56" y="140" rx="14" ry="14" width="260" height="170" fill="#dff1ff" stroke="#86b3c9"/>
-  <text class="box-title" x="76" y="174">Entry Points</text>
-  <text class="box-text" x="76" y="202">- Demo CLI (cli.demo_cli)</text>
-  <text class="box-text" x="76" y="224">- Operational CLI (cli.macli)</text>
-  <text class="box-text" x="76" y="246">- FastAPI routes (/snapshot/*)</text>
-  <text class="box-text" x="76" y="268">- Streamlit app (apps.web)</text>
+  <g clip-path="url(#entry-points-clip)">
+    <text class="box-title" x="76" y="174">Entry Points</text>
+    <text class="box-text" x="76" y="202">- Demo CLI (cli.demo_cli)</text>
+    <text class="box-text" x="76" y="224">- Operational CLI (cli.macli)</text>
+    <text class="box-text" x="76" y="246">- FastAPI routes (/snapshot/*)</text>
+    <text class="box-text" x="76" y="268">- Streamlit app (apps.web)</text>
+  </g>
 
   <rect x="362" y="120" rx="14" ry="14" width="314" height="210" fill="#e9f9e8" stroke="#88ba89"/>
-  <text class="box-title" x="384" y="154">Application Orchestration</text>
-  <text class="box-text" x="384" y="182">- DataSnapshotService</text>
-  <text class="box-text" x="384" y="204">- Scenario plan preview/runner</text>
-  <text class="box-text" x="384" y="226">- Journal balancing controls</text>
-  <text class="box-text" x="384" y="248">- Cache + provider provenance</text>
   <rect x="384" y="268" rx="8" ry="8" width="268" height="38" fill="#d7efd6" stroke="#7dae80"/>
-  <text class="chip" x="396" y="292">src/apps/modular_accounting/application</text>
+  <g clip-path="url(#orchestration-clip)">
+    <text class="box-title" x="384" y="154">Application Orchestration</text>
+    <text class="box-text" x="384" y="182">- DataSnapshotService</text>
+    <text class="box-text" x="384" y="204">- Scenario plan preview/runner</text>
+    <text class="box-text" x="384" y="226">- Journal balancing controls</text>
+    <text class="box-text" x="384" y="248">- Cache + provider provenance</text>
+    <text class="chip" x="396" y="292">src/apps/modular_accounting/application</text>
+  </g>
 
   <rect x="718" y="120" rx="14" ry="14" width="244" height="210" fill="#fff5e2" stroke="#c9ac75"/>
-  <text class="box-title" x="740" y="154">Domain + Ports</text>
-  <text class="box-text" x="740" y="182">- Money, FX, tax, journal</text>
-  <text class="box-text" x="740" y="204">- Snapshot request contracts</text>
-  <text class="box-text" x="740" y="226">- Runtime-checkable ports</text>
   <rect x="740" y="268" rx="8" ry="8" width="198" height="38" fill="#f9e5c0" stroke="#c29b60"/>
-  <text class="chip" x="752" y="292">src/apps/modular_accounting</text>
+  <g clip-path="url(#domain-ports-clip)">
+    <text class="box-title" x="740" y="154">Domain + Ports</text>
+    <text class="box-text" x="740" y="182">- Money, FX, tax, journal</text>
+    <text class="box-text" x="740" y="204">- Snapshot request contracts</text>
+    <text class="box-text" x="740" y="226">- Runtime-checkable ports</text>
+    <text class="chip" x="752" y="292">src/apps/modular_accounting</text>
+  </g>
 
   <rect x="1002" y="120" rx="14" ry="14" width="220" height="210" fill="#f7e8f8" stroke="#b48fbb"/>
-  <text class="box-title" x="1024" y="154">Providers + Extensions</text>
-  <text class="box-text" x="1024" y="182">- FX / Commodity / Tax</text>
-  <text class="box-text" x="1024" y="204">- ops:heartbeat</text>
-  <text class="box-text" x="1024" y="226">- ops:resilience</text>
   <rect x="1024" y="268" rx="8" ry="8" width="176" height="38" fill="#efd6f1" stroke="#ad82b4"/>
-  <text class="chip" x="1036" y="292">src/plugins/*</text>
+  <g clip-path="url(#providers-extensions-clip)">
+    <text class="box-title" x="1024" y="154">Providers + Extensions</text>
+    <text class="box-text" x="1024" y="182">- FX / Commodity / Tax</text>
+    <text class="box-text" x="1024" y="204">- ops:heartbeat</text>
+    <text class="box-text" x="1024" y="226">- ops:resilience</text>
+    <text class="chip" x="1036" y="292">src/plugins/*</text>
+  </g>
 
   <rect x="362" y="386" rx="14" ry="14" width="400" height="214" fill="#e7f3ff" stroke="#88aac5"/>
-  <text class="box-title" x="386" y="422">Operational Assurance</text>
-  <text class="box-text" x="386" y="452">- Ruff lint + format-check</text>
-  <text class="box-text" x="386" y="474">- Mypy + full pytest + coverage</text>
-  <text class="box-text" x="386" y="496">- Accounting-control suites</text>
-  <text class="box-text" x="386" y="518">- pip check + pip-audit</text>
-  <text class="box-text" x="386" y="540">- current-tree secret scan</text>
   <rect x="386" y="556" rx="8" ry="8" width="346" height="32" fill="#d6e9fb" stroke="#7d9fbc"/>
-  <text class="chip" x="398" y="578">python -m src.tools.quality_gate</text>
+  <g clip-path="url(#ops-assurance-clip)">
+    <text class="box-title" x="386" y="422">Operational Assurance</text>
+    <text class="box-text" x="386" y="452">- Ruff lint + format-check</text>
+    <text class="box-text" x="386" y="474">- Mypy + full pytest + coverage</text>
+    <text class="box-text" x="386" y="496">- Accounting-control suites</text>
+    <text class="box-text" x="386" y="518">- pip check + pip-audit</text>
+    <text class="box-text" x="386" y="540">- current-tree secret scan</text>
+    <text class="chip" x="398" y="578">python -m src.tools.quality_gate</text>
+  </g>
 
   <rect x="810" y="386" rx="14" ry="14" width="412" height="214" fill="#edf6ec" stroke="#8db18a"/>
-  <text class="box-title" x="836" y="422">Release Evidence</text>
-  <text class="box-text" x="836" y="452">- PUBLIC_RELEASE_AUDIT.md</text>
-  <text class="box-text" x="836" y="474">- docs/reports/audit-latest.md</text>
-  <text class="box-text" x="836" y="496">- clean-clone validation logs</text>
-  <text class="box-text" x="836" y="518">- full-history secret scan output</text>
-  <text class="box-text" x="836" y="540">- hosted CI disposition</text>
+  <g clip-path="url(#release-evidence-clip)">
+    <text class="box-title" x="836" y="422">Release Evidence</text>
+    <text class="box-text" x="836" y="452">- PUBLIC_RELEASE_AUDIT.md</text>
+    <text class="box-text" x="836" y="474">- docs/reports/audit-latest.md</text>
+    <text class="box-text" x="836" y="496">- clean-clone validation logs</text>
+    <text class="box-text" x="836" y="518">- full-history secret scan output</text>
+    <text class="box-text" x="836" y="540">- hosted CI disposition</text>
+  </g>
 
   <path class="arrow" d="M 316 222 C 336 222, 340 222, 362 222"/>
   <path class="arrow" d="M 676 222 C 698 222, 700 222, 718 222"/>
