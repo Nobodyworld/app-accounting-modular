@@ -18,7 +18,7 @@ A modular Python accounting toolkit that separates ledger and financial-control 
 - Provider provenance, cache metrics, freshness diagnostics, and readiness/health visibility.
 - Journal control primitives for balanced postings and account traceability.
 - Operational CLI and API surfaces for snapshot, scenario plans, and diagnostics.
-- Regression-tested Streamlit interface focused on snapshot controls for employer review.
+- Regression-tested Streamlit interface focused on snapshot controls for portfolio review.
 
 ## Architecture Diagram
 

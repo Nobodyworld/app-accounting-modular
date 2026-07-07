@@ -53,4 +53,4 @@
 
 Complete the public-release blockers: run a full-history secret scan, clean-clone
 validate the final publication commit, record hosted CI disposition, and add
-first-screen visual evidence for employer review.
+first-screen visual evidence for portfolio review.
