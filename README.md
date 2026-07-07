@@ -91,7 +91,7 @@ python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json -
 - [Foreign-currency accounting case study](docs/examples/foreign_currency_accounting_case_study.md)
 - [End-to-end snapshot and control demonstration](docs/examples/end_to_end_snapshot_demo.md)
 - [Public release audit evidence](PUBLIC_RELEASE_AUDIT.md)
-- [Latest audit metrics artifact](docs/reports/audit-latest.md)
+- [Latest audit metrics snapshot](docs/reports/audit-latest.md) - technical supporting evidence only; see the public audit for the release verdict.
 
 ## Testing And Release Evidence
 
