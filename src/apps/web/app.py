@@ -228,20 +228,27 @@ def _render_snapshot_tables(payload: dict[str, Any]) -> None:
 
 st.set_page_config(page_title="Modular Accounting Toolkit", layout="wide")
 st.title("Modular Accounting Toolkit")
-st.caption("Consolidated snapshots and accounting controls for FX, commodities, and tax-provider orchestration.")
+st.caption(
+    "Review financial snapshots through provider evidence, journal controls, scenario plans, "
+    "and optional technical diagnostics."
+)
 
 health_data, health_error = _load_health()
 ready_data, ready_error = _load_readiness()
 providers_payload, providers_error = _load_providers()
 providers_by_key = {entry["key"]: entry for entry in providers_payload if isinstance(entry, dict) and entry.get("key")}
 
-snapshot_tab, utility_tab, plan_tab = st.tabs(["Snapshot & Controls", "Experimental Utilities", "Scenario Plans"])
+snapshot_tab, utility_tab, plan_tab = st.tabs(["Snapshot Review", "Review Utilities", "Scenario Plans"])
 
 with snapshot_tab:
-    st.subheader("Snapshot & Controls")
+    st.subheader("Snapshot Review")
     st.caption(
-        "Primary flow: select provider controls, generate a consolidated snapshot, and review provenance, diagnostics,"
-        " readiness, and journal controls without API schema knowledge."
+        "Evidence-first flow: choose controlled providers, generate a financial snapshot, "
+        "then review source provenance, freshness, readiness, and journal-control status."
+    )
+    st.info(
+        "Designed review order: provider catalog → snapshot results → provenance and freshness "
+        "→ readiness checks → journal-control status → technical audit payload."
     )
 
     if providers_error:
@@ -389,9 +396,9 @@ with snapshot_tab:
     if "snapshot_controls_error" in st.session_state:
         st.error(f"Snapshot request failed: {st.session_state['snapshot_controls_error']}")
     elif "snapshot_controls_payload" not in st.session_state:
-        st.info("Set controls and click 'Generate consolidated snapshot' to run the primary toolkit flow.")
+        st.info("Set provider controls and generate a consolidated snapshot to begin the accountant review flow.")
     else:
-        st.success("Snapshot generated using the selected provider controls.")
+        st.success("Snapshot review generated using the selected provider controls.")
         snapshot_payload_state = st.session_state["snapshot_controls_payload"]
         if not isinstance(snapshot_payload_state, dict):
             st.error("Snapshot payload is unavailable or malformed.")
@@ -479,7 +486,7 @@ with snapshot_tab:
             "- foreign-currency accounting case study and journal walkthrough."
         )
 
-        with st.expander("Raw diagnostics for technical reviewers", expanded=False):
+        with st.expander("Technical audit payload", expanded=False):
             st.json(
                 {
                     "snapshot": snapshot_payload,
@@ -490,11 +497,10 @@ with snapshot_tab:
             )
 
 with utility_tab:
-    st.subheader("Experimental Utilities")
+    st.subheader("Review Utilities")
     st.caption(
-        "These features remain available for operational exploration, "
-        "but the default workflow is the Snapshot & Controls"
-        " accounting toolkit tab."
+        "Supporting budget, cashflow, FX, and market utilities remain available for review, "
+        "but the primary public workflow is the Snapshot Review tab."
     )
 
     budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(["Budgets", "Cashflow", "FX Sync", "Market Sync"])
@@ -654,8 +660,8 @@ with utility_tab:
                 st.error(f"Failed to sync market prices: {exc}")
 
 with plan_tab:
-    st.subheader("Scenario Plans")
-    st.caption("Upload JSON or TOML plans to validate coverage before running scenario batches.")
+    st.subheader("Scenario Plan Review")
+    st.caption("Upload JSON or TOML plans to review scenario coverage before running scenario batches.")
     uploaded_plan = st.file_uploader(
         "Scenario plan",
         type=["json", "toml", "tml"],

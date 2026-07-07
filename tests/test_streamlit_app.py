@@ -187,9 +187,14 @@ def test_primary_snapshot_tab_renders(fake_runtime):
     at.run(timeout=15)
 
     labels = [tab.label for tab in at.tabs]
-    assert "Snapshot & Controls" in labels
-    assert "Experimental Utilities" in labels
+    assert "Snapshot Review" in labels
+    assert "Review Utilities" in labels
     assert "Scenario Plans" in labels
+    assert "Experimental Utilities" not in labels
+
+    markdown_content = [el.value for el in at.markdown]
+    info_content = [el.value for el in at.info]
+    assert any("provider catalog" in str(el).lower() for el in info_content + markdown_content)
 
     # Validate provider controls are present and selectable.
     assert at.selectbox(key="snapshot_fx_provider_select").value == "fx:ecb"
@@ -516,7 +521,7 @@ def test_stale_success_cleared_after_failed_snapshot(fake_runtime, monkeypatch):
 
     # Verify success state.
     success_msgs = [el.value for el in at.success]
-    assert any("Snapshot generated" in str(el) for el in success_msgs), "First snapshot should succeed"
+    assert any("Snapshot review generated" in str(el) for el in success_msgs), "First snapshot should succeed"
 
     # Now patch orchestrator to fail.
     class FailingSnapshotOrchestrator:
@@ -544,6 +549,6 @@ def test_stale_success_cleared_after_failed_snapshot(fake_runtime, monkeypatch):
 
     # Confirm initial state has no success message.
     initial_success = [el.value for el in at2.success]
-    assert not any("Snapshot generated" in str(el) for el in initial_success), (
+    assert not any("Snapshot review generated" in str(el) for el in initial_success), (
         "Fresh run should not have stale success state"
     )
