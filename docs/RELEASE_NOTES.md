@@ -2,12 +2,11 @@
 
 ## Highlights
 
-- Finalized publication evidence for the audited release candidate documented
-  in `PUBLIC_RELEASE_AUDIT.md`: clean-clone validation on Python 3.14,
-  full quality gate pass, accounting control suites pass, dependency checks,
-  operational CLI scenario command checks, API `/health` and `/health/ready`
-  probe validation, Streamlit smoke coverage, and targeted release-doc link
-  checks with no missing paths.
+- Refreshed the final go-live audit evidence against current `main` SHA
+  `6cd88cef4fa36b7f75fe051ad442ebf37e2b8bcf`, regenerated the technical audit
+  metrics snapshot, and revalidated clean-venv quality gates, focused Streamlit
+  tests, public-language grep, documentation link checks, and current-tree and
+  full-history secret scans.
 - Recorded full-history secret scanning via Gitleaks `8.30.1` with no leaks
   found, and captured hosted CI disposition alongside local clean-clone
   validation in the public release audit.
@@ -110,7 +109,7 @@
 ## Known Issues / Follow Ups
 
 - Refer to `PUBLIC_RELEASE_AUDIT.md` for the current hosted CI disposition and
-  release-gate authority for the audited candidate.
+  owner final-visibility decision.
 - The quality gate still installs `pip-audit` dynamically; a future cleanup
   should rely on the pinned development dependency already present in
   `requirements-dev.txt`.
