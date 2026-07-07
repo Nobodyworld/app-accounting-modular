@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 560" role="img" aria-labelledby="title desc">
+  <title id="title">Accounting Control Workflow</title>
+  <desc id="desc">Evidence-first workflow from provider selection through snapshot control, source evidence, journal control, and technical audit payload.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="1" stop-color="#eef5f9"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f2f7fa"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#123" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#456579"/>
+    </marker>
+    <style>
+      .title { font: 700 38px system-ui, -apple-system, Segoe UI, sans-serif; fill: #17364a; }
+      .subtitle { font: 400 18px system-ui, -apple-system, Segoe UI, sans-serif; fill: #516879; }
+      .step-title { font: 700 20px system-ui, -apple-system, Segoe UI, sans-serif; fill: #17364a; }
+      .step-copy { font: 400 15px system-ui, -apple-system, Segoe UI, sans-serif; fill: #506575; }
+      .badge { font: 700 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #21536c; letter-spacing: .06em; }
+      .label { font: 600 14px system-ui, -apple-system, Segoe UI, sans-serif; fill: #2f5870; }
+      .card { fill: url(#card); stroke: #bed0db; stroke-width: 1.4; filter: url(#shadow); }
+      .arrow { stroke: #456579; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1280" height="560" rx="0" fill="url(#bg)"/>
+  <text class="title" x="64" y="70">Accounting Control Workflow</text>
+  <text class="subtitle" x="64" y="102">A focused review path for financial snapshots, source evidence, journal integrity, and technical audit payloads.</text>
+
+  <rect x="64" y="140" width="1152" height="330" rx="26" fill="#ffffff" stroke="#d8e4ea"/>
+
+  <g transform="translate(100 182)">
+    <rect class="card" x="0" y="0" width="190" height="210" rx="18"/>
+    <text class="badge" x="24" y="36">STEP 01</text>
+    <text class="step-title" x="24" y="74">Provider</text>
+    <text class="step-title" x="24" y="101">Selection</text>
+    <text class="step-copy" x="24" y="139">Choose controlled</text>
+    <text class="step-copy" x="24" y="162">FX, market, and</text>
+    <text class="step-copy" x="24" y="185">tax providers.</text>
+  </g>
+
+  <line class="arrow" x1="305" y1="287" x2="385" y2="287"/>
+
+  <g transform="translate(400 182)">
+    <rect class="card" x="0" y="0" width="190" height="210" rx="18"/>
+    <text class="badge" x="24" y="36">STEP 02</text>
+    <text class="step-title" x="24" y="74">Snapshot</text>
+    <text class="step-title" x="24" y="101">Control</text>
+    <text class="step-copy" x="24" y="139">Generate rates,</text>
+    <text class="step-copy" x="24" y="162">quotes, tax rules,</text>
+    <text class="step-copy" x="24" y="185">and freshness.</text>
+  </g>
+
+  <line class="arrow" x1="605" y1="287" x2="685" y2="287"/>
+
+  <g transform="translate(700 182)">
+    <rect class="card" x="0" y="0" width="190" height="210" rx="18"/>
+    <text class="badge" x="24" y="36">STEP 03</text>
+    <text class="step-title" x="24" y="74">Source</text>
+    <text class="step-title" x="24" y="101">Evidence</text>
+    <text class="step-copy" x="24" y="139">Review provider</text>
+    <text class="step-copy" x="24" y="162">provenance, cache,</text>
+    <text class="step-copy" x="24" y="185">and repeatability.</text>
+  </g>
+
+  <line class="arrow" x1="905" y1="287" x2="985" y2="287"/>
+
+  <g transform="translate(1000 182)">
+    <rect class="card" x="0" y="0" width="180" height="210" rx="18"/>
+    <text class="badge" x="24" y="36">STEP 04</text>
+    <text class="step-title" x="24" y="74">Journal</text>
+    <text class="step-title" x="24" y="101">Control</text>
+    <text class="step-copy" x="24" y="139">Confirm balanced</text>
+    <text class="step-copy" x="24" y="162">posting evidence</text>
+    <text class="step-copy" x="24" y="185">and accounts.</text>
+  </g>
+
+  <path class="arrow" d="M1090 410 C1090 488 190 488 190 410"/>
+  <rect x="420" y="428" width="440" height="52" rx="26" fill="#e8f2f6" stroke="#bdd2dd"/>
+  <text class="label" x="472" y="460">Technical audit payload stays available, but not visually dominant.</text>
+
+  <text class="subtitle" x="64" y="525">Designed for accountants, finance-system builders, and reviewers who need evidence before raw diagnostics.</text>
+</svg>
