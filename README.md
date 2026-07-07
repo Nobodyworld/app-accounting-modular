@@ -1,16 +1,35 @@
 # Modular Accounting
 
-A modular Python accounting toolkit that separates ledger and financial-control logic from replaceable FX, commodity, and tax-data providers.
+A modular accounting-control toolkit for validating financial snapshots, provider provenance, and journal integrity without committing to a full ERP.
+
+The project demonstrates how accounting workflows can be broken into auditable modules: FX rates, commodity pricing, tax rules, ledger controls, provider health, cache diagnostics, and scenario plans. It is intentionally smaller than an ERP and focused on transparent controls, reproducible evidence, and clean integration boundaries.
 
 ## Streamlit demonstration interface using controlled sample data
 
 ![Streamlit demonstration interface using controlled sample data](docs/examples/assets/streamlit-demo-snapshot.png)
+
+## Who This Is For
+
+- Accountants who want clearer control evidence around rates, rules, and journal postings.
+- Finance-system builders who need provider-swappable architecture.
+- Hiring managers reviewing accounting automation, data provenance, and operational discipline.
+- Developers building small, auditable accounting modules instead of monolithic ERP features.
 
 ## Why This Toolkit Matters
 
 - Accounting teams need reproducible controls even when data providers change.
 - Finance-systems teams need clear provenance, freshness, and health visibility.
 - Hiring managers need concrete evidence of modular architecture plus operational quality gates.
+
+## Scope
+
+| This project demonstrates | This project does not claim to be |
+|---|---|
+| Provider-backed financial snapshots | A full ERP |
+| FX, commodity, and tax-rule orchestration | A production tax engine |
+| Balanced journal-control examples | A complete GL/subledger platform |
+| Provenance, diagnostics, and health checks | Treasury execution software |
+| CLI/API/Streamlit review surfaces | A commercial accounting product |
 
 ## Verified Core Capabilities
 
@@ -23,6 +42,12 @@ A modular Python accounting toolkit that separates ledger and financial-control 
 ## Architecture Diagram
 
 ![Modular Accounting architecture overview](docs/examples/assets/architecture-overview.svg)
+
+## Accounting Control Workflow
+
+![Accounting control workflow](docs/examples/assets/accounting-control-workflow.svg)
+
+The primary review path is evidence-first: choose controlled providers, run a financial snapshot, review source evidence and freshness, confirm journal-control status, then open technical diagnostics only when needed.
 
 ## Quick-Start Demonstration
 
@@ -61,7 +86,7 @@ python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json
 python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table
 ```
 
-## Employer Review Links
+## Portfolio Review Links
 
 - [Foreign-currency accounting case study](docs/examples/foreign_currency_accounting_case_study.md)
 - [End-to-end snapshot and control demonstration](docs/examples/end_to_end_snapshot_demo.md)
