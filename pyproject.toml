@@ -78,7 +78,6 @@ files = [
 module = [
   "apscheduler.*",
   "apps.modular_accounting.*",
-  "jose.*",
   "passlib.*",
   "pandas.*",
   "requests.*",
