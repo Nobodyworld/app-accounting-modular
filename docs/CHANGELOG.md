@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 2026-07-07: Refreshed final public-release audit evidence after the final
+  `actions/upload-artifact` v7.0.1 Dependabot update. The audit now points to
+  release-candidate SHA `ea86e3d238516ba05b80f6ddc331b8d312e9686d`, records
+  successful PR #51 CI evidence, and keeps the remaining gate as the owner's
+  final visibility decision.
+
 - 2026-07-02: Finalized public-release validation on commit
   audited in `PUBLIC_RELEASE_AUDIT.md`, including clean-clone quality-gate
   pass, full-history Gitleaks pass (no leaks), operational CLI/API/Streamlit

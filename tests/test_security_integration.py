@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+import jwt
 import pytest
 from apps.api import db
 from apps.api.config import settings
@@ -14,7 +15,6 @@ from apps.api.routers import auth as auth_router
 from apps.api.security import create_access_token, create_refresh_token, get_password_hash
 from apps.api.services.ledger_service import LedgerService
 from fastapi.testclient import TestClient
-from jose import jwt
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 

@@ -9,9 +9,10 @@ from functools import lru_cache
 from typing import Annotated, Any
 from uuid import uuid4
 
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jwt import InvalidTokenError
 from passlib.context import CryptContext
 from sqlmodel import Session, select
 
@@ -153,7 +154,7 @@ def _decode_token(token: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         return payload
-    except JWTError as exc:  # pragma: no cover - library raises numerous subclasses
+    except InvalidTokenError as exc:  # pragma: no cover - library raises numerous subclasses
         logger.warning("Failed to decode access token", exc_info=exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

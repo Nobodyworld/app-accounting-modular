@@ -2,11 +2,11 @@
 
 ## Highlights
 
-- Refreshed the final go-live audit evidence against current `main` SHA
-  `6cd88cef4fa36b7f75fe051ad442ebf37e2b8bcf`, regenerated the technical audit
-  metrics snapshot, and revalidated clean-venv quality gates, focused Streamlit
-  tests, public-language grep, documentation link checks, and current-tree and
-  full-history secret scans.
+- Refreshed the final public-release audit evidence after the final
+  `actions/upload-artifact` v7.0.1 Dependabot update. The audit now points to
+  release-candidate SHA `ea86e3d238516ba05b80f6ddc331b8d312e9686d`, records
+  the successful PR #51 CI run, and preserves the owner final-visibility
+  decision as the remaining release gate.
 - Recorded full-history secret scanning via Gitleaks `8.30.1` with no leaks
   found, and captured hosted CI disposition alongside local clean-clone
   validation in the public release audit.
