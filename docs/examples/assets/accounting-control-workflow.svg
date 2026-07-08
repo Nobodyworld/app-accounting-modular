@@ -13,7 +13,7 @@
     <filter id="softShadow" x="-8%" y="-10%" width="116%" height="125%">
       <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#193747" flood-opacity="0.12"/>
     </filter>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#557487"/>
     </marker>
     <style>
@@ -25,7 +25,7 @@
       .step-copy { font: 400 17px system-ui, -apple-system, Segoe UI, sans-serif; fill: #526879; }
       .footer { font: 600 18px system-ui, -apple-system, Segoe UI, sans-serif; fill: #345a70; }
       .card { fill: url(#panel); stroke: #c5d8e2; stroke-width: 1.5; filter: url(#softShadow); }
-      .rail { stroke: #557487; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .connector { stroke: #557487; stroke-width: 3.5; fill: none; marker-end: url(#arrow); stroke-linecap: round; }
       .dot { fill: #2d6179; }
     </style>
   </defs>
@@ -39,11 +39,6 @@
   <text class="panel-title" x="112" y="222">Primary public review path</text>
   <text class="subtitle" x="112" y="256">The reviewer starts with controlled inputs, then moves from evidence to controls before opening technical diagnostics.</text>
 
-  <path class="rail" d="M 182 430 H 395"/>
-  <path class="rail" d="M 443 430 H 656"/>
-  <path class="rail" d="M 704 430 H 917"/>
-  <path class="rail" d="M 965 430 H 1178"/>
-
   <g transform="translate(112 318)">
     <rect class="card" x="0" y="0" width="220" height="230" rx="24"/>
     <circle class="dot" cx="34" cy="36" r="15"/>
@@ -54,6 +49,8 @@
     <text class="step-copy" x="30" y="184">and tax providers</text>
     <text class="step-copy" x="30" y="208">from the catalog.</text>
   </g>
+
+  <path class="connector" d="M 344 433 H 360"/>
 
   <g transform="translate(373 318)">
     <rect class="card" x="0" y="0" width="220" height="230" rx="24"/>
@@ -66,6 +63,8 @@
     <text class="step-copy" x="30" y="208">freshness metrics.</text>
   </g>
 
+  <path class="connector" d="M 605 433 H 621"/>
+
   <g transform="translate(634 318)">
     <rect class="card" x="0" y="0" width="220" height="230" rx="24"/>
     <circle class="dot" cx="34" cy="36" r="15"/>
@@ -77,6 +76,8 @@
     <text class="step-copy" x="30" y="208">and readiness.</text>
   </g>
 
+  <path class="connector" d="M 866 433 H 882"/>
+
   <g transform="translate(895 318)">
     <rect class="card" x="0" y="0" width="220" height="230" rx="24"/>
     <circle class="dot" cx="34" cy="36" r="15"/>
@@ -87,6 +88,8 @@
     <text class="step-copy" x="30" y="184">posting evidence</text>
     <text class="step-copy" x="30" y="208">and accounts.</text>
   </g>
+
+  <path class="connector" d="M 1127 433 H 1143"/>
 
   <g transform="translate(1156 318)">
     <rect class="card" x="0" y="0" width="180" height="230" rx="24"/>
