@@ -9,7 +9,7 @@
     <filter id="shadow" x="-8%" y="-10%" width="116%" height="126%">
       <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#1b3544" flood-opacity="0.12"/>
     </filter>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#456579"/>
     </marker>
     <style>
@@ -19,7 +19,7 @@
       .box-text { font: 400 18px system-ui, -apple-system, Segoe UI, sans-serif; fill: #506575; }
       .chip { font: 700 14px ui-monospace, SFMono-Regular, Consolas, monospace; fill: #2d6179; }
       .card { fill: #ffffff; stroke: #c5d8e2; stroke-width: 1.5; filter: url(#shadow); }
-      .arrow { stroke: #456579; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .arrow { stroke: #456579; stroke-width: 3.5; fill: none; marker-end: url(#arrow); stroke-linecap: round; stroke-linejoin: round; }
       .soft { fill: #e8f2f6; stroke: #bed4df; }
     </style>
   </defs>
@@ -39,6 +39,8 @@
     <text class="chip" x="52" y="198">README + examples</text>
   </g>
 
+  <path class="arrow" d="M 372 293 H 416"/>
+
   <g transform="translate(430 178)">
     <rect class="card" x="0" y="0" width="320" height="230" rx="26"/>
     <text class="box-title" x="32" y="48">Snapshot Orchestration</text>
@@ -48,6 +50,8 @@
     <rect class="soft" x="32" y="176" width="246" height="34" rx="17"/>
     <text class="chip" x="52" y="198">SnapshotOrchestrator</text>
   </g>
+
+  <path class="arrow" d="M 764 293 H 808"/>
 
   <g transform="translate(822 178)">
     <rect class="card" x="0" y="0" width="260" height="230" rx="26"/>
@@ -59,6 +63,8 @@
     <text class="chip" x="52" y="198">domain layer</text>
   </g>
 
+  <path class="arrow" d="M 1096 293 H 1140"/>
+
   <g transform="translate(1154 178)">
     <rect class="card" x="0" y="0" width="198" height="230" rx="26"/>
     <text class="box-title" x="28" y="48">Adapters</text>
@@ -69,9 +75,8 @@
     <text class="chip" x="48" y="198">plugins</text>
   </g>
 
-  <path class="arrow" d="M 360 293 H 420"/>
-  <path class="arrow" d="M 752 293 H 812"/>
-  <path class="arrow" d="M 1084 293 H 1144"/>
+  <path class="arrow" d="M 590 422 V 490"/>
+  <path class="arrow" d="M 952 422 V 455 H 1012 V 490"/>
 
   <g transform="translate(214 506)">
     <rect class="card" x="0" y="0" width="430" height="230" rx="26"/>
@@ -83,6 +88,8 @@
     <text class="chip" x="54" y="206">python -m src.tools.quality_gate</text>
   </g>
 
+  <path class="arrow" d="M 658 621 H 782"/>
+
   <g transform="translate(796 506)">
     <rect class="card" x="0" y="0" width="430" height="230" rx="26"/>
     <text class="box-title" x="34" y="50">Release Evidence</text>
@@ -92,10 +99,6 @@
     <rect class="soft" x="34" y="184" width="292" height="34" rx="17"/>
     <text class="chip" x="54" y="206">PUBLIC_RELEASE_AUDIT.md</text>
   </g>
-
-  <path class="arrow" d="M 590 410 C 590 458 430 458 430 496"/>
-  <path class="arrow" d="M 952 410 C 952 458 1010 458 1010 496"/>
-  <path class="arrow" d="M 646 621 H 786"/>
 
   <rect x="88" y="792" width="1264" height="58" rx="29" fill="#e8f2f6" stroke="#bed4df"/>
   <text class="subtitle" x="128" y="829">The architecture keeps accountant-facing review separate from technical diagnostics while preserving traceable evidence for public portfolio review.</text>
