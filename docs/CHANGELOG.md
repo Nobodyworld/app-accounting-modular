@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 2026-07-08: Polished final public-showcase presentation after PR #52 by
+  replacing visible provider-catalog `Stub` wording with demo/sample/illustrative
+  labels, rebuilding README-linked architecture and accounting-control workflow
+  SVGs, clarifying controlled sample provider data in the README, and refreshing
+  public-release audit evidence to the current post-PR #52 base.
+
 - 2026-07-07: Refreshed final public-release audit evidence after the final
   `actions/upload-artifact` v7.0.1 Dependabot update. The audit now points to
   release-candidate SHA `ea86e3d238516ba05b80f6ddc331b8d312e9686d`, records
