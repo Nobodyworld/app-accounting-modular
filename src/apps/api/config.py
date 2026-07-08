@@ -100,10 +100,10 @@ DEFAULT_ALLOWED_PROVIDERS: dict[str, ProviderInfo] = {
         description="Production FX rates backed by OpenExchangeRates API",
         capabilities=("fx",),
     ),
-    "market:commodities_stub": ProviderInfo(
+    "market:commodities_demo": ProviderInfo(
         module="plugins.market_commodities.provider",
-        name="Commodity & Futures Stub",
-        description="Synthetic commodity/futures prices for testing",
+        name="Synthetic Commodity & Futures Demo",
+        description="Controlled sample commodity and futures prices for public review flows",
         capabilities=("market",),
     ),
     "market:yfinance": ProviderInfo(
@@ -112,34 +112,34 @@ DEFAULT_ALLOWED_PROVIDERS: dict[str, ProviderInfo] = {
         description="Historical price data from Yahoo Finance",
         capabilities=("market",),
     ),
-    "macro:fred_stub": ProviderInfo(
+    "macro:fred_demo": ProviderInfo(
         module="plugins.macro_fred.provider",
-        name="FRED Macroeconomic Stub",
-        description="Synthetic macro series for GDP/inflation style indicators",
+        name="FRED-style Macroeconomic Demo",
+        description="Controlled sample macro series for GDP/inflation style indicators",
         capabilities=("macro",),
     ),
-    "bank:plaid_stub": ProviderInfo(
+    "bank:plaid_demo": ProviderInfo(
         module="plugins.bank_plaid.provider",
-        name="Plaid Bank Feeds (Stub)",
-        description="Stubbed Plaid-like bank feed provider",
+        name="Plaid-style Bank Feed Demo",
+        description="Controlled sample bank feed data for reconciliation plumbing",
         capabilities=("bank",),
     ),
-    "tax:oecd_stub": ProviderInfo(
+    "tax:oecd_demo": ProviderInfo(
         module="plugins.tax_oecd_stub.provider",
-        name="OECD Tax Rules (Stub)",
-        description="Demonstration tax rules sourced from an OECD stub",
+        name="OECD-style Tax Rules Demo",
+        description="Controlled sample tax rules for adapter and provenance review",
         capabilities=("tax",),
     ),
     "tax:oecd_vat": ProviderInfo(
         module="plugins.tax_oecd_vat.provider",
-        name="OECD VAT Rules (Stub)",
-        description="VAT rates across selected OECD members",
+        name="Illustrative OECD VAT Rules",
+        description="Illustrative VAT rates across selected OECD members",
         capabilities=("tax",),
     ),
     "tax:us_tables": ProviderInfo(
         module="plugins.tax_us_tables.provider",
-        name="US Federal and State Tax Tables (Stub)",
-        description="Baseline corporate income tax rates for US federal/state",
+        name="Illustrative US Tax Tables",
+        description="Baseline illustrative corporate income tax rates for US federal/state review",
         capabilities=("tax",),
     ),
 }
