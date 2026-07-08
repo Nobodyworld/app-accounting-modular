@@ -55,7 +55,7 @@ Workflow run: `28842276127`
 
 ### Clean-venv quality gate
 
-Command: `\.\.venv-clean\Scripts\python -m src.tools.quality_gate`
+Command: `.\.venv-clean\Scripts\python -m src.tools.quality_gate`
 
 **Result:** ✅ PASSED in the final go-live validation evidence and remains applicable to the release-candidate runtime tree because PR #51 changed only GitHub Actions workflow configuration.
 
