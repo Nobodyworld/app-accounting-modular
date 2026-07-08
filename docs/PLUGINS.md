@@ -105,6 +105,6 @@ DEFAULT_ALLOWED_PROVIDERS = {
 
 - `src/plugins/fx_ecb/`: ECB foreign exchange rates
 - `src/plugins/market_yfinance/`: Yahoo Finance market data
-- `src/plugins/tax_oecd_stub/`: OECD tax rules stub
+- `src/plugins/tax_oecd_stub/`: OECD-style tax data reference implementation retained under its legacy package path
 
 See [Adapter Contracts](adapters.md) for detailed interface specifications.

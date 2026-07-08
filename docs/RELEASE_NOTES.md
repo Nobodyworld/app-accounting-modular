@@ -2,11 +2,18 @@
 
 ## Highlights
 
+- Polished the final public-showcase presentation after PR #52: provider labels
+  now use demo/sample/illustrative wording, README-linked architecture and
+  workflow SVGs were rebuilt for clearer GitHub rendering, and the README now
+  clarifies that demo providers use controlled sample data unless external API
+  credentials are configured.
+- Refreshed public-release audit evidence to the current post-PR #52 base SHA
+  `3fd00ffceb45009a6fe4d9a91167c646535aa46f`, including the PyJWT migration
+  that resolved the `python-jose` transitive `ecdsa` pip-audit failure.
 - Refreshed the final public-release audit evidence after the final
-  `actions/upload-artifact` v7.0.1 Dependabot update. The audit now points to
-  release-candidate SHA `ea86e3d238516ba05b80f6ddc331b8d312e9686d`, records
-  the successful PR #51 CI run, and preserves the owner final-visibility
-  decision as the remaining release gate.
+  `actions/upload-artifact` v7.0.1 Dependabot update. The audit records
+  successful PR #51 and PR #52 CI evidence and preserves the owner
+  final-visibility decision as the remaining release gate.
 - Recorded full-history secret scanning via Gitleaks `8.30.1` with no leaks
   found, and captured hosted CI disposition alongside local clean-clone
   validation in the public release audit.

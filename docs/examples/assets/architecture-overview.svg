@@ -1,116 +1,102 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
   <title id="title">Modular Accounting Architecture Overview</title>
-  <desc id="desc">High-level architecture showing CLI and API entry points, application orchestration, adapters, plugins, and observability.</desc>
+  <desc id="desc">High-level architecture showing review surfaces, orchestration, domain controls, provider adapters, and release assurance for Modular Accounting.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#f6fbff"/>
-      <stop offset="100%" stop-color="#eef6ef"/>
+      <stop offset="0" stop-color="#f7fbff"/>
+      <stop offset="1" stop-color="#eef6f2"/>
     </linearGradient>
-    <clipPath id="entry-points-clip">
-      <rect x="72" y="160" width="228" height="134"/>
-    </clipPath>
-    <clipPath id="orchestration-clip">
-      <rect x="378" y="140" width="282" height="174"/>
-    </clipPath>
-    <clipPath id="domain-ports-clip">
-      <rect x="734" y="140" width="212" height="174"/>
-    </clipPath>
-    <clipPath id="providers-extensions-clip">
-      <rect x="1018" y="140" width="188" height="174"/>
-    </clipPath>
-    <clipPath id="ops-assurance-clip">
-      <rect x="380" y="406" width="360" height="182"/>
-    </clipPath>
-    <clipPath id="release-evidence-clip">
-      <rect x="830" y="406" width="380" height="150"/>
-    </clipPath>
-    <style>
-      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #1a2a33; }
-      .subtitle { font: 500 16px 'Segoe UI', Arial, sans-serif; fill: #3b4f5a; }
-      .box-title { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #1b2c35; }
-      .box-text { font: 500 14px 'Segoe UI', Arial, sans-serif; fill: #2f4652; }
-      .chip { font: 600 12px 'Consolas', 'Courier New', monospace; fill: #1f3a45; }
-      .arrow { stroke: #2e5561; stroke-width: 2.5; marker-end: url(#m); fill: none; }
-      .edge { stroke: #7ea0ac; stroke-width: 1.7; marker-end: url(#m); fill: none; }
-    </style>
-    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2e5561"/>
+    <filter id="shadow" x="-8%" y="-10%" width="116%" height="126%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#1b3544" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#456579"/>
     </marker>
+    <style>
+      .title { font: 700 44px system-ui, -apple-system, Segoe UI, sans-serif; fill: #17364a; }
+      .subtitle { font: 400 21px system-ui, -apple-system, Segoe UI, sans-serif; fill: #516879; }
+      .box-title { font: 700 24px system-ui, -apple-system, Segoe UI, sans-serif; fill: #17364a; }
+      .box-text { font: 400 18px system-ui, -apple-system, Segoe UI, sans-serif; fill: #506575; }
+      .chip { font: 700 14px ui-monospace, SFMono-Regular, Consolas, monospace; fill: #2d6179; }
+      .card { fill: #ffffff; stroke: #c5d8e2; stroke-width: 1.5; filter: url(#shadow); }
+      .arrow { stroke: #456579; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .soft { fill: #e8f2f6; stroke: #bed4df; }
+    </style>
   </defs>
 
-  <rect x="0" y="0" width="1280" height="760" fill="url(#bg)"/>
+  <rect width="1440" height="900" fill="url(#bg)"/>
 
-  <text class="title" x="54" y="66">Modular Accounting - High-Level Architecture</text>
-  <text class="subtitle" x="54" y="94">Controlled demo topology for portfolio review and release-readiness documentation</text>
+  <text class="title" x="88" y="86">Modular Accounting Architecture</text>
+  <text class="subtitle" x="88" y="124">A compact toolkit for provider-backed snapshots, journal controls, and release evidence without becoming a full ERP.</text>
 
-  <rect x="56" y="140" rx="14" ry="14" width="260" height="170" fill="#dff1ff" stroke="#86b3c9"/>
-  <g clip-path="url(#entry-points-clip)">
-    <text class="box-title" x="76" y="174">Entry Points</text>
-    <text class="box-text" x="76" y="202">- Demo CLI (cli.demo_cli)</text>
-    <text class="box-text" x="76" y="224">- Operational CLI (cli.macli)</text>
-    <text class="box-text" x="76" y="246">- FastAPI routes (/snapshot/*)</text>
-    <text class="box-text" x="76" y="268">- Streamlit app (apps.web)</text>
+  <g transform="translate(88 178)">
+    <rect class="card" x="0" y="0" width="270" height="230" rx="26"/>
+    <text class="box-title" x="32" y="48">Review Surfaces</text>
+    <text class="box-text" x="32" y="90">Streamlit snapshot review</text>
+    <text class="box-text" x="32" y="120">FastAPI routes</text>
+    <text class="box-text" x="32" y="150">Operational CLI</text>
+    <rect class="soft" x="32" y="176" width="206" height="34" rx="17"/>
+    <text class="chip" x="52" y="198">README + examples</text>
   </g>
 
-  <rect x="362" y="120" rx="14" ry="14" width="314" height="210" fill="#e9f9e8" stroke="#88ba89"/>
-  <rect x="384" y="268" rx="8" ry="8" width="268" height="38" fill="#d7efd6" stroke="#7dae80"/>
-  <g clip-path="url(#orchestration-clip)">
-    <text class="box-title" x="384" y="154">Application Orchestration</text>
-    <text class="box-text" x="384" y="182">- DataSnapshotService</text>
-    <text class="box-text" x="384" y="204">- Scenario plan preview/runner</text>
-    <text class="box-text" x="384" y="226">- Journal balancing controls</text>
-    <text class="box-text" x="384" y="248">- Cache + provider provenance</text>
-    <text class="chip" x="396" y="292">src/apps/modular_accounting/application</text>
+  <g transform="translate(430 178)">
+    <rect class="card" x="0" y="0" width="320" height="230" rx="26"/>
+    <text class="box-title" x="32" y="48">Snapshot Orchestration</text>
+    <text class="box-text" x="32" y="90">Provider selection</text>
+    <text class="box-text" x="32" y="120">FX, market, and tax data</text>
+    <text class="box-text" x="32" y="150">Freshness and cache metrics</text>
+    <rect class="soft" x="32" y="176" width="246" height="34" rx="17"/>
+    <text class="chip" x="52" y="198">SnapshotOrchestrator</text>
   </g>
 
-  <rect x="718" y="120" rx="14" ry="14" width="244" height="210" fill="#fff5e2" stroke="#c9ac75"/>
-  <rect x="740" y="268" rx="8" ry="8" width="198" height="38" fill="#f9e5c0" stroke="#c29b60"/>
-  <g clip-path="url(#domain-ports-clip)">
-    <text class="box-title" x="740" y="154">Domain + Ports</text>
-    <text class="box-text" x="740" y="182">- Money, FX, tax, journal</text>
-    <text class="box-text" x="740" y="204">- Snapshot request contracts</text>
-    <text class="box-text" x="740" y="226">- Runtime-checkable ports</text>
-    <text class="chip" x="752" y="292">src/apps/modular_accounting</text>
+  <g transform="translate(822 178)">
+    <rect class="card" x="0" y="0" width="260" height="230" rx="26"/>
+    <text class="box-title" x="32" y="48">Domain Controls</text>
+    <text class="box-text" x="32" y="90">Money and rates</text>
+    <text class="box-text" x="32" y="120">Tax rule contracts</text>
+    <text class="box-text" x="32" y="150">Balanced journal postings</text>
+    <rect class="soft" x="32" y="176" width="178" height="34" rx="17"/>
+    <text class="chip" x="52" y="198">domain layer</text>
   </g>
 
-  <rect x="1002" y="120" rx="14" ry="14" width="220" height="210" fill="#f7e8f8" stroke="#b48fbb"/>
-  <rect x="1024" y="268" rx="8" ry="8" width="176" height="38" fill="#efd6f1" stroke="#ad82b4"/>
-  <g clip-path="url(#providers-extensions-clip)">
-    <text class="box-title" x="1024" y="154">Providers + Extensions</text>
-    <text class="box-text" x="1024" y="182">- FX / Commodity / Tax</text>
-    <text class="box-text" x="1024" y="204">- ops:heartbeat</text>
-    <text class="box-text" x="1024" y="226">- ops:resilience</text>
-    <text class="chip" x="1036" y="292">src/plugins/*</text>
+  <g transform="translate(1154 178)">
+    <rect class="card" x="0" y="0" width="198" height="230" rx="26"/>
+    <text class="box-title" x="28" y="48">Adapters</text>
+    <text class="box-text" x="28" y="90">FX providers</text>
+    <text class="box-text" x="28" y="120">Market providers</text>
+    <text class="box-text" x="28" y="150">Tax providers</text>
+    <rect class="soft" x="28" y="176" width="132" height="34" rx="17"/>
+    <text class="chip" x="48" y="198">plugins</text>
   </g>
 
-  <rect x="362" y="386" rx="14" ry="14" width="400" height="214" fill="#e7f3ff" stroke="#88aac5"/>
-  <rect x="386" y="556" rx="8" ry="8" width="346" height="32" fill="#d6e9fb" stroke="#7d9fbc"/>
-  <g clip-path="url(#ops-assurance-clip)">
-    <text class="box-title" x="386" y="422">Operational Assurance</text>
-    <text class="box-text" x="386" y="452">- Ruff lint + format-check</text>
-    <text class="box-text" x="386" y="474">- Mypy + full pytest + coverage</text>
-    <text class="box-text" x="386" y="496">- Accounting-control suites</text>
-    <text class="box-text" x="386" y="518">- pip check + pip-audit</text>
-    <text class="box-text" x="386" y="540">- current-tree secret scan</text>
-    <text class="chip" x="398" y="578">python -m src.tools.quality_gate</text>
+  <path class="arrow" d="M 360 293 H 420"/>
+  <path class="arrow" d="M 752 293 H 812"/>
+  <path class="arrow" d="M 1084 293 H 1144"/>
+
+  <g transform="translate(214 506)">
+    <rect class="card" x="0" y="0" width="430" height="230" rx="26"/>
+    <text class="box-title" x="34" y="50">Operational Assurance</text>
+    <text class="box-text" x="34" y="94">Quality gate: lint, format, typing, tests</text>
+    <text class="box-text" x="34" y="126">Dependency audit and current-tree secret scan</text>
+    <text class="box-text" x="34" y="158">Hosted CI matrix for Python 3.12, 3.13, 3.14</text>
+    <rect class="soft" x="34" y="184" width="310" height="34" rx="17"/>
+    <text class="chip" x="54" y="206">python -m src.tools.quality_gate</text>
   </g>
 
-  <rect x="810" y="386" rx="14" ry="14" width="412" height="214" fill="#edf6ec" stroke="#8db18a"/>
-  <g clip-path="url(#release-evidence-clip)">
-    <text class="box-title" x="836" y="422">Release Evidence</text>
-    <text class="box-text" x="836" y="452">- PUBLIC_RELEASE_AUDIT.md</text>
-    <text class="box-text" x="836" y="474">- docs/reports/audit-latest.md</text>
-    <text class="box-text" x="836" y="496">- clean-clone validation logs</text>
-    <text class="box-text" x="836" y="518">- full-history secret scan output</text>
-    <text class="box-text" x="836" y="540">- hosted CI disposition</text>
+  <g transform="translate(796 506)">
+    <rect class="card" x="0" y="0" width="430" height="230" rx="26"/>
+    <text class="box-title" x="34" y="50">Release Evidence</text>
+    <text class="box-text" x="34" y="94">Public release audit</text>
+    <text class="box-text" x="34" y="126">README visuals and portfolio collateral</text>
+    <text class="box-text" x="34" y="158">Changelog, release notes, and audit metrics</text>
+    <rect class="soft" x="34" y="184" width="292" height="34" rx="17"/>
+    <text class="chip" x="54" y="206">PUBLIC_RELEASE_AUDIT.md</text>
   </g>
 
-  <path class="arrow" d="M 316 222 C 336 222, 340 222, 362 222"/>
-  <path class="arrow" d="M 676 222 C 698 222, 700 222, 718 222"/>
-  <path class="arrow" d="M 962 222 C 982 222, 986 222, 1002 222"/>
-  <path class="edge" d="M 518 330 C 518 356, 518 356, 518 386"/>
-  <path class="edge" d="M 872 330 C 872 356, 948 356, 948 386"/>
-  <path class="edge" d="M 762 492 C 780 492, 790 492, 810 492"/>
+  <path class="arrow" d="M 590 410 C 590 458 430 458 430 496"/>
+  <path class="arrow" d="M 952 410 C 952 458 1010 458 1010 496"/>
+  <path class="arrow" d="M 646 621 H 786"/>
 
-  <text class="subtitle" x="56" y="706">Release evidence: clean-clone and hosted-CI validation documented in PUBLIC_RELEASE_AUDIT.md.</text>
+  <rect x="88" y="792" width="1264" height="58" rx="29" fill="#e8f2f6" stroke="#bed4df"/>
+  <text class="subtitle" x="128" y="829">The architecture keeps accountant-facing review separate from technical diagnostics while preserving traceable evidence for public portfolio review.</text>
 </svg>

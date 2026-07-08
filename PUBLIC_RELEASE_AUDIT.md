@@ -1,48 +1,56 @@
-# Public Release Audit - Final SHA Refresh After Artifact Update
+# Public Release Audit - Final Showcase Polish
 
-**Audit Date:** 2026-07-07
-**Auditor:** Current-main evidence refresh after Dependabot PR #51
-**Validated Release-Candidate SHA:** `ea86e3d238516ba05b80f6ddc331b8d312e9686d`
-**Audit Scope:** Documentation/evidence refresh only
+**Audit Date:** 2026-07-08
+**Auditor:** Final public-showcase polish after PR #52
+**Validated Base SHA After PR #52:** `3fd00ffceb45009a6fe4d9a91167c646535aa46f`
+**Audit Scope:** Public-facing showcase, provider-label, release-collateral, and README-linked visual polish
 
 ---
 
 ## 1. Repository State Verification
 
-**Validation Method:** GitHub repository metadata, commit inspection, pull request inspection, and carried-forward local validation evidence from the final go-live audit.
+**Validation Method:** GitHub repository metadata, pull request review history, hosted CI evidence, and carried-forward local validation evidence from the final go-live audit.
 
 - Repository: `Nobodyworld/app-accounting-modular`
 - Default branch: `main`
 - Repository visibility: private until the owner changes visibility
 - Archived status: false
-- Current audited release-candidate SHA: `ea86e3d238516ba05b80f6ddc331b8d312e9686d`
-- Most recent audited commit message: `chore(deps): bump actions/upload-artifact from 4.6.2 to 7.0.1`
-- Open pull requests after PR #51 merge: none found through connector inspection
+- Current audited base after PR #52: `3fd00ffceb45009a6fe4d9a91167c646535aa46f`
+- Most recent audited base commit message: `docs/security: refresh final audit and replace jose dependency`
+- Open pull requests before this final showcase-polish branch: none found through connector inspection
 
-**Important SHA note:** this report validates the release-candidate tree at `ea86e3d238516ba05b80f6ddc331b8d312e9686d`. The later merge commit for this audit-refresh PR is expected to differ because it changes release evidence documents only.
+**Important SHA note:** this report validates the current release-candidate base after PR #52 and records the additional showcase-polish work on this branch. The final merge commit for this showcase-polish PR is expected to differ from the base SHA because it changes public-facing labels, README-linked SVG assets, and release collateral.
 
-**Result:** ✅ VERIFIED - current connector-visible `main` is the final release-candidate tree that followed PR #51.
+**Result:** ✅ VERIFIED - current connector-visible `main` after PR #52 is the base for final public-showcase polish.
 
 ---
 
 ## 2. Release Scope Notes
 
-This refresh is documentation and evidence only.
+This final polish pass is intentionally narrow.
 
-- README/public visual polish is already merged on `main` via PR #48.
-- Accountant-first Streamlit UI polish is already merged on `main` via PR #49.
-- Final go-live audit evidence was refreshed via PR #50.
-- Dependabot cleanup is complete, including the final `actions/upload-artifact` v7.0.1 update via PR #51.
-- PR #51 changed only `.github/workflows/ci.yml` and updated the pinned `actions/upload-artifact` SHA from `ea165f8d65b6e75b540449e92b4886f43607fa02` to `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a`.
-- No runtime app code, provider logic, service logic, domain logic, dependency manifests, lockfiles, repo settings, tags, releases, branch protection, security settings, or visibility settings were changed in this refresh.
+Included:
+
+- Provider catalog display polish so public labels use `Demo`, `Synthetic`, and `Illustrative` wording instead of unfinished-looking `Stub` labels.
+- README clarification that demo providers use controlled sample data unless external API credentials are configured.
+- Rebuilt README-linked SVG assets for clearer public showcase rendering.
+- Refreshed audit, release notes, and changelog language after PR #52.
+
+Excluded:
+
+- No repository visibility change.
+- No tags or releases.
+- No branch-protection, CodeQL, Dependabot, workflow, or repository-security setting changes.
+- No lockfile changes.
+- No commercial-product, production-tax-engine, full-ERP, or treasury-execution claim.
 
 ---
 
 ## 3. Current Validation Results
 
-### Hosted CI after final Dependabot update
+### Hosted CI after PR #52
 
-Workflow run: `28842276127`
+Workflow run: `28917998821`
 
 **Result:** ✅ PASSED
 
@@ -53,11 +61,23 @@ Workflow run: `28842276127`
 - Accounting-control suites: success in each matrix job
 - Audit artifact upload: success in each matrix job
 
-### Clean-venv quality gate
+### PR #52 security/dependency correction
+
+PR #52 replaced `python-jose[cryptography]` with `PyJWT[crypto]` after `pip-audit` identified vulnerable transitive `ecdsa 0.19.2` exposure from `python-jose`.
+
+Recorded PR #52 changes:
+
+- `requirements.txt`: replaced `python-jose[cryptography]` with `PyJWT[crypto]`
+- `requirements-dev.txt`: removed `types-python-jose`
+- `src/apps/api/security.py`: switched JWT import/error handling to PyJWT
+- `tests/test_security_integration.py`: switched test decode import to PyJWT
+- `pyproject.toml`: removed stale `jose.*` mypy ignore
+
+### Clean-venv quality gate evidence carried forward
 
 Command: `.\.venv-clean\Scripts\python -m src.tools.quality_gate`
 
-**Result:** ✅ PASSED in the final go-live validation evidence and remains applicable to the release-candidate runtime tree because PR #51 changed only GitHub Actions workflow configuration.
+**Result:** ✅ PASSED in the final go-live and PR #52 validation evidence.
 
 - `ruff check`: passed
 - `ruff format --check`: passed
@@ -65,33 +85,26 @@ Command: `.\.venv-clean\Scripts\python -m src.tools.quality_gate`
 - full `pytest` suite: passed
 - accounting-focused suites: passed
 - `pip check`: passed
-- `pip-audit`: passed
+- `pip-audit`: passed after the PyJWT migration
 - current-tree secret scan: passed
 
 ### Focused Streamlit regression test
 
 Command: `python -m pytest tests/test_streamlit_app.py`
 
-**Result:** ✅ PASSED
-
-- 10 passed
+**Result:** ✅ PASSED in final go-live and PR #52 validation evidence.
 
 ### Documentation link validation
 
 Command: `python tools/link_validator.py`
 
-**Result:** ✅ PASSED
-
-- Files scanned: 72
-- Relative links checked: 130
-- Asset references checked: 5
-- Failures: 0
+**Result:** ✅ PASSED in final go-live and PR #52 validation evidence.
 
 ### Current-tree secret scan
 
 Command: `python -m src.tools.secret_scan`
 
-**Result:** ✅ PASSED - no high-confidence secret patterns found
+**Result:** ✅ PASSED in final go-live and PR #52 validation evidence.
 
 ### Full-history secret scan
 
@@ -99,27 +112,19 @@ Command: `gitleaks detect --no-banner --source . --log-opts="--all" --redact`
 
 **Result:** ✅ PASSED
 
-- Commits scanned: 103
-- Bytes scanned: approximately 1.78 MB
+- Commits scanned in recorded final go-live evidence: 103
+- Bytes scanned in recorded final go-live evidence: approximately 1.78 MB
 - Leaks found: 0
 
-### Public-language grep
+### Public-language and visual sanity check
 
-Scope: README, docs, Streamlit review UI, and Streamlit regression tests.
+This branch specifically addresses the owner-observed public-facing issues:
 
-**Result:** ✅ PASSED - no matches in the checked public-facing files
+- Public provider catalog labels no longer present the live demo as unfinished `Stub` work.
+- README-linked workflow and architecture SVG assets were rebuilt for clearer GitHub rendering.
+- README copy clarifies controlled sample data and avoids production-system overclaiming.
 
-### Visual sanity check
-
-Command: `$env:PYTHONPATH='src'; streamlit run src/apps/web/app.py --server.headless true --server.port 8502`
-
-**Result:** ✅ PASSED
-
-- Page title: `Modular Accounting Toolkit`
-- Tabs: `Snapshot Review`, `Review Utilities`, `Scenario Plans`
-- No top-level `Experimental Utilities` tab
-- Reviewer guidance mentions `provider catalog` and `technical audit payload`
-- No private/local path text surfaced in the visible review flow
+Final hosted CI for this polish PR must pass before merge.
 
 ---
 
@@ -127,8 +132,13 @@ Command: `$env:PYTHONPATH='src'; streamlit run src/apps/web/app.py --server.head
 
 Recent GitHub Actions evidence tied to the release-candidate path:
 
+- Workflow run `28917998821` for PR #52, `docs/security: refresh final audit and replace jose dependency`
+  - PR head SHA: `c07986bb70dbd37bdada09431a1e8c7dad744156`
+  - Merge commit / audited base SHA after PR #52: `3fd00ffceb45009a6fe4d9a91167c646535aa46f`
+  - Status: completed
+  - Conclusion: success
+
 - Workflow run `28842276127` for PR #51, `chore(deps): bump actions/upload-artifact from 4.6.2 to 7.0.1`
-  - PR head SHA: `e16967774e5638fe5b32b27366152e9d03dec004`
   - Merge commit / audited release-candidate SHA: `ea86e3d238516ba05b80f6ddc331b8d312e9686d`
   - Status: completed
   - Conclusion: success
@@ -138,12 +148,7 @@ Recent GitHub Actions evidence tied to the release-candidate path:
   - Status: completed
   - Conclusion: success
 
-- Workflow run `28835905325` for `docs: polish public showcase README visuals`
-  - Head SHA: `92579b3754b1ecf3bfec1b6744d229f374d5915f`
-  - Status: completed
-  - Conclusion: success
-
-**Result:** ✅ Hosted CI evidence exists for the final release-candidate path, including the last Dependabot workflow-action update.
+**Result:** ✅ Hosted CI evidence exists for the final release-candidate path through PR #52. This polish PR still requires its own hosted CI pass before merge.
 
 ---
 
@@ -151,33 +156,34 @@ Recent GitHub Actions evidence tied to the release-candidate path:
 
 `docs/reports/audit-latest.md` is framed as a technical metrics snapshot. It shows package-level coverage metrics for stewardship review and should be read alongside this audit report, not as the release verdict itself.
 
-No audit-metrics regeneration was required for PR #51 because the only changed file was `.github/workflows/ci.yml`; no Python package, Streamlit UI, test, README, or documentation-link target was changed by that dependency update.
+No audit-metrics regeneration was committed in this polish pass because the changes are public-facing labels, SVG collateral, README wording, and release evidence text.
 
 ---
 
 ## 6. Final Classification
 
-**Repository Status:** `READY FOR OWNER FINAL VISIBILITY DECISION`
+**Repository Status:** `READY FOR OWNER FINAL VISIBILITY DECISION AFTER FINAL SHOWCASE-POLISH PR CI PASSES`
 
 ### Justification
 
-1. The validated release-candidate SHA is `ea86e3d238516ba05b80f6ddc331b8d312e9686d`.
-2. The repository remains private and had no open pull requests after PR #51 merged.
-3. Dependabot cleanup is complete.
-4. README/public visual polish is merged.
-5. Accountant-first Streamlit UI polish is merged.
-6. The final `actions/upload-artifact` v7.0.1 update is merged.
-7. Hosted CI passed for the final Dependabot update across Python 3.12, 3.13, and 3.14.
-8. Clean-venv quality gate evidence passed and remains applicable to the release-candidate runtime tree.
-9. Focused Streamlit regression tests passed.
-10. Documentation link validation passed.
-11. Current-tree secret scan passed.
+1. The audited base after PR #52 is `3fd00ffceb45009a6fe4d9a91167c646535aa46f`.
+2. The repository remains private until the owner changes visibility.
+3. README/public visual polish is merged and this branch further repairs README-linked showcase assets.
+4. Accountant-first Streamlit UI polish is merged.
+5. Dependabot cleanup is complete.
+6. PR #52 resolved the `python-jose` / transitive `ecdsa` pip-audit failure by migrating to PyJWT.
+7. Hosted CI passed for PR #52 across Python 3.12, 3.13, and 3.14.
+8. Clean-venv quality gate evidence passed in recorded final validation.
+9. Focused Streamlit regression tests passed in recorded final validation.
+10. Documentation link validation passed in recorded final validation.
+11. Current-tree secret scan passed in recorded final validation.
 12. Full-history Gitleaks passed with no leaks.
-13. Public-language grep passed.
-14. Visual sanity checking confirmed the accountant-first Streamlit presentation.
+13. Public-facing provider labels now read as demo/sample/illustrative, not unfinished implementation labels.
+14. README-linked workflow and architecture visuals have been rebuilt for public readability.
 
 ### Owner Actions Before Any Visibility Change
 
 1. Review this refreshed audit report for final accuracy.
-2. Confirm the technical metrics snapshot remains acceptable as supporting evidence.
-3. Change repository visibility only when ready.
+2. Confirm the rebuilt README-linked visuals are acceptable.
+3. Confirm the final showcase-polish PR CI passes.
+4. Change repository visibility only when ready.
