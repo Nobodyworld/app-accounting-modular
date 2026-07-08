@@ -18,7 +18,7 @@ router = APIRouter(prefix="/tax", tags=["tax"])
 @router.post("/sync")
 def sync_tax(
     organization_id: int,
-    provider_key: str = "tax:oecd_stub",
+    provider_key: str = "tax:oecd_demo",
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str | int]:
