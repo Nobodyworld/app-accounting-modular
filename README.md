@@ -8,6 +8,8 @@ The project demonstrates how accounting workflows can be broken into auditable m
 
 ![Streamlit demonstration interface using controlled sample data](docs/examples/assets/streamlit-demo-snapshot.png)
 
+Demo providers use controlled sample data unless external API credentials are configured. The public review flow is intended to show provider-swappable controls, provenance, and journal evidence without claiming to be a production tax, treasury, or bank-feed system.
+
 ## Who This Is For
 
 - Accountants who want clearer control evidence around rates, rules, and journal postings.
