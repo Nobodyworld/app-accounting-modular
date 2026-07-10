@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          python -m pip install -r requirements-dev.txt
 
       - name: Run quality gate and tests
         env:
@@ -48,10 +48,59 @@ jobs:
           pytest -q tests/test_ledger_service.py tests/test_data_snapshot_service.py tests/test_modular_accounting_snapshot.py tests/test_modular_accounting_controls.py
 
       - name: Upload audit artifact
-        # actions/upload-artifact v4.6.2 (2024-12-10)
+        # actions/upload-artifact v7.0.1 (2026-06-30)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: audit-latest-python-${{ matrix.python-version }}
           path: docs/reports/audit-latest.md
           if-no-files-found: error
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        # actions/checkout v4.2.2 (2024-12-10)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - name: Validate Compose configuration
+        run: docker compose -p modacct-ci -f config/docker-compose.yml config
+
+      - name: Build containers
+        run: docker compose -p modacct-ci -f config/docker-compose.yml build
+
+      - name: Start containers
+        run: docker compose -p modacct-ci -f config/docker-compose.yml up -d
+
+      - name: Wait for API health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -p modacct-ci -f config/docker-compose.yml ps
+          docker compose -p modacct-ci -f config/docker-compose.yml logs api
+          exit 1
+
+      - name: Wait for Streamlit health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:8501/_stcore/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -p modacct-ci -f config/docker-compose.yml ps
+          docker compose -p modacct-ci -f config/docker-compose.yml logs web
+          exit 1
+
+      - name: Show container status
+        run: docker compose -p modacct-ci -f config/docker-compose.yml ps
+
+      - name: Tear down containers
+        if: always()
+        run: docker compose -p modacct-ci -f config/docker-compose.yml down -v --remove-orphans
