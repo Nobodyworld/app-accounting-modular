@@ -48,7 +48,6 @@ COMMANDS: Sequence[Sequence[str]] = (
         "tests/test_modular_accounting_controls.py",
     ),
     (sys.executable, "-m", "pip", "check"),
-    (sys.executable, "-m", "pip", "install", "--quiet", "pip-audit==2.9.0"),
     (
         sys.executable,
         "-m",
