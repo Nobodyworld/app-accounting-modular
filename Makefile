@@ -1,7 +1,7 @@
 PYTHON ?= python
 PIP ?= pip
 
-.PHONY: install lint format format-check typecheck test coverage quality security health plan-validate quality-gate audit release
+.PHONY: install lint format format-check typecheck test coverage quality security health plan-validate quality-gate audit release ci
 
 install:
 	$(PIP) install -r requirements-dev.txt
@@ -24,7 +24,7 @@ test:
 coverage: test
 
 security:
-	$(PYTHON) -m pip install --quiet pip-audit==2.9.0 && $(PYTHON) -m pip_audit -r requirements.txt -r requirements-dev.txt
+	$(PYTHON) -m pip_audit --timeout 60 -r requirements.txt -r requirements-dev.txt
 
 quality: lint format-check typecheck test security
 
