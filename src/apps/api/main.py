@@ -103,7 +103,6 @@ def create_app() -> FastAPI:
             yield
         finally:
             shutdown_scheduler()
-            shutdown_scheduler()
 
     app = FastAPI(title="Modular Accounting API", version=API_VERSION, lifespan=lifespan)
     app.add_middleware(RequestTraceMiddleware)
