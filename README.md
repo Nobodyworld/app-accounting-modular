@@ -114,7 +114,7 @@ For Docker Compose, configuration, validation, and troubleshooting, use the [set
 | ---- | ----------- |
 | [src/apps/](src/apps/README.md) | Implemented Python service packages, including the Streamlit demonstration interface in `src/apps/web/app.py`. |
 | [apps/web/app.py](apps/web/app.py) | Compatibility and test launcher shim that executes `src/apps/web/app.py`. |
-| [apps/react-ui/](apps/react-ui/README.md) | Experimental placeholder React surface (not part of the validated accounting runtime). |
+| `apps/react-ui/` | Experimental React source directory (not part of the validated accounting runtime). |
 | [src/cli/](src/cli/README.md) | Demo and operational CLI entry points. |
 | [src/plugins/](src/plugins/README.md) | Provider and extension reference plugins. |
 | [src/tools/](src/tools/README.md) | Quality-gate, audit, and release tooling. |

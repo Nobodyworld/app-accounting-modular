@@ -51,7 +51,7 @@ Demo providers use controlled sample data unless external credentials are config
 ## Known Limits
 
 - This is a portfolio-grade controls toolkit, not a production accounting system.
-- The React directory is an experimental placeholder and is not part of the validated runtime.
+- The React directory is experimental and is not part of the validated runtime.
 - OTLP export remains optional and requires the OpenTelemetry extras described in the operations documentation.
 - Streamlit `use_container_width` deprecation warnings remain a maintenance item.
 - Provider catalog persistence and several legacy TODOs remain future work.

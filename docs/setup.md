@@ -64,7 +64,7 @@ cp config/.env.example .env
 export MODACCT_ENV_FILE="$PWD/.env"
 ```
 
-Replace all placeholder credentials. At minimum, use a stable high-entropy `MODACCT_JWT_SECRET_KEY` for persistent authentication sessions.
+Replace every example credential value. At minimum, use a stable high-entropy `MODACCT_JWT_SECRET_KEY` for persistent authentication sessions.
 
 Common variables:
 

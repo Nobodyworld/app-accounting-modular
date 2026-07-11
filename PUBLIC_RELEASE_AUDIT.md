@@ -119,7 +119,7 @@ No visibility, tag, release, branch-protection, ruleset, or repository-security 
 - JWT signing uses PyJWT.
 - Runtime configuration supports a high-entropy persistent JWT secret through environment variables.
 - The application generates an ephemeral secret when none is configured and warns that tokens will rotate on restart.
-- Example environment values are placeholders rather than live credentials.
+- Example environment values do not contain live credentials.
 
 Before any public deployment, operators must replace example credentials and provide a persistent JWT secret.
 
