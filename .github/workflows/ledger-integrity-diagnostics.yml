@@ -1,0 +1,88 @@
+name: Ledger Integrity Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - "src/apps/api/routers/ledger.py"
+      - "src/apps/api/services/ledger_service.py"
+      - "src/apps/modular_accounting/domain/models.py"
+      - "tests/test_ledger_integrity.py"
+      - "tests/test_ledger_service.py"
+      - "tests/test_reports_api.py"
+      - "tests/test_smoke.py"
+      - ".github/workflows/ledger-integrity-diagnostics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Ruff lint changed files
+        run: >-
+          python -m ruff check
+          src/apps/api/routers/ledger.py
+          src/apps/api/services/ledger_service.py
+          src/apps/modular_accounting/domain/models.py
+          tests/test_ledger_integrity.py
+          tests/test_ledger_service.py
+          tests/test_reports_api.py
+          tests/test_smoke.py
+
+      - name: Ruff format changed files
+        run: >-
+          python -m ruff format --check
+          src/apps/api/routers/ledger.py
+          src/apps/api/services/ledger_service.py
+          src/apps/modular_accounting/domain/models.py
+          tests/test_ledger_integrity.py
+          tests/test_ledger_service.py
+          tests/test_reports_api.py
+          tests/test_smoke.py
+
+      - name: Mypy ledger sources
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: >-
+          python -m mypy
+          src/apps/api/routers/ledger.py
+          src/apps/api/services/ledger_service.py
+          src/apps/modular_accounting/domain/models.py
+
+      - name: Ledger integrity regressions
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: python -m pytest -q tests/test_ledger_integrity.py
+
+      - name: Direct ledger and smoke suites
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: python -m pytest -q tests/test_ledger_service.py tests/test_smoke.py
+
+      - name: Report and adjacent integration suites
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: >-
+          python -m pytest -q
+          tests/test_reports_api.py
+          tests/test_budget_service.py
+          tests/test_workflow_service.py
+          tests/test_security_integration.py
+          tests/test_audit_logging.py
