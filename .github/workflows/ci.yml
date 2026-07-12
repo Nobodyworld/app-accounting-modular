@@ -39,13 +39,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          set -o pipefail
-          python -m src.tools.quality_gate 2>&1 | tee quality-gate.log
-
-      - name: Capture formatter diff
-        if: failure()
-        run: |
-          python -m ruff format --diff src/apps/api/services/ledger_service.py tests/test_ledger_api_invariants.py > ruff-format.diff || true
+          python -m src.tools.quality_gate
 
       - name: Run accounting control suites
         env:
@@ -59,8 +53,5 @@ jobs:
         if: always()
         with:
           name: audit-latest-python-${{ matrix.python-version }}
-          path: |
-            docs/reports/audit-latest.md
-            quality-gate.log
-            ruff-format.diff
+          path: docs/reports/audit-latest.md
           if-no-files-found: error
