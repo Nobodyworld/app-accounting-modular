@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from apps.modular_accounting.adapters import (
     InMemoryCommodityAdapter,
     InMemoryFXAdapter,
@@ -53,6 +54,89 @@ def test_transaction_balance_control_fails_for_unbalanced_entries() -> None:
     )
 
     assert transaction.is_balanced() is False
+
+
+def test_empty_transaction_is_not_balanced() -> None:
+    transaction = Transaction(
+        transaction_id="txn-empty",
+        occurred_on=date(2026, 1, 1),
+        description="Empty journal",
+    )
+
+    assert transaction.is_balanced() is False
+
+
+def test_single_entry_transaction_is_not_balanced() -> None:
+    transaction = Transaction(
+        transaction_id="txn-single",
+        occurred_on=date(2026, 1, 1),
+        description="Single entry",
+        entries=[
+            LedgerEntry(
+                account_code="1000",
+                amount=Money(amount=Decimal("10.00"), currency="USD"),
+                direction="debit",
+            )
+        ],
+    )
+
+    assert transaction.is_balanced() is False
+
+
+def test_ledger_entry_rejects_invalid_direction() -> None:
+    with pytest.raises(ValueError, match="direction"):
+        LedgerEntry(
+            account_code="1000",
+            amount=Money(amount=Decimal("10.00"), currency="USD"),
+            direction="increase",
+        )
+
+
+def test_ledger_entry_rejects_non_positive_amount() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        LedgerEntry(
+            account_code="1000",
+            amount=Money(amount=Decimal("0"), currency="USD"),
+            direction="debit",
+        )
+
+
+def test_cross_currency_offset_is_not_balanced() -> None:
+    transaction = Transaction(
+        transaction_id="txn-currency",
+        occurred_on=date(2026, 1, 1),
+        description="Cross-currency offset",
+        entries=[
+            LedgerEntry(
+                account_code="1000",
+                amount=Money(amount=Decimal("100.00"), currency="USD"),
+                direction="debit",
+            ),
+            LedgerEntry(
+                account_code="4000",
+                amount=Money(amount=Decimal("100.00"), currency="EUR"),
+                direction="credit",
+            ),
+        ],
+    )
+
+    assert transaction.is_balanced() is False
+
+
+def test_each_currency_can_balance_independently() -> None:
+    transaction = Transaction(
+        transaction_id="txn-multi-currency",
+        occurred_on=date(2026, 1, 1),
+        description="Balanced currency groups",
+        entries=[
+            LedgerEntry("1000", Money(Decimal("100.00"), "USD"), "debit"),
+            LedgerEntry("4000", Money(Decimal("100.00"), "USD"), "credit"),
+            LedgerEntry("1100", Money(Decimal("80.00"), "EUR"), "debit"),
+            LedgerEntry("4100", Money(Decimal("80.00"), "EUR"), "credit"),
+        ],
+    )
+
+    assert transaction.is_balanced() is True
 
 
 def test_transaction_accounts_control_tracks_all_accounts_in_order() -> None:

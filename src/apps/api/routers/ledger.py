@@ -22,7 +22,7 @@ def _service_for_org(session: Session, organization_id: int) -> LedgerService:
     typed_cache = cache if isinstance(cache, dict) else {}
     if typed_cache is not cache:
         session.info["ledger_service_cache"] = typed_cache
-    if organization_id not in cache:
+    if organization_id not in typed_cache:
         typed_cache[organization_id] = LedgerService(session, organization_id=organization_id)
     return cast(LedgerService, typed_cache[organization_id])
 
@@ -82,13 +82,16 @@ def post_transaction(
         raise HTTPException(status_code=500, detail="Organization id is missing")
     org_id = org_ctx.organization.id
     service = _service_for_org(session, org_id)
-    return service.post_transaction(
-        payload.date,
-        payload.description,
-        list(payload.ledger_payload()),
-        source=payload.source,
-        source_reference=payload.source_reference,
-    )
+    try:
+        return service.post_transaction(
+            payload.date,
+            payload.description,
+            list(payload.ledger_payload()),
+            source=payload.source,
+            source_reference=payload.source_reference,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/trial-balance", response_model=TrialBalanceResponse)
@@ -114,9 +117,11 @@ def trial_balance(
         raise HTTPException(status_code=500, detail="Organization id is missing")
     org_id = org_ctx.organization.id
     service = _service_for_org(session, org_id)
-    return TrialBalanceResponse.from_service(
-        service.trial_balance(start_date=start_date, end_date=end_date, currency=currency)
-    )
+    try:
+        payload = service.trial_balance(start_date=start_date, end_date=end_date, currency=currency)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return TrialBalanceResponse.from_service(payload)
 
 
 __all__ = ["router"]

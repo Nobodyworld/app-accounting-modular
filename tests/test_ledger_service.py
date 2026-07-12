@@ -1,4 +1,4 @@
-"""Ledger service unit tests covering trial balance reporting behaviours."""
+"""Ledger service unit tests covering trial balance and posting controls."""
 
 from __future__ import annotations
 
@@ -191,13 +191,105 @@ def test_post_transaction_requires_balanced_entries() -> None:
         cash = ledger.create_account(name="Cash", type="ASSET", code="1000")
         expense = ledger.create_account(name="Expenses", type="EXPENSE", code="5000")
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="not balanced"):
             ledger.post_transaction(
                 date=date(2024, 2, 1),
                 description="Unbalanced",
                 postings=[
                     {"account_id": cash.id, "debit": 100.0, "credit": 0.0},
                     {"account_id": expense.id, "debit": 0.0, "credit": 90.0},
+                ],
+            )
+
+
+def test_post_transaction_requires_at_least_two_postings() -> None:
+    with create_session() as session:
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
+        cash = ledger.create_account(name="Cash", type="ASSET", code="1000")
+
+        with pytest.raises(ValueError, match="At least two postings"):
+            ledger.post_transaction(
+                date=date(2024, 2, 1),
+                description="One-sided entry",
+                postings=[{"account_id": cash.id, "debit": 100.0, "credit": 0.0}],
+            )
+
+
+@pytest.mark.parametrize(
+    ("debit", "credit", "message"),
+    [
+        (10.0, 10.0, "either debit or credit"),
+        (0.0, 0.0, "either debit or credit must be provided"),
+    ],
+)
+def test_post_transaction_requires_exactly_one_positive_side(debit: float, credit: float, message: str) -> None:
+    with create_session() as session:
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
+        first = ledger.create_account(name="First", type="ASSET", code="1000")
+        second = ledger.create_account(name="Second", type="EQUITY", code="3000")
+
+        with pytest.raises(ValueError, match=message):
+            ledger.post_transaction(
+                date=date(2024, 2, 1),
+                description="Invalid posting sides",
+                postings=[
+                    {"account_id": first.id, "debit": debit, "credit": credit},
+                    {"account_id": second.id, "debit": 0.0, "credit": 10.0},
+                ],
+            )
+
+
+def test_post_transaction_accepts_account_code_and_name_references() -> None:
+    with create_session() as session:
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
+        ledger.create_account(name="Cash", type="ASSET", code="1000")
+        ledger.create_account(name="Revenue", type="REVENUE", code="4000")
+
+        txn = ledger.post_transaction(
+            date=date(2024, 2, 1),
+            description="Named references",
+            postings=[
+                {"account_id": "1000", "debit": 25.0, "credit": 0.0},
+                {"account_id": "Revenue", "debit": 0.0, "credit": 25.0},
+            ],
+        )
+
+        assert txn.id is not None
+
+
+def test_post_transaction_rejects_cross_currency_offset() -> None:
+    with create_session() as session:
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
+        usd = ledger.create_account(name="USD Cash", type="ASSET", code="USD", currency="USD")
+        eur = ledger.create_account(name="EUR Revenue", type="REVENUE", code="EUR", currency="EUR")
+
+        with pytest.raises(ValueError, match="not balanced for currency"):
+            ledger.post_transaction(
+                date=date(2024, 2, 1),
+                description="Invalid cross-currency offset",
+                postings=[
+                    {"account_id": usd.id, "debit": 100.0, "credit": 0.0},
+                    {"account_id": eur.id, "debit": 0.0, "credit": 100.0},
                 ],
             )
 
@@ -221,6 +313,60 @@ def test_post_transaction_requires_existing_account() -> None:
                     {"account_id": cash.id, "debit": 0.0, "credit": 100.0},
                 ],
             )
+
+
+def test_trial_balance_requires_fx_rate_for_conversion() -> None:
+    with create_session() as session:
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
+        receivable = ledger.create_account(name="EUR Receivable", type="ASSET", code="1100", currency="EUR")
+        revenue = ledger.create_account(name="EUR Revenue", type="REVENUE", code="4100", currency="EUR")
+        ledger.post_transaction(
+            date=date(2024, 2, 2),
+            description="EUR sale",
+            postings=[
+                {"account_id": receivable.id, "debit": 100.0, "credit": 0.0},
+                {"account_id": revenue.id, "debit": 0.0, "credit": 100.0},
+            ],
+        )
+
+        with pytest.raises(ValueError, match="Missing FX rate for EUR/USD"):
+            ledger.trial_balance(currency="USD")
+
+
+def test_post_transaction_rolls_back_on_commit_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    with create_session() as session:
+        org = Organization(name="Test Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+        ledger = LedgerService(session, organization_id=org.id)
+        cash = ledger.create_account(name="Cash", type="ASSET", code="1000")
+        revenue = ledger.create_account(name="Revenue", type="REVENUE", code="4000")
+        original_commit = session.commit
+
+        def fail_commit() -> None:
+            raise RuntimeError("database unavailable")
+
+        monkeypatch.setattr(session, "commit", fail_commit)
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            ledger.post_transaction(
+                date=date(2024, 2, 3),
+                description="Rollback test",
+                postings=[
+                    {"account_id": cash.id, "debit": 10.0, "credit": 0.0},
+                    {"account_id": revenue.id, "debit": 0.0, "credit": 10.0},
+                ],
+            )
+        monkeypatch.setattr(session, "commit", original_commit)
+
+        assert session.exec(select(Transaction)).all() == []
+        assert session.exec(select(JournalEntry)).all() == []
 
 
 # TODO - (ledger) Extend coverage to reversing entries and multi-org postings.
@@ -274,17 +420,25 @@ def test_multi_org_postings_isolated() -> None:
         ledger1 = LedgerService(session, organization_id=org1.id)
         ledger2 = LedgerService(session, organization_id=org2.id)
         cash1 = ledger1.create_account(name="Cash1", type="ASSET", code="C1")
+        equity1 = ledger1.create_account(name="Equity1", type="EQUITY", code="E1")
         cash2 = ledger2.create_account(name="Cash2", type="ASSET", code="C2")
+        equity2 = ledger2.create_account(name="Equity2", type="EQUITY", code="E2")
 
         ledger1.post_transaction(
             date=date(2024, 4, 1),
             description="Org1 txn",
-            postings=[{"account_id": cash1.id, "debit": 10.0, "credit": 0.0}],
+            postings=[
+                {"account_id": cash1.id, "debit": 10.0, "credit": 0.0},
+                {"account_id": equity1.id, "debit": 0.0, "credit": 10.0},
+            ],
         )
         ledger2.post_transaction(
             date=date(2024, 4, 2),
             description="Org2 txn",
-            postings=[{"account_id": cash2.id, "debit": 20.0, "credit": 0.0}],
+            postings=[
+                {"account_id": cash2.id, "debit": 20.0, "credit": 0.0},
+                {"account_id": equity2.id, "debit": 0.0, "credit": 20.0},
+            ],
         )
 
         tb1 = ledger1.trial_balance()
@@ -293,5 +447,7 @@ def test_multi_org_postings_isolated() -> None:
         rows2 = cast(list[TrialBalanceRow], tb2["rows"])
         codes1 = {row.account_code for row in rows1}
         codes2 = {row.account_code for row in rows2}
-        assert "C1" in codes1 and "C1" not in codes2
-        assert "C2" in codes2 and "C2" not in codes1
+        assert {"C1", "E1"}.issubset(codes1)
+        assert "C2" not in codes1 and "E2" not in codes1
+        assert {"C2", "E2"}.issubset(codes2)
+        assert "C1" not in codes2 and "E1" not in codes2
