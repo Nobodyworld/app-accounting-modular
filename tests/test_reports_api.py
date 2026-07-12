@@ -9,7 +9,15 @@ from decimal import Decimal
 
 import pytest
 from apps.api import db
-from apps.api.models.models import Budget, BudgetLine, ForecastOutput, Organization, Rate
+from apps.api.models.models import (
+    Budget,
+    BudgetLine,
+    ForecastOutput,
+    JournalEntry,
+    Organization,
+    Rate,
+    Transaction,
+)
 from apps.api.routers.reports import (
     _response_from_cashflow,
     budget_vs_actual,
@@ -119,14 +127,34 @@ def test_budget_vs_actual_multicurrency_conversion() -> None:
         cash = ledger.create_account("Cash", "ASSET", code="1000", organization_id=org.id, currency="USD")
         expense = ledger.create_account("Ops EUR", "EXPENSE", code="5000", organization_id=org.id, currency="EUR")
 
-        ledger.post_transaction(
-            date=date(2024, 1, 1),
-            description="EUR spend",
-            postings=[
-                {"account_id": expense.id, "debit": 100.0, "credit": 0.0, "currency": "EUR"},
-                {"account_id": cash.id, "debit": 0.0, "credit": 100.0, "currency": "USD"},
-            ],
+        session.add(Rate(base="EUR", quote="USD", date=date(2024, 1, 1), value=1.1, provider="demo"))
+        transaction = Transaction(date=date(2024, 1, 1), description="EUR spend", organization_id=org.id)
+        session.add(transaction)
+        session.commit()
+        session.refresh(transaction)
+        assert transaction.id is not None
+        # This fixture targets downstream report conversion. Mixed-currency posting is
+        # seeded explicitly with converted economic amounts rather than bypassing the
+        # ledger service's normal single-currency transaction invariant.
+        session.add_all(
+            [
+                JournalEntry(
+                    transaction_id=transaction.id,
+                    account_id=expense.id,
+                    debit=100.0,
+                    credit=0.0,
+                    currency="EUR",
+                ),
+                JournalEntry(
+                    transaction_id=transaction.id,
+                    account_id=cash.id,
+                    debit=0.0,
+                    credit=110.0,
+                    currency="USD",
+                ),
+            ]
         )
+        session.commit()
 
         budget = Budget(
             organization_id=org.id,
@@ -147,10 +175,7 @@ def test_budget_vs_actual_multicurrency_conversion() -> None:
             )
         )
         session.commit()
-        session.add(Rate(base="EUR", quote="USD", date=date(2024, 1, 1), value=1.1, provider="stub"))
-        session.commit()
 
-        # run endpoint
         response = budget_vs_actual(
             budget_id=budget.id,
             organization_id=org.id,
@@ -202,7 +227,7 @@ def test_cashflow_endpoint() -> None:
             session=session,
         )
         assert response.metadata.organization_id == org_id
-        assert response.current_cash < 0  # cash reduced by spend
+        assert response.current_cash < 0
         assert response.metadata.forecast_diagnostics is not None
         diagnostics = response.metadata.forecast_diagnostics
         assert diagnostics is not None
