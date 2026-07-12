@@ -39,7 +39,8 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          python -m src.tools.quality_gate
+          set -o pipefail
+          python -m src.tools.quality_gate 2>&1 | tee quality-gate.log
 
       - name: Run accounting control suites
         env:
@@ -53,5 +54,7 @@ jobs:
         if: always()
         with:
           name: audit-latest-python-${{ matrix.python-version }}
-          path: docs/reports/audit-latest.md
+          path: |
+            docs/reports/audit-latest.md
+            quality-gate.log
           if-no-files-found: error
