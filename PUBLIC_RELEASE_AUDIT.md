@@ -1,9 +1,9 @@
 # Public Release Audit - Current Release Candidate
 
-**Audit Date:** 2026-07-10  
-**Release-candidate baseline:** `b00b2d84d082e8d97ee9dba0cf366c1fbe6f21e1`  
-**Baseline commit:** `docs: clean README SVG connector arrows`  
-**Audit scope:** public portfolio readiness, release evidence, onboarding accuracy, dependency posture, and hosted validation
+**Audit Date:** 2026-07-11  
+**Release-readiness branch baseline:** `b00b2d84d082e8d97ee9dba0cf366c1fbe6f21e1`  
+**Current `main`:** `9c45cc001449b38fec67d40474a38689ed81b2ac`  
+**Audit scope:** public portfolio readiness, accounting-control integrity, release evidence, onboarding accuracy, dependency posture, and hosted validation
 
 ---
 
@@ -13,17 +13,18 @@
 - Default branch: `main`
 - Visibility at audit time: private
 - Archived: false
-- Open pull requests before this correction branch: none
-- Open issues before this correction branch: none
-- Release-candidate baseline: `b00b2d84d082e8d97ee9dba0cf366c1fbe6f21e1`
+- Release-readiness PR: #55
+- Release-readiness branch: `agent/public-release-truth`
+- Current `main`: `9c45cc001449b38fec67d40474a38689ed81b2ac`
+- Remaining public-release control issues: #56 and #57
 
-This audit records the validated baseline and the corrections proposed by the public-release readiness pull request. The eventual merge commit will differ from the baseline because the pull request updates release evidence, onboarding documentation, container configuration, and validation automation.
+PR #60 resolved the accounting-integrity blocker and was squash-merged into `main`. PR #55 remains a separate release, documentation, visual, and container-hardening branch. GitHub's pull-request checks must validate the current merge ref so the release-hardening changes are tested together with the accounting controls now on `main`.
 
 ---
 
 ## 2. Product Scope
 
-Modular Accounting is a portfolio-grade accounting-control toolkit and demonstration. It is designed to show auditable orchestration across provider-backed financial snapshots, journal controls, health diagnostics, scenario plans, and extension boundaries.
+Modular Accounting is a portfolio-grade accounting-control toolkit and demonstration. It shows auditable orchestration across provider-backed financial snapshots, journal controls, health diagnostics, scenario plans, and extension boundaries.
 
 It does **not** claim to be:
 
@@ -39,33 +40,35 @@ Demo and illustrative providers use controlled sample data unless external crede
 
 ## 3. Hosted CI Evidence
 
-### Latest validated baseline
+### Accounting-integrity baseline now on `main`
 
-PR #54: `docs: clean README SVG connector arrows`
+PR #60: `fix: enforce double-entry invariants across ledger layers`
 
-- Merge commit: `b00b2d84d082e8d97ee9dba0cf366c1fbe6f21e1`
-- Workflow run: `28931509566`
-- Conclusion: success
-- `build (3.12)`: success
-- `build (3.13)`: success
-- `build (3.14)`: success
-- Quality gate and tests: success in every matrix job
-- Accounting-control suites: success in every matrix job
-- Audit artifact upload: success in every matrix job
+- Squash merge commit: `9c45cc001449b38fec67d40474a38689ed81b2ac`
+- Final workflow run: `29176805053`
+- Python 3.12: success
+- Python 3.13: success
+- Python 3.14: success
+- Diagnostic validation: 281 tests passed
+- Aggregate pytest coverage: 86.12%
+- Issue #58: closed as completed
+
+The merged control work requires at least two normal journal postings, validates posting sides and numeric amounts, balances each currency independently, supports intentional account-reference forms, rolls back failed persistence, reports missing FX rates explicitly, and adds service, domain, API, and no-partial-persistence regression coverage.
+
+### Previous release-readiness branch validation
+
+PR #55 head `4f2f411e412f1bfedc1a3c6fb7925a32f6004229` previously passed workflow run `29144808093`:
+
+- Python 3.12: success
+- Python 3.13: success
+- Python 3.14: success
+- container smoke: success
+
+That result is historical because `main` subsequently gained PR #60. A new PR #55 run against the current merge ref is required before the branch can be considered technically ready.
 
 ### Security/dependency correction
 
-PR #52 replaced `python-jose[cryptography]` with `PyJWT[crypto]` after `pip-audit` identified vulnerable transitive `ecdsa 0.19.2` exposure.
-
-Recorded changes:
-
-- `requirements.txt`: replaced `python-jose[cryptography]` with `PyJWT[crypto]`;
-- `requirements-dev.txt`: removed `types-python-jose`;
-- `src/apps/api/security.py`: migrated JWT handling to PyJWT;
-- `tests/test_security_integration.py`: migrated decode validation to PyJWT; and
-- `pyproject.toml`: removed the obsolete `jose.*` mypy override.
-
-PR #52 workflow run `28917998821` passed across Python 3.12, 3.13, and 3.14.
+PR #52 replaced `python-jose[cryptography]` with `PyJWT[crypto]` after `pip-audit` identified vulnerable transitive `ecdsa 0.19.2` exposure. Workflow run `28917998821` passed across Python 3.12, 3.13, and 3.14.
 
 ---
 
@@ -82,63 +85,67 @@ The repository quality gate runs:
 7. `pip-audit`
 8. current-tree secret scanning
 
-Recorded clean-environment validation also includes:
-
-- focused Streamlit regression tests;
-- documentation link validation; and
-- full-history Gitleaks scanning with no findings.
+Recorded clean-environment validation also includes focused Streamlit regression tests, documentation link validation, and full-history Gitleaks scanning with no findings.
 
 ### Coverage-metrics clarification
 
-`docs/reports/audit-latest.md` reports package-level trace metrics generated by `src.tools.audit_metrics`. Those package rows are stewardship diagnostics and are not the aggregate coverage value enforced by pytest. The authoritative CI release gate remains `pytest --cov ... --cov-fail-under=85`.
+`docs/reports/audit-latest.md` reports package-level trace metrics generated by `src.tools.audit_metrics`. Those rows are stewardship diagnostics and are not the aggregate coverage value enforced by pytest. The authoritative release gate remains pytest-cov with an 85% aggregate minimum.
 
 ---
 
-## 5. Public-facing Corrections in This Release-readiness Pass
+## 5. Release-readiness Corrections in PR #55
 
-This pass addresses the remaining release-truth and onboarding drift identified after PR #54:
+PR #55:
 
-- refreshes this audit to the latest validated baseline;
-- records PR #54 and workflow run `28931509566`;
-- updates release notes, changelog, and roadmap status;
-- clarifies the technical audit coverage methodology;
+- refreshes release evidence, release notes, changelog, and roadmap status;
+- clarifies the technical-audit coverage methodology;
 - corrects stale setup and Makefile command references;
+- makes the README quick start cross-platform;
 - aligns Docker Compose build contexts with the repository layout;
 - sets explicit container `PYTHONPATH` and service-to-service API configuration;
-- removes development reload mode from the API container; and
-- adds container configuration/build/startup smoke validation to CI.
+- removes development reload mode from the API image;
+- adds API and Streamlit health checks and persistent SQLite storage;
+- adds container configuration, build, startup, health, and teardown validation to CI;
+- refreshes the public Streamlit screenshot;
+- corrects architecture-diagram rendering; and
+- removes stale public placeholder terminology.
 
-No visibility, tag, release, branch-protection, ruleset, or repository-security setting is changed by this pull request.
+No visibility, tag, GitHub release, branch-protection, ruleset, or repository-security setting is changed by PR #55.
 
 ---
 
 ## 6. Secret and Configuration Posture
 
-- Current-tree secret scan: passed in the recorded release path.
-- Full-history Gitleaks scan: passed with zero leaks in the recorded final go-live evidence.
+- Current-tree secret scanning passes in the recorded release path.
+- Full-history Gitleaks scanning recorded zero findings.
 - JWT signing uses PyJWT.
 - Runtime configuration supports a high-entropy persistent JWT secret through environment variables.
-- The application generates an ephemeral secret when none is configured and warns that tokens will rotate on restart.
+- The application generates an ephemeral secret when none is configured and warns that tokens rotate on restart.
 - Example environment values do not contain live credentials.
 
-Before any public deployment, operators must replace example credentials and provide a persistent JWT secret.
+Before public deployment, operators must replace example credentials and provide a persistent JWT secret.
 
 ---
 
-## 7. Final Classification
+## 7. Current Classification
 
-**Repository classification:** `READY FOR PUBLIC PORTFOLIO VISIBILITY AFTER THIS RELEASE-READINESS PR PASSES HOSTED CI AND IS MERGED`
+**Repository classification:** `TECHNICALLY NEAR READY - PUBLIC VISIBILITY BLOCKED`
 
-### Basis
+### Completed technical controls
 
-1. The current baseline is cleanly merged with no open PR or issue backlog at audit start.
-2. The latest baseline CI passed across Python 3.12, 3.13, and 3.14.
+1. The accounting-integrity defect identified in #58 is resolved on `main`.
+2. The merged accounting-control CI passed on Python 3.12, 3.13, and 3.14.
 3. The quality gate covers linting, formatting, typing, tests, aggregate coverage, dependency health, vulnerability auditing, and secret scanning.
 4. The vulnerable `python-jose` dependency path was removed.
-5. Full-history secret scanning recorded no findings.
-6. The README accurately limits product claims and identifies sample/demo data.
-7. Public-facing screenshots and architecture/control diagrams are present.
-8. This correction pass brings release evidence, setup instructions, Docker configuration, and roadmap status back into alignment.
+5. Public-facing product claims remain limited to a portfolio-grade accounting-controls demonstration.
+6. PR #55 supplies the remaining release-evidence, onboarding, container, and visual corrections.
+
+### Remaining gates
+
+1. PR #55 must pass the full Python matrix and container smoke job against current `main`.
+2. Issue #56 must provide a valid, monitored private security-reporting channel.
+3. Issue #57 must record the repository metadata, ruleset, required-check, Actions-permission, vulnerability-reporting, Dependabot, secret-scanning, push-protection, social-preview, and release decisions.
+4. Repository visibility must remain private until those gates are complete.
 
 This classification is for a public code portfolio and accounting-controls demonstration. It is not a production-readiness certification for financial reporting, tax compliance, treasury execution, or regulated data processing.
 
@@ -146,11 +153,10 @@ This classification is for a public code portfolio and accounting-controls demon
 
 ## 8. Owner Actions Before Changing Visibility
 
-1. Confirm this pull request's hosted CI, including the container smoke job, passes.
-2. Review the README screenshot and linked SVGs in GitHub rendering.
-3. Confirm `security@modular-accounting.dev` is a real, monitored reporting address; otherwise replace it before publication.
-4. Review repository description, topics, and social-preview image in GitHub settings.
-5. Confirm branch protection or repository rulesets for `main`.
-6. Confirm private vulnerability reporting and desired GitHub security features are enabled.
-7. Decide whether to create a GitHub release for version `0.1.0` or keep the repository explicitly unreleased.
-8. Change repository visibility only after the checks above are complete.
+1. Confirm PR #55's new hosted CI passes against the current merge ref, including container smoke.
+2. Resolve #56 with a verified private security-reporting route.
+3. Complete the repository-settings inventory in #57.
+4. Review the README screenshot and linked SVGs in GitHub rendering.
+5. Decide whether version `0.1.0` receives a GitHub release or remains explicitly unreleased.
+6. Keep the repository private until all required controls are recorded.
+7. Make the visibility change as a separate owner action after PR #55 is merged.
