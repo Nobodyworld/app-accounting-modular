@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from sqlmodel import Session, select
@@ -86,6 +86,9 @@ class LedgerService:
         if isinstance(identifier, int):
             stmt = stmt.where(Account.id == identifier)
         else:
+            identifier = identifier.strip()
+            if not identifier:
+                raise ValueError("account reference cannot be blank")
             stmt = stmt.where((Account.code == identifier) | (Account.name == identifier))
         if self.organization_id is not None:
             stmt = stmt.where(Account.organization_id == self.organization_id)
@@ -97,18 +100,27 @@ class LedgerService:
     # ------------------------------------------------------------------
     # Transaction posting
     # ------------------------------------------------------------------
+    @staticmethod
+    def _coerce_amount(value: object, *, posting_index: int, field: str) -> Decimal:
+        try:
+            return Decimal(str(value or 0))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise ValueError(f"Posting {posting_index}: {field} must be numeric") from exc
+
     def validate_transaction(
         self, date: date, description: str, postings: Iterable[dict[str, Any]]
     ) -> list[dict[str, object]]:
+        del date  # Reserved for future period-close validation.
         if not description or not description.strip():
             raise ValueError("Transaction description is required")
         posting_list = list(postings)
-        if not posting_list:
-            raise ValueError("At least one posting is required")
+        if len(posting_list) < 2:
+            raise ValueError("At least two postings are required")
 
         normalised: list[dict[str, object]] = []
         total_debit = Decimal("0")
         total_credit = Decimal("0")
+        currencies: set[str] = set()
 
         for idx, posting in enumerate(posting_list, start=1):
             account_ref = posting.get("account_id")
@@ -116,26 +128,35 @@ class LedgerService:
                 raise ValueError(f"Posting {idx}: account reference is required")
             if not isinstance(account_ref, (int, str)):
                 raise ValueError(f"Posting {idx}: account reference must be int or str")
-            account = self.require_account(int(account_ref))
+            account = self.require_account(account_ref)
 
-            debit = Decimal(str(posting.get("debit", 0) or 0))
-            credit = Decimal(str(posting.get("credit", 0) or 0))
+            debit = self._coerce_amount(posting.get("debit", 0), posting_index=idx, field="debit")
+            credit = self._coerce_amount(posting.get("credit", 0), posting_index=idx, field="credit")
             if debit < 0 or credit < 0:
                 raise ValueError("Debit and credit amounts must be non-negative")
+            if debit > 0 and credit > 0:
+                raise ValueError(f"Posting {idx}: specify either debit or credit, not both")
+            if debit == 0 and credit == 0:
+                raise ValueError(f"Posting {idx}: either debit or credit must be provided")
 
-            currency = posting.get("currency") or account.currency
+            currency = str(posting.get("currency") or account.currency).strip().upper()
+            if not currency:
+                raise ValueError(f"Posting {idx}: currency is required")
+            currencies.add(currency)
             normalised.append(
                 {
                     "account_id": account.id,
                     "debit": debit,
                     "credit": credit,
-                    "currency": str(currency),
+                    "currency": currency,
                 }
             )
             total_debit += debit
             total_credit += credit
 
-        if len(posting_list) > 1 and total_debit != total_credit:
+        if len(currencies) > 1:
+            raise ValueError("Mixed-currency transactions require an explicit conversion policy")
+        if total_debit != total_credit:
             raise ValueError("Transaction is not balanced")
 
         return normalised
@@ -254,7 +275,9 @@ class LedgerService:
                         or None
                     )
                     if rate is None:
-                        continue
+                        raise ValueError(
+                            f"Missing FX rate for {acct_currency}/{currency} on or before {txn_date.isoformat()}"
+                        )
                     factor = Decimal(str(rate))
                     debit_dec *= factor
                     credit_dec *= factor
