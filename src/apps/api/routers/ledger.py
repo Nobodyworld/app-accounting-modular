@@ -58,8 +58,10 @@ def create_account(
     org_id = org_ctx.organization.id
     service = _service_for_org(session, org_id)
     data = payload.model_dump(exclude={"organization_id"})
-    # TODO - Validate account code uniqueness before delegating to the service layer.
-    return service.create_account(**data)
+    try:
+        return service.create_account(**data)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/post", response_model=Transaction)
@@ -82,13 +84,16 @@ def post_transaction(
         raise HTTPException(status_code=500, detail="Organization id is missing")
     org_id = org_ctx.organization.id
     service = _service_for_org(session, org_id)
-    return service.post_transaction(
-        payload.date,
-        payload.description,
-        list(payload.ledger_payload()),
-        source=payload.source,
-        source_reference=payload.source_reference,
-    )
+    try:
+        return service.post_transaction(
+            payload.date,
+            payload.description,
+            list(payload.ledger_payload()),
+            source=payload.source,
+            source_reference=payload.source_reference,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/trial-balance", response_model=TrialBalanceResponse)
@@ -114,9 +119,11 @@ def trial_balance(
         raise HTTPException(status_code=500, detail="Organization id is missing")
     org_id = org_ctx.organization.id
     service = _service_for_org(session, org_id)
-    return TrialBalanceResponse.from_service(
-        service.trial_balance(start_date=start_date, end_date=end_date, currency=currency)
-    )
+    try:
+        payload = service.trial_balance(start_date=start_date, end_date=end_date, currency=currency)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return TrialBalanceResponse.from_service(payload)
 
 
 __all__ = ["router"]
