@@ -11,7 +11,8 @@ from typing import Any
 import pytest
 from apps.api import db
 from apps.api.main import create_app
-from apps.api.models.models import JournalEntry, Membership, Organization, Transaction as StoredTransaction, User
+from apps.api.models.models import JournalEntry, Membership, Organization, User
+from apps.api.models.models import Transaction as StoredTransaction
 from apps.api.security import get_current_user
 from apps.api.services.ledger_service import LedgerService
 from apps.modular_accounting.domain import LedgerEntry, Money, Transaction
