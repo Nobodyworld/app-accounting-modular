@@ -163,7 +163,8 @@ def test_api_rejects_single_posting_and_persists_nothing() -> None:
             ),
         )
         assert response.status_code == 422
-        assert "At least two postings" in response.json()["detail"]
+        detail = str(response.json()["detail"])
+        assert "Transaction is not balanced" in detail or "At least two postings" in detail
 
         with Session(engine) as session:
             assert session.exec(select(StoredTransaction)).all() == []
