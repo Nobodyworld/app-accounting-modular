@@ -99,7 +99,7 @@ class LedgerEntry:
     account_code:
         Identifier for the ledger account.
     amount:
-        Monetary amount applied to the account.
+        Positive monetary magnitude applied to the account.
     direction:
         Either ``"debit"`` or ``"credit"``.
     """
@@ -107,6 +107,18 @@ class LedgerEntry:
     account_code: str
     amount: Money
     direction: str
+
+    def __post_init__(self) -> None:
+        direction = self.direction.strip().lower()
+        if direction not in {"debit", "credit"}:
+            raise ValueError("Ledger entry direction must be 'debit' or 'credit'")
+        if self.amount.amount <= Decimal("0"):
+            raise ValueError("Ledger entry amount must be positive")
+        currency = self.amount.currency.strip().upper()
+        if not currency:
+            raise ValueError("Ledger entry currency is required")
+        self.direction = direction
+        self.amount.currency = currency
 
 
 @dataclass(slots=True)
@@ -131,21 +143,29 @@ class Transaction:
     entries: list[LedgerEntry] = field(default_factory=list)
 
     def is_balanced(self) -> bool:
-        """Determine whether the transaction entries balance.
+        """Determine whether each currency in the transaction balances.
 
         Returns
         -------
         bool
-            ``True`` when the sum of debit and credit amounts cancel out, otherwise ``False``.
+            ``True`` only when at least two valid entries exist and every
+            currency has equal debit and credit magnitudes.
         """
 
-        total = Decimal("0")
+        if len(self.entries) < 2:
+            return False
+
+        totals: dict[str, Decimal] = {}
         for entry in self.entries:
-            if entry.direction.lower() == "debit":
-                total += entry.amount.amount
-            else:
-                total -= entry.amount.amount
-        return total == Decimal("0")
+            direction = entry.direction.strip().lower()
+            currency = entry.amount.currency.strip().upper()
+            amount = entry.amount.amount
+            if direction not in {"debit", "credit"} or not currency or amount <= Decimal("0"):
+                return False
+            signed_amount = amount if direction == "debit" else -amount
+            totals[currency] = totals.get(currency, Decimal("0")) + signed_amount
+
+        return bool(totals) and all(total == Decimal("0") for total in totals.values())
 
     def add_entry(self, entry: LedgerEntry) -> None:
         """Append an entry to the transaction.
