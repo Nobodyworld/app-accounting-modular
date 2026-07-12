@@ -56,13 +56,23 @@ def create_ledger_client() -> Iterator[tuple[TestClient, Any, int, dict[str, int
 
         ledger = LedgerService(seed, organization_id=organization.id)
         accounts = {
-            "usd_cash": ledger.create_account("USD Cash", "ASSET", "1000", currency="USD").id,
-            "usd_equity": ledger.create_account("USD Equity", "EQUITY", "3000", currency="USD").id,
-            "eur_cash": ledger.create_account("EUR Cash", "ASSET", "1100", currency="EUR").id,
-            "eur_equity": ledger.create_account("EUR Equity", "EQUITY", "3100", currency="EUR").id,
+            "usd_cash": ledger.create_account(
+                "USD Cash", "ASSET", "1000", currency="USD"
+            ).id,
+            "usd_equity": ledger.create_account(
+                "USD Equity", "EQUITY", "3000", currency="USD"
+            ).id,
+            "eur_cash": ledger.create_account(
+                "EUR Cash", "ASSET", "1100", currency="EUR"
+            ).id,
+            "eur_equity": ledger.create_account(
+                "EUR Equity", "EQUITY", "3100", currency="EUR"
+            ).id,
         }
         assert all(account_id is not None for account_id in accounts.values())
-        typed_accounts = {name: int(account_id) for name, account_id in accounts.items()}
+        typed_accounts = {
+            name: int(account_id) for name, account_id in accounts.items()
+        }
         user_id = user.id
         organization_id = organization.id
 
@@ -85,7 +95,9 @@ def create_ledger_client() -> Iterator[tuple[TestClient, Any, int, dict[str, int
         engine.dispose()
 
 
-def _transaction_payload(organization_id: int, postings: list[dict[str, object]]) -> dict[str, object]:
+def _transaction_payload(
+    organization_id: int, postings: list[dict[str, object]]
+) -> dict[str, object]:
     return {
         "date": "2026-07-12",
         "description": "Integrity regression",
@@ -144,7 +156,9 @@ def test_nonpositive_domain_amount_is_rejected() -> None:
 
 def test_api_rejects_empty_postings_and_persists_nothing() -> None:
     with create_ledger_client() as (client, engine, organization_id, _accounts):
-        response = client.post("/ledger/post", json=_transaction_payload(organization_id, []))
+        response = client.post(
+            "/ledger/post", json=_transaction_payload(organization_id, [])
+        )
         assert response.status_code == 422
         assert "At least two postings" in response.json()["detail"]
 
@@ -164,7 +178,9 @@ def test_api_rejects_single_posting_and_persists_nothing() -> None:
         )
         assert response.status_code == 422
         detail = str(response.json()["detail"])
-        assert "Transaction is not balanced" in detail or "At least two postings" in detail
+        assert (
+            "Transaction is not balanced" in detail or "At least two postings" in detail
+        )
 
         with Session(engine) as session:
             assert session.exec(select(StoredTransaction)).all() == []
