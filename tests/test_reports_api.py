@@ -116,7 +116,13 @@ def test_budget_vs_actual_multicurrency_conversion() -> None:
         session.refresh(org)
 
         ledger = LedgerService(session)
-        cash = ledger.create_account("Cash", "ASSET", code="1000", organization_id=org.id, currency="USD")
+        eur_payable = ledger.create_account(
+            "EUR Payable",
+            "LIABILITY",
+            code="2000",
+            organization_id=org.id,
+            currency="EUR",
+        )
         expense = ledger.create_account("Ops EUR", "EXPENSE", code="5000", organization_id=org.id, currency="EUR")
 
         ledger.post_transaction(
@@ -124,7 +130,7 @@ def test_budget_vs_actual_multicurrency_conversion() -> None:
             description="EUR spend",
             postings=[
                 {"account_id": expense.id, "debit": 100.0, "credit": 0.0, "currency": "EUR"},
-                {"account_id": cash.id, "debit": 0.0, "credit": 100.0, "currency": "USD"},
+                {"account_id": eur_payable.id, "debit": 0.0, "credit": 100.0, "currency": "EUR"},
             ],
         )
 
@@ -150,7 +156,6 @@ def test_budget_vs_actual_multicurrency_conversion() -> None:
         session.add(Rate(base="EUR", quote="USD", date=date(2024, 1, 1), value=1.1, provider="stub"))
         session.commit()
 
-        # run endpoint
         response = budget_vs_actual(
             budget_id=budget.id,
             organization_id=org.id,
@@ -202,7 +207,7 @@ def test_cashflow_endpoint() -> None:
             session=session,
         )
         assert response.metadata.organization_id == org_id
-        assert response.current_cash < 0  # cash reduced by spend
+        assert response.current_cash < 0
         assert response.metadata.forecast_diagnostics is not None
         diagnostics = response.metadata.forecast_diagnostics
         assert diagnostics is not None
