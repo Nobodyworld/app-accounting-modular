@@ -209,7 +209,5 @@ def test_balanced_same_currency_transaction_remains_supported(ledger_api_context
 def test_fixture_accounts_are_scoped_to_expected_organization(ledger_api_context) -> None:
     _, context, engine = ledger_api_context
     with Session(engine) as session:
-        accounts = session.exec(
-            select(Account).where(Account.organization_id == context["organization_id"])
-        ).all()
+        accounts = session.exec(select(Account).where(Account.organization_id == context["organization_id"])).all()
     assert {account.code for account in accounts} == {"USD-CASH", "USD-REV", "EUR-AR", "EUR-REV"}
