@@ -46,7 +46,35 @@ jobs:
           tests/test_reports_api.py
           tests/test_smoke.py
 
-      - name: Ruff format changed files
+      - name: Format ledger router
+        continue-on-error: true
+        run: python -m ruff format --check src/apps/api/routers/ledger.py
+
+      - name: Format ledger service
+        continue-on-error: true
+        run: python -m ruff format --check src/apps/api/services/ledger_service.py
+
+      - name: Format domain models
+        continue-on-error: true
+        run: python -m ruff format --check src/apps/modular_accounting/domain/models.py
+
+      - name: Format ledger integrity tests
+        continue-on-error: true
+        run: python -m ruff format --check tests/test_ledger_integrity.py
+
+      - name: Format ledger service tests
+        continue-on-error: true
+        run: python -m ruff format --check tests/test_ledger_service.py
+
+      - name: Format report tests
+        continue-on-error: true
+        run: python -m ruff format --check tests/test_reports_api.py
+
+      - name: Format smoke tests
+        continue-on-error: true
+        run: python -m ruff format --check tests/test_smoke.py
+
+      - name: Enforce formatting
         run: >-
           python -m ruff format --check
           src/apps/api/routers/ledger.py
