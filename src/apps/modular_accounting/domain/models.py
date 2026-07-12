@@ -108,6 +108,16 @@ class LedgerEntry:
     amount: Money
     direction: str
 
+    def __post_init__(self) -> None:
+        direction = self.direction.strip().lower()
+        if direction not in {"debit", "credit"}:
+            raise ValueError(f"Unsupported ledger entry direction '{self.direction}'")
+        if self.amount.amount <= Decimal("0"):
+            raise ValueError("Ledger entry amount must be positive")
+        if not self.amount.currency.strip():
+            raise ValueError("Ledger entry currency is required")
+        self.direction = direction
+
 
 @dataclass(slots=True)
 class Transaction:
@@ -136,16 +146,25 @@ class Transaction:
         Returns
         -------
         bool
-            ``True`` when the sum of debit and credit amounts cancel out, otherwise ``False``.
+            ``True`` when at least two same-currency entries contain equal debit and credit totals.
         """
 
-        total = Decimal("0")
-        for entry in self.entries:
-            if entry.direction.lower() == "debit":
-                total += entry.amount.amount
-            else:
-                total -= entry.amount.amount
-        return total == Decimal("0")
+        if len(self.entries) < 2:
+            return False
+
+        currencies = {entry.amount.currency.strip().upper() for entry in self.entries}
+        if len(currencies) != 1:
+            return False
+
+        total_debit = sum(
+            (entry.amount.amount for entry in self.entries if entry.direction == "debit"),
+            start=Decimal("0"),
+        )
+        total_credit = sum(
+            (entry.amount.amount for entry in self.entries if entry.direction == "credit"),
+            start=Decimal("0"),
+        )
+        return total_debit == total_credit
 
     def add_entry(self, entry: LedgerEntry) -> None:
         """Append an entry to the transaction.
