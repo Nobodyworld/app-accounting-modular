@@ -149,11 +149,7 @@ class LedgerService:
             totals["debit"] += debit
             totals["credit"] += credit
 
-        unbalanced = [
-            currency
-            for currency, totals in currency_totals.items()
-            if totals["debit"] != totals["credit"]
-        ]
+        unbalanced = [currency for currency, totals in currency_totals.items() if totals["debit"] != totals["credit"]]
         if unbalanced:
             currencies = ", ".join(sorted(unbalanced))
             raise ValueError(f"Transaction is not balanced for currency: {currencies}")
