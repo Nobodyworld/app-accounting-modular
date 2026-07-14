@@ -84,12 +84,17 @@ class WorkflowService:
                 raw_description = payload.get("description")
                 description = str(raw_description or "")
                 payload_source_reference = payload.get("source_reference")
+                has_transaction_reference = isinstance(payload_source_reference, str)
                 resolved_source_reference: str | None = (
-                    payload_source_reference if isinstance(payload_source_reference, str) else source_reference
+                    payload_source_reference if has_transaction_reference else source_reference
                 )
                 posting_payloads = self._normalise_ingest_postings(payload.get("postings") or [])
 
-                existing = self._find_by_source_reference(source, resolved_source_reference)
+                existing = (
+                    self._find_by_source_reference(source, resolved_source_reference)
+                    if has_transaction_reference
+                    else None
+                )
                 if existing is not None:
                     self._assert_idempotent_payload(
                         existing,
@@ -395,15 +400,11 @@ class WorkflowService:
 
     def _load_postings(self, staged_id: int) -> list[StagedPosting]:
         stmt = (
-            select(StagedPosting)
-            .where(StagedPosting.staged_transaction_id == staged_id)
-            .order_by(StagedPosting.id)  # type: ignore[arg-type]
+            select(StagedPosting).where(StagedPosting.staged_transaction_id == staged_id).order_by(StagedPosting.id)  # type: ignore[arg-type]
         )
         return list(self.s.exec(stmt))
 
-    def _prepare_postings(
-        self, postings: Sequence[StagedPosting]
-    ) -> tuple[list[dict[str, object]], int | None]:
+    def _prepare_postings(self, postings: Sequence[StagedPosting]) -> tuple[list[dict[str, object]], int | None]:
         payload: list[dict[str, object]] = []
         currencies: set[str] = set()
         organization_ids: set[int | None] = set()
