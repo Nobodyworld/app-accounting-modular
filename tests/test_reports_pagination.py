@@ -37,6 +37,11 @@ class _StubService:
 
 def test_budget_vs_actual_pagination(monkeypatch):
     monkeypatch.setattr(reports, "BudgetService", lambda session: _StubService())
+    monkeypatch.setattr(
+        reports,
+        "_require_report_membership",
+        lambda session, organization_id, current_user: organization_id,
+    )
     fake_budget = Budget(
         id=1, organization_id=1, name="stub", start_date=date(2024, 1, 1), end_date=date(2024, 12, 31), currency="USD"
     )  # type: ignore[call-arg]
