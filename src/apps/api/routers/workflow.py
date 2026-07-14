@@ -75,9 +75,7 @@ def _posting_payload(
         if not matches:
             raise HTTPException(status_code=404, detail="Account not found")
         if len(matches) > 1:
-            raise HTTPException(
-                status_code=400, detail="Account reference is ambiguous"
-            )
+            raise HTTPException(status_code=400, detail="Account reference is ambiguous")
         account_id = matches[0].id
 
     return {
@@ -168,9 +166,7 @@ def _scoped_records(
         scoped.extend(
             (staged, postings)
             for staged, postings in page
-            if _record_belongs_to_organization(
-                session, staged, postings, organization_id
-            )
+            if _record_belongs_to_organization(session, staged, postings, organization_id)
         )
         cursor += len(page)
         if len(page) < page_size:
@@ -206,9 +202,7 @@ def _serialize_staged(
         date=staged.date,
         description=staged.description,
         status=staged.status,
-        source=str(
-            staged.source_metadata.get(_ORIGINAL_SOURCE_METADATA_KEY, staged.source)
-        ),
+        source=str(staged.source_metadata.get(_ORIGINAL_SOURCE_METADATA_KEY, staged.source)),
         source_reference=staged.source_reference,
         source_metadata=source_metadata,
         validation_errors=staged.validation_errors,
@@ -228,9 +222,7 @@ def ingest_transactions(
 ) -> WorkflowIngestResponse:
     """Persist raw transactions to the staging tables and optionally process them."""
 
-    org_id = _require_workflow_access(
-        organization_id, session=s, current_user=current_user
-    )
+    org_id = _require_workflow_access(organization_id, session=s, current_user=current_user)
     svc = WorkflowService(s)
     internal_metadata = {
         _ORGANIZATION_METADATA_KEY: org_id,
@@ -243,8 +235,7 @@ def ingest_transactions(
                     "date": txn.date,
                     "description": txn.description,
                     "postings": [
-                        _posting_payload(posting, session=s, organization_id=org_id)
-                        for posting in txn.postings
+                        _posting_payload(posting, session=s, organization_id=org_id) for posting in txn.postings
                     ],
                     "source_reference": txn.source_reference,
                     "metadata": {**txn.metadata, **internal_metadata},
@@ -260,15 +251,11 @@ def ingest_transactions(
 
     results = []
     if payload.auto_process:
-        staged_ids = [
-            _require_id(item.id, label="staged transaction") for item in staged
-        ]
+        staged_ids = [_require_id(item.id, label="staged transaction") for item in staged]
         results = svc.process_transactions(staged_ids)
 
     return WorkflowIngestResponse(
-        staged_ids=[
-            _require_id(item.id, label="staged transaction") for item in staged
-        ],
+        staged_ids=[_require_id(item.id, label="staged transaction") for item in staged],
         results=[WorkflowResultSchema.from_result(result) for result in results],
     )
 
@@ -282,9 +269,7 @@ def process_transactions(
 ) -> list[WorkflowResultSchema]:
     """Trigger validation/posting for staged transactions."""
 
-    org_id = _require_workflow_access(
-        organization_id, session=s, current_user=current_user
-    )
+    org_id = _require_workflow_access(organization_id, session=s, current_user=current_user)
     svc = WorkflowService(s)
     if payload.staged_ids is None:
         staged_ids = [
@@ -311,9 +296,7 @@ def get_staged_transaction(
 ) -> StagedTransactionRead:
     """Return a staged transaction including its postings."""
 
-    org_id = _require_workflow_access(
-        organization_id, session=s, current_user=current_user
-    )
+    org_id = _require_workflow_access(organization_id, session=s, current_user=current_user)
     svc = WorkflowService(s)
     staged, postings = _require_scoped_record(svc, s, staged_id, org_id)
     return _serialize_staged(staged, postings)
@@ -330,13 +313,9 @@ def list_staged_transactions(
 ) -> list[StagedTransactionRead]:
     """List staged transactions ordered by creation time."""
 
-    org_id = _require_workflow_access(
-        organization_id, session=s, current_user=current_user
-    )
+    org_id = _require_workflow_access(organization_id, session=s, current_user=current_user)
     svc = WorkflowService(s)
     return [
         _serialize_staged(staged, postings)
-        for staged, postings in _scoped_records(
-            svc, s, org_id, limit=limit, offset=offset
-        )
+        for staged, postings in _scoped_records(svc, s, org_id, limit=limit, offset=offset)
     ]
