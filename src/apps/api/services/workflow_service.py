@@ -84,12 +84,8 @@ class WorkflowService:
                 raw_description = payload.get("description")
                 description = str(raw_description or "")
                 payload_source_reference = payload.get("source_reference")
-                transaction_reference = (
-                    payload_source_reference if isinstance(payload_source_reference, str) else None
-                )
-                resolved_source_reference = (
-                    transaction_reference if transaction_reference is not None else source_reference
-                )
+                transaction_reference = payload_source_reference if isinstance(payload_source_reference, str) else None
+                resolved_source_reference = transaction_reference if transaction_reference is not None else source_reference
                 posting_payloads = self._normalise_ingest_postings(payload.get("postings") or [])
 
                 existing = (
