@@ -44,7 +44,9 @@ class CoverageSummary:
 
 def _nonnegative_int(value: object, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"coverage totals field '{field_name}' must be a non-negative integer")
+        raise ValueError(
+            f"coverage totals field '{field_name}' must be a non-negative integer"
+        )
     return value
 
 
@@ -71,7 +73,9 @@ def load_coverage_summary(report_path: Path) -> CoverageSummary:
 
     covered_lines = _nonnegative_int(totals.get("covered_lines"), "covered_lines")
     total_lines = _nonnegative_int(totals.get("num_statements"), "num_statements")
-    covered_branches = _nonnegative_int(totals.get("covered_branches", 0), "covered_branches")
+    covered_branches = _nonnegative_int(
+        totals.get("covered_branches", 0), "covered_branches"
+    )
     total_branches = _nonnegative_int(totals.get("num_branches", 0), "num_branches")
 
     if covered_lines > total_lines:
