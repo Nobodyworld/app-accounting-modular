@@ -14,7 +14,7 @@ from apps.api import scheduler
 from apps.api.models.models import ForecastPlan
 from sqlalchemy import text
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, delete, select
+from sqlmodel import Session, SQLModel, create_engine, delete
 
 
 class StubBudgetService:
