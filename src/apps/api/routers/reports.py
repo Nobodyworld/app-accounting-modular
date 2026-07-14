@@ -177,9 +177,9 @@ def budget_vs_actual(
 @router.get("/cashflow-forecast", response_model=CashflowForecastResponse)
 def cashflow_forecast(
     organization_id: int = Query(..., ge=1),
-    horizon: int | None = Query(default=None, ge=1),
-    refresh: bool = Query(default=False),
-    stream_csv: bool = Query(default=False),
+    horizon: int | None = None,
+    refresh: bool = False,
+    stream_csv: bool = False,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CashflowForecastResponse | Response:
