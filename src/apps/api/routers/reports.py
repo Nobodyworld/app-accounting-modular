@@ -10,13 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel import Session
 
 from ..db import get_session
-from ..models.models import Budget
+from ..models.models import Budget, User
 from ..schemas import (
     BudgetReportLineSchema,
     BudgetReportResponse,
     CashflowForecastResponse,
     ReportMetadata,
 )
+from ..security import get_current_organization, get_current_user
 from ..services.budget_service import BudgetReport, BudgetService, CashflowReport
 from ..utils.metadata import (
     merge_forecast_diagnostics,
@@ -111,6 +112,23 @@ def _ensure_budget_scope(session: Session, budget_id: int, organization_id: int)
         )
 
 
+def _require_report_membership(
+    session: Session,
+    organization_id: int,
+    current_user: User,
+) -> int:
+    """Return the authorized organization identifier for report access."""
+
+    org_ctx = get_current_organization(
+        organization_id=organization_id,
+        session=session,
+        current_user=current_user,
+    )
+    if org_ctx.organization.id is None:
+        raise HTTPException(status_code=500, detail="Organization missing identifier")
+    return org_ctx.organization.id
+
+
 @router.get("/budget-vs-actual", response_model=BudgetReportResponse)
 def budget_vs_actual(
     budget_id: int = Query(..., ge=1),
@@ -120,10 +138,12 @@ def budget_vs_actual(
     limit: int = Query(default=500, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> BudgetReportResponse:
     """Return a budget variance view, optionally forcing a recalculation."""
 
-    _ensure_budget_scope(session, budget_id, organization_id)
+    org_id = _require_report_membership(session, organization_id, current_user)
+    _ensure_budget_scope(session, budget_id, org_id)
     service = BudgetService(session)
     effective_horizon = _coerce_optional_int(horizon)
     try:
@@ -156,19 +176,20 @@ def budget_vs_actual(
 
 @router.get("/cashflow-forecast", response_model=CashflowForecastResponse)
 def cashflow_forecast(
-    organization_id: int,
-    horizon: int | None = None,
-    refresh: bool = False,
-    stream_csv: bool = False,
+    organization_id: int = Query(..., ge=1),
+    horizon: int | None = Query(default=None, ge=1),
+    refresh: bool = Query(default=False),
+    stream_csv: bool = Query(default=False),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> CashflowForecastResponse | Response:
     """Return a rolling cashflow forecast for an organisation."""
 
-    stream_csv = bool(stream_csv)
+    org_id = _require_report_membership(session, organization_id, current_user)
     if stream_csv:
         refresh = True
     effective_horizon = _coerce_optional_int(horizon)
-    key = (organization_id, effective_horizon)
+    key = (org_id, effective_horizon)
     now = datetime.now().timestamp()
     if not refresh:
         cached = _cashflow_cache.get(key)
@@ -176,7 +197,7 @@ def cashflow_forecast(
             return _response_from_cashflow(cached[0])
     service = BudgetService(session)
     try:
-        report = service.cashflow_forecast(organization_id, horizon=effective_horizon, refresh=refresh)
+        report = service.cashflow_forecast(org_id, horizon=effective_horizon, refresh=refresh)
         _cashflow_cache[key] = (report, now)
     except ValueError as exc:
         detail = str(exc)
