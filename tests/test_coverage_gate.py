@@ -76,9 +76,7 @@ def test_render_markdown_distinguishes_line_gate_from_branch_evidence() -> None:
     assert "Line gate | **PASS**" in rendered
 
 
-def test_main_passes_and_appends_github_step_summary(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_main_passes_and_appends_github_step_summary(tmp_path: Path, monkeypatch) -> None:
     report = _write_report(tmp_path, covered_lines=85, total_lines=100)
     step_summary = tmp_path / "step-summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(step_summary))
