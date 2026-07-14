@@ -39,7 +39,11 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          python -m src.tools.quality_gate
+          python -m src.tools.quality_gate > quality-gate.log 2>&1
+
+      - name: Show quality-gate log tail
+        if: always()
+        run: tail -n 160 quality-gate.log || true
 
       - name: Run accounting control suites
         env:
@@ -57,6 +61,7 @@ jobs:
             docs/reports/audit-latest.md
             coverage.xml
             coverage.json
+            quality-gate.log
           if-no-files-found: error
           retention-days: 14
 
