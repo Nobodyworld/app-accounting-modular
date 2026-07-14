@@ -13,7 +13,6 @@ from ..models.models import AuditAction, TaxRule
 
 JSONLogicRule = Mapping[str, Any]
 
-
 __all__ = ["BaseTaxProvider", "TaxService"]
 _DEFAULT_JURISDICTION_RULES = {
     "US": [
@@ -33,6 +32,10 @@ _DEFAULT_JURISDICTION_RULES = {
         }
     ],
 }
+
+
+def _is_operand_sequence(value: object) -> bool:
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
 
 
 class BaseTaxProvider:
@@ -64,27 +67,37 @@ class TaxService:
 
     @staticmethod
     def _validate_jsonlogic(expr: Mapping[str, Any], *, path: str = "expr") -> None:
-        """Shallow validation of supported JSONLogic operators for tax rules."""
+        """Validate supported JSONLogic operators and nested operand shapes."""
 
-        allowed = {"and", "or", "if", "gt", "lt", "le", "ge", "eq", "var", "rate", "and_", "or_", "if_"}
+        if not expr:
+            raise ValueError(f"JSONLogic expression must not be empty at {path}")
+        if len(expr) != 1:
+            raise ValueError(f"JSONLogic expression must contain exactly one operator at {path}")
+
+        allowed = {"and", "or", "if", "gt", "lt", "le", "ge", "eq", "var", "rate"}
         for key, value in expr.items():
+            if not isinstance(key, str):
+                raise ValueError(f"JSONLogic operator names must be strings at {path}")
             normalised_key = key.rstrip("_")
             if normalised_key not in allowed:
                 raise ValueError(f"Unsupported JSONLogic operator '{key}' at {path}")
             if normalised_key in {"and", "or", "if"}:
-                if not isinstance(value, Sequence):
+                if not _is_operand_sequence(value):
                     raise ValueError(f"Operator '{key}' expects a list at {path}")
                 for idx, part in enumerate(value):
                     if isinstance(part, Mapping):
                         TaxService._validate_jsonlogic(part, path=f"{path}.{key}[{idx}]")
                 continue
             if normalised_key in {"gt", "lt", "le", "ge", "eq"}:
-                if not (isinstance(value, Sequence) and len(value) == 2):
+                if not (_is_operand_sequence(value) and len(value) == 2):
                     raise ValueError(f"Operator '{key}' expects a two-item list at {path}")
+                for idx, part in enumerate(value):
+                    if isinstance(part, Mapping):
+                        TaxService._validate_jsonlogic(part, path=f"{path}.{key}[{idx}]")
                 continue
             if normalised_key == "var" and not isinstance(value, str):
                 raise ValueError(f"Operator '{key}' expects a string at {path}")
-            if normalised_key == "rate" and not isinstance(value, (int, float)):
+            if normalised_key == "rate" and (isinstance(value, bool) or not isinstance(value, (int, float))):
                 raise ValueError(f"Operator '{key}' expects a numeric rate at {path}")
 
     @classmethod
@@ -102,6 +115,7 @@ class TaxService:
 
         incoming_rules = list(self.provider.upsert_rules())
         scoped_rules = [rule for rule in incoming_rules if rule is not None]
+        incoming_keys: set[tuple[Any, ...]] = set()
         for rule in scoped_rules:
             apply_creation_metadata(rule)
             if self.organization_id is not None:
@@ -117,6 +131,19 @@ class TaxService:
             except ValueError as exc:
                 detail = f"{rule.jurisdiction}:{rule.scope}"
                 raise ValueError(f"Invalid expression for {detail} - {exc}") from exc
+
+            key = (
+                rule.organization_id,
+                rule.jurisdiction,
+                rule.scope,
+                rule.valid_from,
+                rule.valid_to,
+                rule.source,
+            )
+            if key in incoming_keys:
+                detail = f"{rule.jurisdiction}:{rule.scope}"
+                raise ValueError(f"Duplicate tax rule key for {detail}")
+            incoming_keys.add(key)
 
         stmt = select(TaxRule)
         if self.organization_id is not None:
