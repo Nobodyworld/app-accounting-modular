@@ -315,15 +315,11 @@ def test_rejections_and_retries_create_workflow_audit_records() -> None:
 
         audit_events = [
             (entry.context or {}).get("event")
-            for entry in session.exec(
-                select(AuditLog).where(AuditLog.entity_name == "StagedTransaction")
-            ).all()
+            for entry in session.exec(select(AuditLog).where(AuditLog.entity_name == "StagedTransaction")).all()
         ]
         assert "rejected" in audit_events
         assert "retried" in audit_events
 
-        transaction_audits = session.exec(
-            select(AuditLog).where(AuditLog.entity_name == "Transaction")
-        ).all()
+        transaction_audits = session.exec(select(AuditLog).where(AuditLog.entity_name == "Transaction")).all()
         assert len(transaction_audits) == 1
         assert (transaction_audits[0].context or {})["staged_transaction_id"] == staged.id
