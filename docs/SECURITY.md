@@ -4,21 +4,23 @@
 
 | Version | Supported |
 | --- | --- |
-| main | Yes |
-| releases prior to 0.1.0 | No |
+| `main` | Best-effort Early Beta support |
+| Tagged releases | None published |
 
 ## Reporting a Vulnerability
 
-- Email `security@modular-accounting.dev` with a detailed report.
-- Include reproduction steps, impact assessment, and any proof-of-concept code.
-- Expect an acknowledgement within **2 business days**.
-- We aim to provide a remediation plan or mitigation within **7 business days**.
-- Please do not disclose publicly until a fix is released.
+Use the repository's **Security** tab and select **Report a vulnerability** to submit a private report through GitHub Private Vulnerability Reporting.
+
+Include reproduction steps, an impact assessment, affected versions or commits, and proof-of-concept material when it can be shared safely. Do not include vulnerability details in a public issue, pull request, discussion, or commit.
+
+Response and remediation timing depends on severity, reproducibility, maintainer availability, and the scope of the Early Beta. No fixed response-time or remediation-time guarantee is provided.
 
 ## Coordinated Disclosure
 
-- Security advisories will be published via GitHub Security Advisories.
-- Credits may be provided with the reporter’s consent.
+- Keep the report private until a fix, mitigation, or disclosure plan is agreed.
+- Security advisories may be coordinated and published through GitHub Security Advisories.
+- Reporter credit may be provided with consent.
+- Avoid accessing, modifying, or retaining data that is not necessary to demonstrate the issue.
 
 ## Hardening Checklist
 
