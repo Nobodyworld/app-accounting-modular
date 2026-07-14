@@ -1,23 +1,26 @@
 # Public Release Audit — Early Beta / Portfolio Preview
 
 **Audit date:** 2026-07-13  
-**Current `main` before this correction:** `1b5d2f24a044c8939c90f7c9de611e08545d5506`  
-**Publication branch:** `release/early-beta-publication`
+**Publication baseline:** `d2e7b72861f4138fe8d14fabc7025b2e2de05cbb`  
+**Publication preparation:** PR #66 merged
 
 ## Classification
 
 **EARLY BETA / PORTFOLIO PREVIEW**
 
-This repository may be public as a code-portfolio preview after this documentation correction is merged. Public visibility is not a production release, certification, or representation that every open pull request has passed current validation.
+This repository is prepared for public code-portfolio visibility. Public visibility is not a production release, certification, or representation that every open pull request has passed current validation.
 
 Modular Accounting demonstrates auditable accounting-control architecture. Demo providers use controlled sample data unless external credentials are configured. The project is not an ERP, production tax engine, bank-feed product, treasury platform, or commercially supported accounting system. Users must independently validate accounting, tax, security, data, provider, and deployment behavior.
 
 ## Git and validation evidence
 
-### Current `main`
+### PR #66 — publication preparation
 
-- Commit: `1b5d2f24a044c8939c90f7c9de611e08545d5506`
-- Commit message: `release: harden public-readiness documentation and containers (#55)`
+- Squash merge commit: `d2e7b72861f4138fe8d14fabc7025b2e2de05cbb`
+- Added the Early Beta / Portfolio Preview status block
+- Removed the unverified security mailbox and fixed response promises
+- Directed private reports to GitHub Private Vulnerability Reporting
+- Updated this audit for public portfolio visibility
 
 ### PR #55 — merged release hardening
 
@@ -69,15 +72,14 @@ The policy directs reporters to **Security → Report a vulnerability** for priv
 
 ## Owner actions during and after visibility change
 
-1. Merge this publication correction before changing visibility.
-2. Change repository visibility to public as an Early Beta / Portfolio Preview.
-3. Enable or verify GitHub Private Vulnerability Reporting.
-4. Confirm description, topics, and social preview.
-5. Confirm `main` branch protection or rulesets and required CI checks.
-6. Confirm least-privilege Actions permissions.
-7. Confirm Dependabot alerts and security updates.
-8. Confirm secret scanning and push protection.
-9. Keep version `0.1.0` unreleased and create no tag or GitHub release.
-10. Manually dispatch `main` CI and rerun PR #65 CI.
+1. Change repository visibility to public as an Early Beta / Portfolio Preview.
+2. Enable or verify GitHub Private Vulnerability Reporting.
+3. Confirm description, topics, and social preview.
+4. Confirm `main` branch protection or rulesets and required CI checks.
+5. Confirm least-privilege Actions permissions.
+6. Confirm Dependabot alerts and security updates.
+7. Confirm secret scanning and push protection.
+8. Keep version `0.1.0` unreleased and create no tag or GitHub release.
+9. Manually dispatch `main` CI and rerun PR #65 CI.
 
 This audit supports public code-portfolio visibility only. It is not a certification for financial reporting, tax compliance, treasury execution, regulated data processing, or production deployment.
