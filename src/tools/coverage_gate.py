@@ -44,9 +44,7 @@ class CoverageSummary:
 
 def _nonnegative_int(value: object, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(
-            f"coverage totals field '{field_name}' must be a non-negative integer"
-        )
+        raise ValueError(f"coverage totals field '{field_name}' must be a non-negative integer")
     return value
 
 
@@ -73,9 +71,7 @@ def load_coverage_summary(report_path: Path) -> CoverageSummary:
 
     covered_lines = _nonnegative_int(totals.get("covered_lines"), "covered_lines")
     total_lines = _nonnegative_int(totals.get("num_statements"), "num_statements")
-    covered_branches = _nonnegative_int(
-        totals.get("covered_branches", 0), "covered_branches"
-    )
+    covered_branches = _nonnegative_int(totals.get("covered_branches", 0), "covered_branches")
     total_branches = _nonnegative_int(totals.get("num_branches", 0), "num_branches")
 
     if covered_lines > total_lines:
@@ -97,10 +93,7 @@ def render_markdown(summary: CoverageSummary, minimum_line_percent: float) -> st
 
     branch_display = "not measured"
     if summary.branch_percent is not None:
-        branch_display = (
-            f"{summary.branch_percent:.2f}% "
-            f"({summary.covered_branches}/{summary.total_branches} branches)"
-        )
+        branch_display = f"{summary.branch_percent:.2f}% ({summary.covered_branches}/{summary.total_branches} branches)"
 
     status = "PASS" if summary.line_percent >= minimum_line_percent else "FAIL"
     return "\n".join(
@@ -167,8 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if summary.line_percent < minimum_line_percent:
         print(
-            f"line coverage {summary.line_percent:.2f}% is below the required "
-            f"{minimum_line_percent:.2f}%",
+            f"line coverage {summary.line_percent:.2f}% is below the required {minimum_line_percent:.2f}%",
             file=sys.stderr,
         )
         return 1
