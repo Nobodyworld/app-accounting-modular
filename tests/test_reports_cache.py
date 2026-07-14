@@ -28,6 +28,11 @@ class _StubService:
 def test_cashflow_forecast_uses_cache(monkeypatch):
     stub = _StubService()
     monkeypatch.setattr(reports, "BudgetService", lambda session: stub)
+    monkeypatch.setattr(
+        reports,
+        "_require_report_membership",
+        lambda session, organization_id, current_user: organization_id,
+    )
     reports._cashflow_cache.clear()
 
     first = cashflow_forecast(organization_id=1, session=None)  # type: ignore[arg-type]
