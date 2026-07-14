@@ -9,8 +9,17 @@ from decimal import Decimal
 
 import pytest
 from apps.api import db
-from apps.api.models.models import Budget, BudgetLine, ForecastOutput, Organization, Rate
+from apps.api.models.models import (
+    Budget,
+    BudgetLine,
+    ForecastOutput,
+    Membership,
+    Organization,
+    Rate,
+    User,
+)
 from apps.api.routers.reports import (
+    _cashflow_cache,
     _response_from_cashflow,
     budget_vs_actual,
     cashflow_forecast,
@@ -30,12 +39,35 @@ def setup_database() -> Iterator[Session]:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     db.engine = engine
     SQLModel.metadata.create_all(engine)
+    _cashflow_cache.clear()
     session = Session(engine, expire_on_commit=False)
     try:
         yield session
     finally:
         session.close()
+        _cashflow_cache.clear()
         engine.dispose()
+
+
+def grant_report_access(session: Session, organization_id: int, *, email: str = "reports@example.com") -> User:
+    """Persist a user and organization membership for direct router calls."""
+
+    user = User(email=email, password_hash="stub", is_active=True)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    assert user.id is not None
+    session.add(Membership(user_id=user.id, organization_id=organization_id))
+    session.commit()
+    return user
+
+
+def create_outsider(session: Session, *, email: str = "outsider@example.com") -> User:
+    user = User(email=email, password_hash="stub", is_active=True)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
 
 
 def seed_data(session: Session) -> tuple[int, int]:
@@ -105,6 +137,8 @@ def seed_data(session: Session) -> tuple[int, int]:
         ]
     )
     session.commit()
+    assert org.id is not None
+    assert budget.id is not None
     return org.id, budget.id
 
 
@@ -114,6 +148,8 @@ def test_budget_vs_actual_multicurrency_conversion() -> None:
         session.add(org)
         session.commit()
         session.refresh(org)
+        assert org.id is not None
+        current_user = grant_report_access(session, org.id)
 
         ledger = LedgerService(session)
         eur_payable = ledger.create_account(
@@ -162,6 +198,7 @@ def test_budget_vs_actual_multicurrency_conversion() -> None:
             horizon=15,
             refresh=True,
             session=session,
+            current_user=current_user,
         )
         assert response.metadata.reporting_currency == "USD"
         assert response.summary["total_actual"] >= 100.0
@@ -170,6 +207,7 @@ def test_budget_vs_actual_multicurrency_conversion() -> None:
 def test_budget_vs_actual_endpoint() -> None:
     with setup_database() as session:
         org_id, budget_id = seed_data(session)
+        current_user = grant_report_access(session, org_id)
 
         response = budget_vs_actual(
             budget_id=budget_id,
@@ -177,6 +215,7 @@ def test_budget_vs_actual_endpoint() -> None:
             horizon=15,
             refresh=True,
             session=session,
+            current_user=current_user,
         )
         assert response.summary["total_actual"] > 0
         assert response.metadata.budget_id == budget_id
@@ -198,13 +237,15 @@ def test_budget_vs_actual_endpoint() -> None:
 
 def test_cashflow_endpoint() -> None:
     with setup_database() as session:
-        org_id, budget_id = seed_data(session)
+        org_id, _budget_id = seed_data(session)
+        current_user = grant_report_access(session, org_id)
 
         response = cashflow_forecast(
             organization_id=org_id,
             horizon=10,
             refresh=True,
             session=session,
+            current_user=current_user,
         )
         assert response.metadata.organization_id == org_id
         assert response.current_cash < 0
@@ -277,15 +318,33 @@ def test_response_from_cashflow_serialises_forecast_diagnostics() -> None:
 def test_budget_vs_actual_rejects_cross_org_access() -> None:
     with setup_database() as session:
         org_id, budget_id = seed_data(session)
+        current_user = grant_report_access(session, org_id)
 
         with pytest.raises(HTTPException) as excinfo:
             budget_vs_actual(
                 budget_id=budget_id,
                 organization_id=org_id + 1,
                 session=session,
+                current_user=current_user,
             )
 
         assert excinfo.value.status_code == 404
+
+
+def test_budget_vs_actual_rejects_non_member() -> None:
+    with setup_database() as session:
+        org_id, budget_id = seed_data(session)
+        outsider = create_outsider(session)
+
+        with pytest.raises(HTTPException) as excinfo:
+            budget_vs_actual(
+                budget_id=budget_id,
+                organization_id=org_id,
+                session=session,
+                current_user=outsider,
+            )
+
+        assert excinfo.value.status_code == 403
 
 
 def test_budget_vs_actual_returns_400_for_empty_budget() -> None:
@@ -294,6 +353,8 @@ def test_budget_vs_actual_returns_400_for_empty_budget() -> None:
         session.add(org)
         session.commit()
         session.refresh(org)
+        assert org.id is not None
+        current_user = grant_report_access(session, org.id)
 
         budget = Budget(
             organization_id=org.id,
@@ -310,17 +371,48 @@ def test_budget_vs_actual_returns_400_for_empty_budget() -> None:
                 budget_id=budget.id,
                 organization_id=org.id,
                 session=session,
+                current_user=current_user,
             )
 
         assert excinfo.value.status_code == 400
 
 
+def test_cashflow_cache_does_not_bypass_membership() -> None:
+    with setup_database() as session:
+        org_id, _budget_id = seed_data(session)
+        member = grant_report_access(session, org_id)
+        outsider = create_outsider(session)
+
+        cached = cashflow_forecast(
+            organization_id=org_id,
+            horizon=10,
+            refresh=True,
+            session=session,
+            current_user=member,
+        )
+        assert cached.metadata.organization_id == org_id
+        assert _cashflow_cache
+
+        with pytest.raises(HTTPException) as excinfo:
+            cashflow_forecast(
+                organization_id=org_id,
+                horizon=10,
+                refresh=False,
+                session=session,
+                current_user=outsider,
+            )
+
+        assert excinfo.value.status_code == 403
+
+
 def test_cashflow_forecast_returns_404_for_missing_org() -> None:
     with setup_database() as session:
+        current_user = create_outsider(session)
         with pytest.raises(HTTPException) as excinfo:
             cashflow_forecast(
                 organization_id=999,
                 session=session,
+                current_user=current_user,
             )
 
         assert excinfo.value.status_code == 404
