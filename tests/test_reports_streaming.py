@@ -22,6 +22,11 @@ class _StubService:
 
 def test_cashflow_forecast_streams_csv(monkeypatch):
     monkeypatch.setattr(reports, "BudgetService", lambda session: _StubService())
+    monkeypatch.setattr(
+        reports,
+        "_require_report_membership",
+        lambda session, organization_id, current_user: organization_id,
+    )
     response = cashflow_forecast(organization_id=1, session=None, stream_csv=True)  # type: ignore[arg-type]
     assert isinstance(response, Response)
     assert response.headers["content-type"].startswith("text/csv")
