@@ -100,6 +100,7 @@
     <text class="chip" x="54" y="206">PUBLIC_RELEASE_AUDIT.md</text>
   </g>
 
-  <rect x="88" y="792" width="1264" height="58" rx="29" fill="#e8f2f6" stroke="#bed4df"/>
-  <text class="subtitle" x="128" y="829">The architecture keeps accountant-facing review separate from technical diagnostics while preserving traceable evidence for public portfolio review.</text>
+  <rect x="88" y="780" width="1264" height="82" rx="29" fill="#e8f2f6" stroke="#bed4df"/>
+  <text class="subtitle" x="128" y="817">The architecture keeps accountant-facing review separate from technical diagnostics</text>
+  <text class="subtitle" x="128" y="845">while preserving traceable evidence for public portfolio review.</text>
 </svg>

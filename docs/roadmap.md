@@ -1,25 +1,34 @@
 # Roadmap
 
-| Milestone | Description | Target |
-| --- | --- | --- |
-| Adapter SDK Beta | Publish typed base classes and expand tests across community adapters; document caching best practices for providers. | 2025-Q4 |
-| Provider Marketplace | Catalogue certified tax, FX, and commodity providers with metadata for automatic discovery and compliance screening. | 2026-Q1 |
-| Workflow Recipes | Ship opinionated orchestration flows for reconciliation, hedging, and tax filing, including CLI UX polish for non-engineers. | 2026-Q2 |
-| Observability Pack | Add metrics/tracing hooks to monitor adapter latency and cache hit ratios. | 2026-Q3 |
+This roadmap reflects the repository state as of July 2026. Dates from the original modernization plan have been replaced with explicit status so completed foundations are not presented as overdue promises.
 
-## Quarterly Milestones
+## Current Status
 
-### 2025 Q4 — Adapter SDK Beta
-- Harden the adapter protocols with type-checked abstract base classes.
-- Publish packaging guidance for third-party providers.
-- Add conformance tests for FX, tax, and commodity data integrations.
+| Workstream | Status | Current state | Next meaningful step |
+| --- | --- | --- | --- |
+| Accounting-control demonstration | Complete for portfolio release | Snapshot orchestration, provenance, journal controls, CLI/API/Streamlit review surfaces, examples, and regression coverage are present. | Maintain release evidence and improve reviewer onboarding. |
+| Adapter SDK foundation | Partial | Typed provider contracts, loader services, catalog metadata, caching behavior, and reference adapters exist. | Package a documented third-party adapter SDK with conformance tests. |
+| Provider marketplace | Planned | Provider discovery and metadata are represented in the internal catalog. No public marketplace or certification program exists. | Define package metadata, trust criteria, version compatibility, and review policy before implementation. |
+| Workflow recipes | Foundation complete | Scenario plans, preview/inspection commands, sample workflows, and orchestration helpers exist. | Add accountant-oriented reconciliation and close-control recipes with expected journal evidence. |
+| Observability pack | Foundation complete | Metrics, tracing hooks, health/readiness endpoints, startup diagnostics, scheduler state, and CLI observability commands exist. | Add deployment examples, alerting guidance, and optional OTLP collector integration. |
+| Container onboarding | In validation | API and Streamlit Dockerfiles plus Compose configuration exist. | Keep container build and startup smoke coverage in CI. |
+| Public portfolio release | In owner review | README, screenshots, architecture diagrams, case studies, security policy, license, contribution docs, and release audit are present. | Complete hosted CI and repository-setting review before changing visibility. |
 
-### 2026 Q1 — Provider Marketplace
-- Launch a metadata registry that advertises certified provider packages.
-- Document provider onboarding criteria and review processes.
-- Automate nightly smoke tests across registered adapters.
+## Near-term Priorities
 
-### 2026 Q2 — Workflow Recipes
-- Deliver sample orchestration flows covering reconciliation, hedging, and tax filing.
-- Provide infrastructure-as-code templates for deploying portable pipelines.
-- Capture best practices for monitoring and alerting across modular accounting workloads.
+1. Keep setup instructions executable from a clean clone on Windows, macOS, Linux, and Docker.
+2. Convert the current source-layout application into a conventionally installable Python project when packaging work begins.
+3. Expand strict typing beyond the current targeted modules.
+4. Replace remaining Streamlit deprecated parameters and reduce UI maintenance warnings.
+5. Persist provider-catalog administration rather than relying only on process configuration.
+6. Add accountant-centered workflow recipes for reconciliation, period close, variance review, and journal approval evidence.
+
+## Future Opportunities
+
+- Third-party adapter conformance kit and compatibility matrix.
+- Signed or attestable provider metadata.
+- Additional jurisdiction-aware tax demonstrations with explicit non-production disclaimers.
+- Deployment examples for PostgreSQL, OTLP collectors, and Prometheus/Grafana.
+- A production-grade web client only after the accounting-control workflows and API contracts stabilize.
+
+Roadmap items are directional, not release commitments. Production financial, tax, treasury, and regulated-data use would require separate control design, security review, compliance assessment, and operational support.

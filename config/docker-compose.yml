@@ -1,24 +1,52 @@
-version: "3.9"
 services:
   api:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.api
+      context: ..
+      dockerfile: config/Dockerfile.api
+    environment:
+      MODACCT_DATABASE_URL: sqlite:////data/modacct.db
+      MODACCT_JWT_SECRET_KEY: ${MODACCT_JWT_SECRET_KEY:-local-compose-demo-key-not-for-production-0123456789abcdef}
+      MODACCT_LOG_LEVEL: INFO
+      MODACCT_LOG_FORMAT: JSON
+      MODACCT_TRACING_EXPORTER: disabled
     ports:
       - "8000:8000"
-    env_file:
-      - .env
     volumes:
-      - ./:/app
+      - modacct-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    restart: unless-stopped
+
   web:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.web
+      context: ..
+      dockerfile: config/Dockerfile.web
+    environment:
+      API_BASE: http://api:8000
     ports:
       - "8501:8501"
-    env_file:
-      - .env
     depends_on:
-      - api
-    volumes:
-      - ./:/app
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=5)"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  modacct-data:

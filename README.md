@@ -53,40 +53,47 @@ The primary review path is evidence-first: choose controlled providers, run a fi
 
 ## Quick-Start Demonstration
 
-1. Install dependencies and configure PYTHONPATH:
+1. Create and activate a virtual environment, then install the validated development requirements:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-make install
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
 On Windows PowerShell:
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
 $env:PYTHONPATH = "$PWD\src"
 ```
 
-1. Start API:
+2. Start the API:
 
 ```bash
 python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-1. Run Streamlit demonstration:
+3. Run the Streamlit demonstration in another activated shell:
 
 ```bash
 streamlit run src/apps/web/app.py
 ```
 
-1. Optional CLI snapshot and scenario proof:
+4. Optional CLI snapshot and scenario proof:
 
 ```bash
 python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table
 python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json
 python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table
 ```
+
+For Docker Compose, configuration, validation, and troubleshooting, use the [setup guide](docs/setup.md).
 
 ## Portfolio Review Links
 
@@ -107,7 +114,7 @@ python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json -
 | ---- | ----------- |
 | [src/apps/](src/apps/README.md) | Implemented Python service packages, including the Streamlit demonstration interface in `src/apps/web/app.py`. |
 | [apps/web/app.py](apps/web/app.py) | Compatibility and test launcher shim that executes `src/apps/web/app.py`. |
-| [apps/react-ui/](apps/react-ui/README.md) | Experimental placeholder React surface (not part of the validated accounting runtime). |
+| `apps/react-ui/` | Experimental React source directory (not part of the validated accounting runtime). |
 | [src/cli/](src/cli/README.md) | Demo and operational CLI entry points. |
 | [src/plugins/](src/plugins/README.md) | Provider and extension reference plugins. |
 | [src/tools/](src/tools/README.md) | Quality-gate, audit, and release tooling. |
