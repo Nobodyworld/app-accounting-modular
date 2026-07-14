@@ -23,6 +23,7 @@ from ..services.workflow_service import WorkflowService
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
 _ORGANIZATION_METADATA_KEY = "_organization_id"
+_ORIGINAL_SOURCE_METADATA_KEY = "_workflow_source"
 
 
 def _require_id(value: int | None, *, label: str) -> int:
@@ -45,6 +46,12 @@ def _require_workflow_access(
     if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_ledger):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return _require_id(org_ctx.organization.id, label="organization")
+
+
+def _storage_source(source: str, organization_id: int) -> str:
+    """Namespace idempotency keys while preserving the caller-visible source."""
+
+    return f"{source}::organization:{organization_id}"
 
 
 def _posting_payload(
@@ -185,18 +192,19 @@ def _serialize_staged(
         )
         for post in postings
     ]
+    source_metadata = {
+        key: value
+        for key, value in staged.source_metadata.items()
+        if key not in {_ORGANIZATION_METADATA_KEY, _ORIGINAL_SOURCE_METADATA_KEY}
+    }
     return StagedTransactionRead(
         id=staged_id,
         date=staged.date,
         description=staged.description,
         status=staged.status,
-        source=staged.source,
+        source=str(staged.source_metadata.get(_ORIGINAL_SOURCE_METADATA_KEY, staged.source)),
         source_reference=staged.source_reference,
-        source_metadata={
-            key: value
-            for key, value in staged.source_metadata.items()
-            if key != _ORGANIZATION_METADATA_KEY
-        },
+        source_metadata=source_metadata,
         validation_errors=staged.validation_errors,
         transaction_id=staged.transaction_id,
         ingested_at=staged.ingested_at,
@@ -216,6 +224,10 @@ def ingest_transactions(
 
     org_id = _require_workflow_access(organization_id, session=s, current_user=current_user)
     svc = WorkflowService(s)
+    internal_metadata = {
+        _ORGANIZATION_METADATA_KEY: org_id,
+        _ORIGINAL_SOURCE_METADATA_KEY: payload.source,
+    }
     try:
         staged = svc.ingest_transactions(
             (
@@ -227,13 +239,13 @@ def ingest_transactions(
                         for posting in txn.postings
                     ],
                     "source_reference": txn.source_reference,
-                    "metadata": {**txn.metadata, _ORGANIZATION_METADATA_KEY: org_id},
+                    "metadata": {**txn.metadata, **internal_metadata},
                 }
                 for txn in payload.transactions
             ),
-            source=payload.source,
+            source=_storage_source(payload.source, org_id),
             source_reference=payload.source_reference,
-            metadata={**payload.metadata, _ORGANIZATION_METADATA_KEY: org_id},
+            metadata={**payload.metadata, **internal_metadata},
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
