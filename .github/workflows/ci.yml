@@ -39,7 +39,11 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          python -m src.tools.quality_gate
+          python -m src.tools.quality_gate > quality-gate.log 2>&1
+
+      - name: Show quality-gate log tail
+        if: always()
+        run: tail -n 160 quality-gate.log || true
 
       - name: Run accounting control suites
         env:
@@ -47,14 +51,19 @@ jobs:
         run: |
           pytest -q tests/test_ledger_service.py tests/test_data_snapshot_service.py tests/test_modular_accounting_snapshot.py tests/test_modular_accounting_controls.py
 
-      - name: Upload audit artifact
+      - name: Upload quality evidence
         # actions/upload-artifact v7.0.1 (2026-06-30)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: audit-latest-python-${{ matrix.python-version }}
-          path: docs/reports/audit-latest.md
+          name: quality-evidence-python-${{ matrix.python-version }}
+          path: |
+            docs/reports/audit-latest.md
+            coverage.xml
+            coverage.json
+            quality-gate.log
           if-no-files-found: error
+          retention-days: 14
 
   container-smoke:
     runs-on: ubuntu-latest
