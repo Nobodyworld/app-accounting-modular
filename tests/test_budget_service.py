@@ -105,7 +105,7 @@ def seed_basic_ledger(session: Session) -> tuple[int, int]:
 
 def test_budget_vs_actual_generates_and_persists() -> None:
     with create_session() as session:
-        org_id, budget_id = seed_basic_ledger(session)
+        _org_id, budget_id = seed_basic_ledger(session)
         service = BudgetService(session)
 
         report = service.budget_vs_actual(budget_id, horizon=30, refresh=True)
@@ -113,6 +113,7 @@ def test_budget_vs_actual_generates_and_persists() -> None:
         assert report.lines
         assert pytest.approx(report.total_actual, rel=1e-3) == 1050.0
         assert report.metadata["budget_id"] == budget_id
+        assert report.metadata["actuals_status"] == "complete"
 
         outputs = len(session.exec(select(ForecastOutput)).all())
         assert outputs == 1
@@ -123,7 +124,7 @@ def test_budget_vs_actual_generates_and_persists() -> None:
 
 def test_cashflow_forecast_handles_history() -> None:
     with create_session() as session:
-        org_id, budget_id = seed_basic_ledger(session)
+        org_id, _budget_id = seed_basic_ledger(session)
         service = BudgetService(session)
 
         report = service.cashflow_forecast(org_id, horizon=15, refresh=True)
@@ -220,3 +221,256 @@ def test_budget_plan_creation_handles_race(monkeypatch: pytest.MonkeyPatch) -> N
         assert plan.id is not None
         count = len(session.exec(select(ForecastPlan)).all())
         assert count == 1
+
+
+@pytest.mark.parametrize("horizon", [0, -1])
+def test_report_services_reject_non_positive_horizons_without_creating_plans(horizon: int) -> None:
+    with create_session() as session:
+        org_id, budget_id = seed_basic_ledger(session)
+        service = BudgetService(session)
+
+        with pytest.raises(ValueError, match="horizon must be a positive integer"):
+            service.budget_vs_actual(budget_id, horizon=horizon)
+        with pytest.raises(ValueError, match="horizon must be a positive integer"):
+            service.cashflow_forecast(org_id, horizon=horizon)
+
+        assert session.exec(select(ForecastPlan)).all() == []
+
+
+def test_budget_actuals_include_month_boundaries_and_net_refunds_with_decimal_precision() -> None:
+    with create_session() as session:
+        org = Organization(name="Boundary Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+        if org.id is None:
+            raise AssertionError("Organization id was not persisted")
+
+        ledger = LedgerService(session, organization_id=org.id)
+        cash = ledger.create_account("Cash", "ASSET", code="1000")
+        expense = ledger.create_account("Expense", "EXPENSE", code="5000")
+        if cash.id is None or expense.id is None:
+            raise AssertionError("Account ids were not persisted")
+
+        def post_spend(txn_date: date, amount: float, description: str) -> None:
+            ledger.post_transaction(
+                date=txn_date,
+                description=description,
+                postings=[
+                    {"account_id": expense.id, "debit": amount, "credit": 0.0},
+                    {"account_id": cash.id, "debit": 0.0, "credit": amount},
+                ],
+            )
+
+        post_spend(date(2023, 12, 31), 99.0, "Before period")
+        post_spend(date(2024, 1, 1), 0.1, "First day")
+        post_spend(date(2024, 1, 31), 0.2, "Last day")
+        post_spend(date(2024, 2, 1), 88.0, "After period")
+        ledger.post_transaction(
+            date=date(2024, 1, 31),
+            description="Expense refund",
+            postings=[
+                {"account_id": cash.id, "debit": 0.05, "credit": 0.0},
+                {"account_id": expense.id, "debit": 0.0, "credit": 0.05},
+            ],
+        )
+
+        budget = Budget(
+            organization_id=org.id,
+            name="January precision",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 1, 31),
+            currency="USD",
+        )
+        session.add(budget)
+        session.commit()
+        session.refresh(budget)
+        if budget.id is None:
+            raise AssertionError("Budget id was not persisted")
+        session.add(
+            BudgetLine(
+                budget_id=budget.id,
+                account_id=expense.id,
+                period_start=date(2024, 1, 1),
+                amount=1.0,
+            )
+        )
+        session.commit()
+
+        report = BudgetService(session).budget_vs_actual(budget.id, horizon=5, refresh=True)
+
+        assert report.total_actual == pytest.approx(0.25)
+        assert report.total_variance == pytest.approx(-0.75)
+        assert report.lines[0].burn_rate == pytest.approx(0.25)
+        assert "2024-01-01,1.00,0.25,-0.75,0.2500" in report.csv_export
+        assert report.metadata["actuals_status"] == "complete"
+
+
+def test_budget_and_cashflow_reports_handle_no_history() -> None:
+    with create_session() as session:
+        org = Organization(name="No History Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+        if org.id is None:
+            raise AssertionError("Organization id was not persisted")
+
+        ledger = LedgerService(session, organization_id=org.id)
+        ledger.create_account("Cash", "ASSET", code="1000")
+        expense = ledger.create_account("Expense", "EXPENSE", code="5000")
+        if expense.id is None:
+            raise AssertionError("Account id was not persisted")
+
+        budget = Budget(
+            organization_id=org.id,
+            name="No history budget",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 1, 31),
+            currency="USD",
+        )
+        session.add(budget)
+        session.commit()
+        session.refresh(budget)
+        if budget.id is None:
+            raise AssertionError("Budget id was not persisted")
+        session.add(
+            BudgetLine(
+                budget_id=budget.id,
+                account_id=expense.id,
+                period_start=date(2024, 1, 1),
+                amount=100.0,
+            )
+        )
+        session.commit()
+
+        service = BudgetService(session)
+        budget_report = service.budget_vs_actual(budget.id, horizon=5, refresh=True)
+        cashflow_report = service.cashflow_forecast(org.id, horizon=5, refresh=True)
+
+        assert budget_report.total_actual == 0.0
+        assert budget_report.lines[0].forecast == []
+        assert budget_report.metadata["actuals_status"] == "complete"
+        missing_accounts = budget_report.metadata.get("accounts_without_actuals")
+        assert isinstance(missing_accounts, list)
+        assert missing_accounts[0]["account_id"] == expense.id
+        assert cashflow_report.historical == []
+        assert cashflow_report.forecast is None
+        assert cashflow_report.current_cash == 0.0
+        assert cashflow_report.average_monthly_flow is None
+        assert cashflow_report.metadata["forecast_status"] == "unavailable"
+
+
+def test_budget_report_marks_totals_partial_when_fx_rate_is_missing() -> None:
+    with create_session() as session:
+        org = Organization(name="Missing FX Org")
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+        if org.id is None:
+            raise AssertionError("Organization id was not persisted")
+
+        ledger = LedgerService(session, organization_id=org.id)
+        payable = ledger.create_account("EUR Payable", "LIABILITY", code="2000", currency="EUR")
+        expense = ledger.create_account("EUR Expense", "EXPENSE", code="5000", currency="EUR")
+        if payable.id is None or expense.id is None:
+            raise AssertionError("Account ids were not persisted")
+        ledger.post_transaction(
+            date=date(2024, 1, 15),
+            description="EUR expense without rate",
+            postings=[
+                {"account_id": expense.id, "debit": 100.0, "credit": 0.0, "currency": "EUR"},
+                {"account_id": payable.id, "debit": 0.0, "credit": 100.0, "currency": "EUR"},
+            ],
+        )
+
+        budget = Budget(
+            organization_id=org.id,
+            name="USD budget",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 1, 31),
+            currency="USD",
+        )
+        session.add(budget)
+        session.commit()
+        session.refresh(budget)
+        if budget.id is None:
+            raise AssertionError("Budget id was not persisted")
+        session.add(
+            BudgetLine(
+                budget_id=budget.id,
+                account_id=expense.id,
+                period_start=date(2024, 1, 1),
+                amount=120.0,
+            )
+        )
+        session.commit()
+
+        report = BudgetService(session).budget_vs_actual(budget.id, horizon=5, refresh=True)
+
+        assert report.total_actual == 0.0
+        assert report.metadata["actuals_status"] == "partial"
+        diagnostics = report.metadata.get("missing_fx_rates")
+        assert isinstance(diagnostics, list)
+        assert diagnostics == [
+            {
+                "account_id": expense.id,
+                "base_currency": "EUR",
+                "quote_currency": "USD",
+                "as_of": "2024-01-15",
+                "period_start": "2024-01-01",
+                "omitted_amount": 100.0,
+            }
+        ]
+
+
+def test_refresh_bypasses_cached_budget_output_after_new_activity() -> None:
+    with create_session() as session:
+        org_id, budget_id = seed_basic_ledger(session)
+        service = BudgetService(session)
+        initial = service.budget_vs_actual(budget_id, horizon=30, refresh=True)
+
+        ledger = LedgerService(session, organization_id=org_id)
+        cash = ledger.require_account("1000")
+        expense = ledger.require_account("5000")
+        ledger.post_transaction(
+            date=date(2024, 1, 20),
+            description="Late January spend",
+            postings=[
+                {"account_id": expense.id, "debit": 25.0, "credit": 0.0},
+                {"account_id": cash.id, "debit": 0.0, "credit": 25.0},
+            ],
+        )
+
+        cached = service.budget_vs_actual(budget_id)
+        refreshed = service.budget_vs_actual(budget_id, refresh=True)
+
+        assert cached.total_actual == initial.total_actual
+        assert refreshed.total_actual == pytest.approx(initial.total_actual + 25.0)
+        outputs = session.exec(select(ForecastOutput).where(ForecastOutput.report_type == "budget_vs_actual")).all()
+        assert len(outputs) == 2
+
+
+def test_duplicate_budget_line_is_rejected_by_persistence_constraint() -> None:
+    with create_session() as session:
+        _org_id, budget_id = seed_basic_ledger(session)
+        original = session.exec(
+            select(BudgetLine).where(
+                BudgetLine.budget_id == budget_id,
+                BudgetLine.period_start == date(2024, 1, 1),
+            )
+        ).one()
+
+        session.add(
+            BudgetLine(
+                budget_id=budget_id,
+                account_id=original.account_id,
+                period_start=original.period_start,
+                amount=999.0,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            session.commit()
+        session.rollback()
+
+        lines = session.exec(select(BudgetLine).where(BudgetLine.budget_id == budget_id)).all()
+        assert len(lines) == 2
