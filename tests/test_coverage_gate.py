@@ -5,7 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.tools.coverage_gate import CoverageSummary, load_coverage_summary, main, render_markdown
+from src.tools.coverage_gate import (
+    CoverageSummary,
+    load_coverage_summary,
+    main,
+    render_markdown,
+)
 
 
 def _write_report(
@@ -37,7 +42,9 @@ def _write_report(
     return report
 
 
-def test_load_coverage_summary_normalizes_line_and_branch_totals(tmp_path: Path) -> None:
+def test_load_coverage_summary_normalizes_line_and_branch_totals(
+    tmp_path: Path,
+) -> None:
     report = _write_report(tmp_path)
 
     summary = load_coverage_summary(report)
@@ -69,7 +76,9 @@ def test_render_markdown_distinguishes_line_gate_from_branch_evidence() -> None:
     assert "Line gate | **PASS**" in rendered
 
 
-def test_main_passes_and_appends_github_step_summary(tmp_path: Path, monkeypatch) -> None:
+def test_main_passes_and_appends_github_step_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
     report = _write_report(tmp_path, covered_lines=85, total_lines=100)
     step_summary = tmp_path / "step-summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(step_summary))
