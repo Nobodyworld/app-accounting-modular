@@ -84,6 +84,7 @@ class BudgetService:
 
     BUDGET_PLAN_NAME = "Budget vs Actual"
     CASHFLOW_PLAN_NAME = "Cashflow Forecast"
+    DEFAULT_HORIZON = 90
 
     def __init__(self, session: Session, forecast_service: ForecastService | None = None):
         self.session = session
@@ -94,6 +95,17 @@ class BudgetService:
         if value is None:
             raise ValueError(f"{context} missing identifier")
         return int(value)
+
+    @classmethod
+    def _normalise_horizon(cls, horizon: int | None, *, fallback: int | None = None) -> int:
+        """Return a positive service-level forecast horizon."""
+
+        resolved = fallback if horizon is None else horizon
+        if resolved is None:
+            resolved = cls.DEFAULT_HORIZON
+        if isinstance(resolved, bool) or not isinstance(resolved, int) or resolved <= 0:
+            raise ValueError("horizon must be a positive integer")
+        return resolved
 
     # ------------------------------------------------------------------
     # Public API
@@ -148,7 +160,7 @@ class BudgetService:
                     organization_id=budget.organization_id,
                     budget_id=budget.id,
                     name=self.BUDGET_PLAN_NAME,
-                    horizon=horizon or 90,
+                    horizon=self._normalise_horizon(horizon),
                 ),
             )
         else:
@@ -173,7 +185,7 @@ class BudgetService:
                     organization_id=organization_id,
                     budget_id=None,
                     name=self.CASHFLOW_PLAN_NAME,
-                    horizon=horizon or 90,
+                    horizon=self._normalise_horizon(horizon),
                 ),
             )
         else:
@@ -206,9 +218,8 @@ class BudgetService:
         if not budget_lines:
             raise ValueError("Budget contains no lines to analyse")
 
-        actuals = self._collect_actuals(accounts_by_id, period_keys, budget.currency)
+        actuals, missing_fx_rates = self._collect_actuals(accounts_by_id, period_keys, budget.currency)
         forecast_series = self._forecast_by_account(actuals, plan.horizon)
-        # TODO - Surface accounts missing actuals in report metadata for diagnostics.
 
         total_budget = Decimal("0")
         total_actual = Decimal("0")
@@ -266,9 +277,12 @@ class BudgetService:
             "budget_id": plan.budget_id,
             "organization_id": plan.organization_id,
             "reporting_currency": budget.currency,
+            "actuals_status": "partial" if missing_fx_rates else "complete",
         }
         if missing_accounts:
             metadata["accounts_without_actuals"] = missing_accounts
+        if missing_fx_rates:
+            metadata["missing_fx_rates"] = missing_fx_rates
 
         return BudgetReport(
             lines=lines,
@@ -385,7 +399,7 @@ class BudgetService:
         return candidate
 
     def _update_plan_horizon(self, plan: ForecastPlan, horizon: int | None) -> ForecastPlan:
-        updated_horizon = horizon or plan.horizon
+        updated_horizon = self._normalise_horizon(horizon, fallback=plan.horizon)
         if plan.horizon != updated_horizon:
             plan.horizon = updated_horizon
             plan.updated_at = datetime.now(UTC)
@@ -418,10 +432,10 @@ class BudgetService:
         accounts_by_id: dict[int, Account],
         periods: Iterable[date],
         budget_currency: str,
-    ) -> dict[tuple[int, date], Decimal]:
+    ) -> tuple[dict[tuple[int, date], Decimal], list[dict[str, object]]]:
         period_set = {self._period_key(p) for p in periods}
         if not period_set:
-            return {}
+            return {}, []
 
         min_period = min(period_set)
         max_period = max(period_set)
@@ -440,6 +454,7 @@ class BudgetService:
         )
 
         actuals: dict[tuple[int, date], Decimal] = defaultdict(lambda: Decimal("0"))
+        missing_fx_rates: list[dict[str, object]] = []
         result = self.session.exec(stmt)
         for account_id, txn_date, debit, credit in result.yield_per(1000):
             if txn_date is None:
@@ -451,10 +466,20 @@ class BudgetService:
             account_currency = account.currency if account is not None else budget_currency
             converted = self._convert_currency(raw_amount, account_currency, budget_currency, txn_date)
             if converted is None:
+                missing_fx_rates.append(
+                    {
+                        "account_id": int(account_id),
+                        "base_currency": account_currency,
+                        "quote_currency": budget_currency,
+                        "as_of": txn_date.isoformat(),
+                        "period_start": period.isoformat(),
+                        "omitted_amount": float(raw_amount),
+                    }
+                )
                 continue
             actuals[key] += converted
 
-        return actuals
+        return actuals, missing_fx_rates
 
     def _forecast_by_account(
         self, actuals: dict[tuple[int, date], Decimal], horizon: int
