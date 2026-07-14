@@ -2,6 +2,11 @@
 
 A modular accounting-control toolkit for validating financial snapshots, provider provenance, and journal integrity without committing to a full ERP.
 
+> [!IMPORTANT]
+> **EARLY BETA / PORTFOLIO PREVIEW**
+>
+> This repository demonstrates accounting-control architecture and workflow evidence. Demo providers use controlled sample data unless external credentials are configured. It is not an ERP, production tax engine, bank-feed product, treasury platform, or commercially supported accounting system. Independently validate accounting, tax, security, data, and deployment behavior before relying on any result.
+
 The project demonstrates how accounting workflows can be broken into auditable modules: FX rates, commodity pricing, tax rules, ledger controls, provider health, cache diagnostics, and scenario plans. It is intentionally smaller than an ERP and focused on transparent controls, reproducible evidence, and clean integration boundaries.
 
 ## Streamlit demonstration interface using controlled sample data
