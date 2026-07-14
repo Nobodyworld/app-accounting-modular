@@ -1,7 +1,7 @@
 # Public Release Audit — Early Beta / Portfolio Preview
 
 **Audit date:** 2026-07-14  
-**Current `main`:** `b1ae2c12486484f406be6cf424cb14f0341f18ec`  
+**Validated runtime baseline:** `b1ae2c12486484f406be6cf424cb14f0341f18ec`  
 **Repository visibility:** public
 
 ## Classification
