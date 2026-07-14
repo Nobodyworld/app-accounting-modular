@@ -51,6 +51,9 @@ def _session_scope() -> Iterator[Session]:
 
     try:
         yield session
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -61,6 +64,15 @@ def _refresh_plan(service: BudgetService, plan: ForecastPlan) -> None:
     else:
         service.cashflow_forecast(plan.organization_id, horizon=plan.horizon, refresh=True)
     plan.last_refreshed_at = datetime.now(UTC)
+
+
+def _cleanup_failed_scheduler_start(scheduler: BackgroundScheduler) -> None:
+    """Best-effort cleanup that never masks the original startup failure."""
+
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception:
+        logger.warning("Failed to clean up scheduler after startup error", exc_info=True)
 
 
 def _run_scheduled_refresh() -> None:
@@ -109,8 +121,11 @@ def _run_scheduled_refresh() -> None:
                 ):
                     try:
                         _refresh_plan(service, plan)
+                        session.add(plan)
+                        session.commit()
                         logger.info("Refreshed forecast plan")
                     except Exception:
+                        session.rollback()
                         logger.exception(
                             "Failed to refresh forecast plan",
                             extra={
@@ -119,7 +134,6 @@ def _run_scheduled_refresh() -> None:
                                 "budget_id": plan.budget_id,
                             },
                         )
-            session.commit()
 
 
 def start_scheduler() -> None:
@@ -128,9 +142,17 @@ def start_scheduler() -> None:
     global _scheduler
     with _scheduler_lock:
         if _scheduler is not None:
-            if not _scheduler.running:
-                logger.info("Starting scheduler that was instantiated but not running")
+            if _scheduler.running:
+                return
+            logger.info("Starting scheduler that was instantiated but not running")
+            try:
                 _scheduler.start()
+            except Exception:
+                failed_scheduler = _scheduler
+                _scheduler = None
+                logger.exception("Failed to restart background scheduler")
+                _cleanup_failed_scheduler_start(failed_scheduler)
+                raise
             return
 
         scheduler = BackgroundScheduler(daemon=True)
@@ -144,9 +166,9 @@ def start_scheduler() -> None:
         # TODO[P3][5d]: Externalize refresh cadence into configuration per organization.
         try:
             scheduler.start()
-        except Exception:  # pragma: no cover - protective guard
+        except Exception:
             logger.exception("Failed to start background scheduler")
-            scheduler.shutdown(wait=False)
+            _cleanup_failed_scheduler_start(scheduler)
             raise
 
         _scheduler = scheduler
@@ -156,12 +178,20 @@ def start_scheduler() -> None:
 def shutdown_scheduler() -> None:
     """Stop the APScheduler if it is running."""
 
-    global _scheduler
+    global _last_run_at, _scheduler
     with _scheduler_lock:
-        if _scheduler is not None:
-            _scheduler.shutdown(wait=False)
-            _scheduler = None
-            logger.info("Background scheduler stopped")
+        scheduler = _scheduler
+        _scheduler = None
+        _last_run_at = None
+        if scheduler is None:
+            return
+        if scheduler.running:
+            try:
+                scheduler.shutdown(wait=False)
+            except Exception:
+                logger.exception("Failed to stop background scheduler")
+                return
+        logger.info("Background scheduler stopped")
 
 
 def get_scheduler_state() -> dict[str, Any]:
