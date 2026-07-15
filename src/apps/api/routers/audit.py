@@ -69,12 +69,7 @@ def list_audit_logs(
 
     ts_col = cast(Any, AuditLog.ts)
     id_col = cast(Any, AuditLog.id)
-    stmt = (
-        select(AuditLog)
-        .where(AuditLog.actor_org_id == organization_id)
-        .order_by(ts_col.desc())
-        .limit(limit)
-    )
+    stmt = select(AuditLog).where(AuditLog.actor_org_id == organization_id).order_by(ts_col.desc()).limit(limit)
     if after_id is not None:
         stmt = stmt.where(id_col < after_id)
     if entity:
