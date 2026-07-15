@@ -55,7 +55,11 @@ def list_audit_logs(
     end: datetime | None = Query(default=None),
     request_id: str | None = Query(default=None, min_length=1, max_length=255),
     limit: int = Query(default=100, ge=1, le=1000),
-    after_id: int | None = Query(default=None, ge=1, description="Fetch entries older than this id for pagination"),
+    after_id: int | None = Query(
+        default=None,
+        ge=1,
+        description="Fetch entries older than this id for pagination",
+    ),
 ) -> list[AuditLogSchema]:
     """Return organization-scoped audit entries to organization administrators."""
 
