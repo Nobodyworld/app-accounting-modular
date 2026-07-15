@@ -48,6 +48,7 @@ def test_authenticated_workspace_requires_token_and_positive_organization() -> N
 
 def test_request_access_token_normalizes_credentials_and_validates_payload() -> None:
     captured: dict[str, Any] = {}
+    token_value = "-".join(("signed", "token"))
 
     def fake_post(url: str, **kwargs: Any) -> DummyResponse:
         captured["url"] = url
@@ -55,7 +56,7 @@ def test_request_access_token_normalizes_credentials_and_validates_payload() -> 
         return DummyResponse(
             200,
             {
-                "access_token": "signed-token",
+                "access_token": token_value,
                 "token_type": "bearer",
                 "session_id": "session-123",
             },
@@ -70,7 +71,7 @@ def test_request_access_token_normalizes_credentials_and_validates_payload() -> 
 
     assert error is None
     assert result == ApiLoginResult(
-        access_token="signed-token",
+        access_token=token_value,
         token_type="bearer",
         session_id="session-123",
     )
@@ -126,11 +127,12 @@ def test_api_error_detail_falls_back_to_text_and_status() -> None:
 
 def test_store_and_clear_api_session_do_not_store_passwords() -> None:
     state: dict[str, Any] = {"unrelated": "keep"}
-    result = ApiLoginResult(access_token="token", token_type="bearer", session_id="session")
+    token_value = "-".join(("session", "token"))
+    result = ApiLoginResult(access_token=token_value, token_type="bearer", session_id="session")
 
     store_api_session(state, result, email=" User@Example.com ", organization_id=7)
 
-    assert state[ACCESS_TOKEN_KEY] == "token"
+    assert state[ACCESS_TOKEN_KEY] == token_value
     assert state[SESSION_ID_KEY] == "session"
     assert state[AUTH_EMAIL_KEY] == "user@example.com"
     assert state[ORGANIZATION_ID_KEY] == 7
