@@ -19,6 +19,17 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 from apps.api.services.snapshot_service import SnapshotOrchestrator
 from apps.modular_accounting.domain import LedgerEntry, Money, Transaction
+from apps.web.api_session import (
+    ACCESS_TOKEN_KEY,
+    AUTH_EMAIL_KEY,
+    ORGANIZATION_ID_KEY,
+    api_error_detail,
+    auth_headers,
+    authenticated_workspace_ready,
+    clear_api_session,
+    request_access_token,
+    store_api_session,
+)
 
 API = os.getenv("API_BASE", "http://localhost:8000")
 BUDGET_TEMPLATE = "account_id,period_start,amount\n101,2024-01-01,2500\n101,2024-02-01,2600\n"
@@ -156,6 +167,53 @@ def _journal_control_status() -> dict[str, Any]:
     }
 
 
+def _submit_api_login() -> None:
+    """Exchange sidebar credentials while keeping passwords out of retained state."""
+
+    email = str(st.session_state.get("api_login_email", ""))
+    password = str(st.session_state.get("api_login_password", ""))
+    organization_id = int(st.session_state.get("api_organization_input", 0) or 0)
+    result, error = request_access_token(API, email, password, post=requests.post)
+
+    # The password widget is intentionally transient: remove its submitted value before rerendering.
+    st.session_state.pop("api_login_password", None)
+    if error:
+        clear_api_session(st.session_state)
+        st.session_state["api_login_error"] = error
+        return
+
+    if result is None:  # pragma: no cover - request_access_token always pairs this with an error
+        clear_api_session(st.session_state)
+        st.session_state["api_login_error"] = "Authentication response was incomplete."
+        return
+
+    store_api_session(
+        st.session_state,
+        result,
+        email=email,
+        organization_id=organization_id,
+    )
+    st.session_state.pop("api_login_error", None)
+
+
+def _logout_api_session() -> None:
+    """Clear authenticated workspace values without touching public workflow state."""
+
+    clear_api_session(st.session_state)
+    st.session_state.pop("api_login_error", None)
+
+
+def _protected_response_payload(response: Any) -> tuple[Any | None, str | None]:
+    """Return a safe API payload or its actionable error detail."""
+
+    if response.status_code >= 400:
+        return None, api_error_detail(response)
+    try:
+        return response.json(), None
+    except Exception:
+        return None, "API response was not valid JSON."
+
+
 def _render_snapshot_tables(payload: dict[str, Any]) -> None:
     fx_rows = payload.get("fx_rates", [])
     commodity_rows = payload.get("commodity_quotes", [])
@@ -231,6 +289,36 @@ st.title("Modular Accounting Toolkit")
 st.caption(
     "Review financial snapshots through provider evidence, journal controls, scenario plans, "
     "and optional technical diagnostics."
+)
+
+with st.sidebar:
+    st.subheader("API Session")
+    if st.session_state.get(ACCESS_TOKEN_KEY):
+        st.success("Authenticated")
+        st.write(f"Authenticated email: {st.session_state.get(AUTH_EMAIL_KEY, 'Unknown')}")
+        st.write(f"Organization ID: {st.session_state.get(ORGANIZATION_ID_KEY, 'Unknown')}")
+        st.caption("This organization scope applies to every protected Review Utilities request.")
+        st.button("Log out", key="api_logout_button", on_click=_logout_api_session)
+    else:
+        st.info("Protected utilities locked")
+        st.caption("Snapshot Review and Scenario Plan Preview remain public local evidence workflows.")
+        login_error = st.session_state.get("api_login_error")
+        if isinstance(login_error, str) and login_error:
+            st.error(login_error)
+        st.text_input("Email", key="api_login_email")
+        st.text_input("Password", type="password", key="api_login_password")
+        st.number_input("Organization ID", min_value=1, step=1, key="api_organization_input")
+        st.button("Sign in", type="primary", key="api_login_button", on_click=_submit_api_login)
+
+# Resolve the protected workspace once after the sidebar has updated the API session state.
+access_token = st.session_state.get(ACCESS_TOKEN_KEY)
+organization_id = st.session_state.get(ORGANIZATION_ID_KEY)
+protected_ready = authenticated_workspace_ready(access_token, organization_id)
+headers = auth_headers(access_token)
+
+st.info(
+    "Snapshot Review is a public/local evidence workflow. Scenario Plan Preview is public. "
+    "Review Utilities require an authenticated API session and organization scope."
 )
 
 health_data, health_error = _load_health()
@@ -499,9 +587,15 @@ with snapshot_tab:
 with utility_tab:
     st.subheader("Review Utilities")
     st.caption(
-        "Supporting budget, cashflow, FX, and market utilities remain available for review, "
-        "but the primary public workflow is the Snapshot Review tab."
+        "Budget, cashflow, FX, and market actions use the authenticated API session and its "
+        "organization scope. Budget CSV preview and template behavior remain local."
     )
+    if not protected_ready:
+        st.warning(
+            "Protected utilities locked. Sign in through API Session with a positive organization ID to continue."
+        )
+    else:
+        st.success("Protected utilities ready for the authenticated organization scope.")
 
     budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(["Budgets", "Cashflow", "FX Sync", "Market Sync"])
 
@@ -549,41 +643,80 @@ with utility_tab:
         )
         budget_refresh = st.checkbox("Force refresh", value=False, key="budget_refresh_toggle")
 
-        if st.button("Generate Budget Report", key="budget_report_button"):
+        if st.button("Generate Budget Report", key="budget_report_button", disabled=not protected_ready):
             try:
                 budget_params = {
                     "budget_id": int(budget_id),
+                    "organization_id": int(organization_id),
                     "horizon": int(budget_horizon),
                     "refresh": budget_refresh,
                 }
-                response = requests.get(f"{API}/reports/budget-vs-actual", params=budget_params, timeout=60)
-                response.raise_for_status()
-                st.session_state["budget_report_payload"] = response.json()
+                with st.spinner("Generating budget report..."):
+                    response = requests.get(
+                        f"{API}/reports/budget-vs-actual",
+                        params=budget_params,
+                        headers=headers,
+                        timeout=60,
+                    )
+            except requests.RequestException as exc:  # pragma: no cover - runtime feedback
+                budget_payload, budget_error = None, f"Budget service unavailable: {exc}"
+            except Exception:  # pragma: no cover - defensive UI boundary
+                budget_payload, budget_error = None, "Budget report request could not be completed."
+            else:
+                budget_payload, budget_error = _protected_response_payload(response)
+
+            if budget_error:
+                st.session_state.pop("budget_report_payload", None)
+                st.session_state["budget_report_error"] = budget_error
+            else:
+                st.session_state["budget_report_payload"] = budget_payload
+                st.session_state.pop("budget_report_error", None)
                 st.success("Budget report loaded")
-            except Exception as exc:  # pragma: no cover - runtime feedback
-                st.error(f"Failed to load budget report: {exc}")
+
+        budget_error = st.session_state.get("budget_report_error")
+        if isinstance(budget_error, str) and budget_error:
+            st.error(f"Budget report unavailable: {budget_error}")
 
     with cashflow_tab:
         st.markdown("#### Cashflow forecast")
-        org_id = st.number_input("Organization ID", min_value=1, step=1, key="cashflow_org_input")
+        st.caption("Uses the organization scope selected in API Session.")
         cashflow_horizon = st.number_input(
             "Forecast horizon (days)", min_value=1, max_value=365, value=60, key="cashflow_horizon_input"
         )
         cashflow_refresh = st.checkbox("Force refresh", value=True, key="cashflow_refresh_toggle")
 
-        if st.button("Generate Cashflow Forecast", key="cashflow_report_button"):
+        if st.button("Generate Cashflow Forecast", key="cashflow_report_button", disabled=not protected_ready):
             try:
                 cashflow_params = {
-                    "organization_id": int(org_id),
+                    "organization_id": int(organization_id),
                     "horizon": int(cashflow_horizon),
                     "refresh": cashflow_refresh,
                 }
-                response = requests.get(f"{API}/reports/cashflow-forecast", params=cashflow_params, timeout=60)
-                response.raise_for_status()
-                st.session_state["cashflow_report_payload"] = response.json()
+                with st.spinner("Generating cashflow forecast..."):
+                    response = requests.get(
+                        f"{API}/reports/cashflow-forecast",
+                        params=cashflow_params,
+                        headers=headers,
+                        timeout=60,
+                    )
+            except requests.RequestException as exc:  # pragma: no cover - runtime feedback
+                cashflow_payload, cashflow_error = None, f"Cashflow service unavailable: {exc}"
+            except Exception:  # pragma: no cover - defensive UI boundary
+                cashflow_payload, cashflow_error = None, "Cashflow forecast request could not be completed."
+            else:
+                cashflow_payload, cashflow_error = _protected_response_payload(response)
+
+            if cashflow_error:
+                st.session_state.pop("cashflow_report_payload", None)
+                st.session_state["cashflow_report_error"] = cashflow_error
+            else:
+                st.session_state["cashflow_report_payload"] = cashflow_payload
+                st.session_state.pop("cashflow_report_error", None)
                 st.success("Cashflow forecast generated")
-            except Exception as exc:  # pragma: no cover - runtime feedback
-                st.error(f"Failed to load cashflow forecast: {exc}")
+
+        cashflow_error = st.session_state.get("cashflow_report_error")
+        if isinstance(cashflow_error, str) and cashflow_error:
+            st.error(f"Cashflow forecast unavailable: {cashflow_error}")
 
         cashflow_payload = st.session_state.get("cashflow_report_payload")
         if isinstance(cashflow_payload, dict):
@@ -607,6 +740,10 @@ with utility_tab:
     with fx_tab:
         st.markdown("#### Sync FX rates")
         base = st.text_input("Base currency", value="USD", key="fx_base_input")
+        normalized_base = base.strip().upper()
+        fx_currency_error = _currency_error(normalized_base)
+        if fx_currency_error:
+            st.error(fx_currency_error)
         fx_options = _provider_options("fx", providers_by_key)
         provider_key = None
         if fx_options:
@@ -619,20 +756,44 @@ with utility_tab:
         else:
             st.info("No FX providers configured on the API")
 
-        if st.button("Sync FX Now", disabled=provider_key is None, key="fx_sync_button"):
+        can_sync_fx = protected_ready and provider_key is not None and fx_currency_error is None
+        if st.button("Sync FX Now", disabled=not can_sync_fx, key="fx_sync_button"):
             try:
-                fx_sync_params: dict[str, Any] = {"base": base, "provider_key": provider_key}
-                response = requests.post(f"{API}/fx/sync", params=fx_sync_params, timeout=30)
-                response.raise_for_status()
-                st.success(response.json())
-            except Exception as exc:  # pragma: no cover - runtime feedback
-                st.error(f"Failed to sync FX rates: {exc}")
+                fx_sync_params: dict[str, Any] = {
+                    "organization_id": int(organization_id),
+                    "base": normalized_base,
+                    "provider_key": provider_key,
+                }
+                with st.spinner("Synchronizing FX rates..."):
+                    response = requests.post(f"{API}/fx/sync", params=fx_sync_params, headers=headers, timeout=30)
+            except requests.RequestException as exc:  # pragma: no cover - runtime feedback
+                fx_error = f"FX service unavailable: {exc}"
+            except Exception:  # pragma: no cover - defensive UI boundary
+                fx_error = "FX synchronization request could not be completed."
+            else:
+                _, fx_error = _protected_response_payload(response)
+
+            if fx_error:
+                st.session_state["fx_sync_error"] = fx_error
+            else:
+                st.session_state.pop("fx_sync_error", None)
+                st.success("FX rates synchronized")
+
+        fx_error = st.session_state.get("fx_sync_error")
+        if isinstance(fx_error, str) and fx_error:
+            st.error(f"FX synchronization unavailable: {fx_error}")
 
     with market_tab:
         st.markdown("#### Sync market prices")
         symbol = st.text_input("Symbol", value="AAPL", key="market_symbol_input")
-        start = st.text_input("Start date", value="2024-01-01", key="market_start_input")
-        end = st.text_input("End date", value="2024-12-31", key="market_end_input")
+        normalized_symbol = symbol.strip().upper()
+        start = st.date_input("Start date", value=date(2024, 1, 1), key="market_start_input")
+        end = st.date_input("End date", value=date(2024, 12, 31), key="market_end_input")
+        market_date_error = "Start date must be on or before end date." if start > end else None
+        if not normalized_symbol:
+            st.error("Market symbol is required.")
+        if market_date_error:
+            st.error(market_date_error)
         market_options = _provider_options("market", providers_by_key)
         market_provider = None
         if market_options:
@@ -645,19 +806,38 @@ with utility_tab:
         else:
             st.info("No market providers configured on the API")
 
-        if st.button("Sync Prices", disabled=market_provider is None, key="market_sync_button"):
+        can_sync_market = (
+            protected_ready and market_provider is not None and bool(normalized_symbol) and not market_date_error
+        )
+        if st.button("Sync Prices", disabled=not can_sync_market, key="market_sync_button"):
             try:
                 market_sync_params: dict[str, Any] = {
-                    "symbol": symbol,
-                    "start": start,
-                    "end": end,
+                    "organization_id": int(organization_id),
+                    "symbol": normalized_symbol,
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
                     "provider_key": market_provider,
                 }
-                response = requests.post(f"{API}/market/sync", params=market_sync_params, timeout=30)
-                response.raise_for_status()
-                st.success(response.json())
-            except Exception as exc:  # pragma: no cover - runtime feedback
-                st.error(f"Failed to sync market prices: {exc}")
+                with st.spinner("Synchronizing market prices..."):
+                    response = requests.post(
+                        f"{API}/market/sync", params=market_sync_params, headers=headers, timeout=30
+                    )
+            except requests.RequestException as exc:  # pragma: no cover - runtime feedback
+                market_error = f"Market service unavailable: {exc}"
+            except Exception:  # pragma: no cover - defensive UI boundary
+                market_error = "Market synchronization request could not be completed."
+            else:
+                _, market_error = _protected_response_payload(response)
+
+            if market_error:
+                st.session_state["market_sync_error"] = market_error
+            else:
+                st.session_state.pop("market_sync_error", None)
+                st.success("Market prices synchronized")
+
+        market_error = st.session_state.get("market_sync_error")
+        if isinstance(market_error, str) and market_error:
+            st.error(f"Market synchronization unavailable: {market_error}")
 
 with plan_tab:
     st.subheader("Scenario Plan Review")

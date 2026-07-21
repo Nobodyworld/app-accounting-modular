@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 import streamlit as st
+from apps.web.api_session import ACCESS_TOKEN_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY, SESSION_ID_KEY
 
 pytest.importorskip("streamlit", reason="streamlit dependencies not available")
 from streamlit.testing.v1 import AppTest  # type: ignore[import-not-found]
@@ -21,11 +22,12 @@ def _app_test() -> AppTest:
 class DummyResponse:
     """Simple response stub to simulate ``requests`` interactions."""
 
-    def __init__(self, payload: dict[str, Any], status_code: int = 200):
+    def __init__(self, payload: Any, status_code: int = 200, text: str = ""):
         self._payload = payload
         self.status_code = status_code
+        self.text = text
 
-    def json(self) -> dict[str, Any]:
+    def json(self) -> Any:
         return self._payload
 
     def raise_for_status(self) -> None:
@@ -38,6 +40,19 @@ class SnapshotCall:
     base_currency: str
     commodity_symbols: list[str]
     jurisdictions: list[str]
+
+
+@dataclass
+class RequestCall:
+    """Recorded HTTP request data used to verify protected request contracts."""
+
+    method: str
+    url: str
+    headers: dict[str, str] | None
+    data: dict[str, Any] | None
+    params: dict[str, Any] | None
+    json: dict[str, Any] | None
+    timeout: int
 
 
 @pytest.fixture
@@ -54,6 +69,10 @@ def fake_runtime(monkeypatch):
     from apps.api.services import snapshot_service
 
     calls: list[SnapshotCall] = []
+    outbound_calls: list[RequestCall] = []
+    get_responses: dict[str, DummyResponse] = {}
+    post_responses: dict[str, DummyResponse] = {}
+    token_value = "-".join(("streamlit", "session", "token"))
 
     providers = [
         {
@@ -73,7 +92,28 @@ def fake_runtime(monkeypatch):
         },
     ]
 
-    def fake_get(url: str, timeout: int = 5, params: dict[str, Any] | None = None):
+    def fake_get(
+        url: str,
+        timeout: int = 5,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        data: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> DummyResponse:
+        outbound_calls.append(
+            RequestCall(
+                method="GET",
+                url=url,
+                headers=headers,
+                data=data,
+                params=params,
+                json=json,
+                timeout=timeout,
+            )
+        )
+        for path, response in get_responses.items():
+            if url.endswith(path):
+                return response
         if url.endswith("/health"):
             return DummyResponse({"status": "ok"})
         if url.endswith("/health/ready"):
@@ -93,10 +133,34 @@ def fake_runtime(monkeypatch):
 
     def fake_post(
         url: str,
-        params: dict[str, Any] | None = None,
-        json: dict[str, Any] | None = None,
         timeout: int = 5,
-    ):
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        data: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> DummyResponse:
+        outbound_calls.append(
+            RequestCall(
+                method="POST",
+                url=url,
+                headers=headers,
+                data=data,
+                params=params,
+                json=json,
+                timeout=timeout,
+            )
+        )
+        for path, response in post_responses.items():
+            if url.endswith(path):
+                return response
+        if url.endswith("/auth/token"):
+            return DummyResponse(
+                {
+                    "access_token": token_value,
+                    "token_type": "bearer",
+                    "session_id": "streamlit-session",
+                }
+            )
         if url.endswith("/snapshot/plans/preview"):
             return DummyResponse({"summary": {"scenario_count": 1}, "plan": {"metadata": {}}})
         return DummyResponse({"ok": True})
@@ -179,7 +243,23 @@ def fake_runtime(monkeypatch):
     monkeypatch.setattr(snapshot_service, "SnapshotOrchestrator", FakeSnapshotOrchestrator)
     monkeypatch.setenv("API_BASE", "http://fake")
     monkeypatch.setenv("STREAMLIT_TESTING", "1")
-    return SimpleNamespace(calls=calls)
+    return SimpleNamespace(
+        calls=calls,
+        outbound_calls=outbound_calls,
+        get_responses=get_responses,
+        post_responses=post_responses,
+        token_value=token_value,
+    )
+
+
+def _login(at: AppTest, *, email: str = "User@Example.COM", organization_id: int = 7) -> None:
+    """Complete the sidebar sign-in flow through AppTest."""
+
+    at.text_input(key="api_login_email").set_value(email)
+    at.text_input(key="api_login_password").set_value("not-retained")
+    at.number_input(key="api_organization_input").set_value(organization_id)
+    at.button(key="api_login_button").click()
+    at.run(timeout=15)
 
 
 def test_primary_snapshot_tab_renders(fake_runtime):
@@ -200,6 +280,169 @@ def test_primary_snapshot_tab_renders(fake_runtime):
     assert at.selectbox(key="snapshot_fx_provider_select").value == "fx:ecb"
     assert at.selectbox(key="snapshot_commodity_provider_select").value == "market:commodities_stub"
     assert at.selectbox(key="snapshot_tax_provider_select").value == "tax:oecd_stub"
+
+
+def test_public_workflows_remain_available_and_protected_actions_start_locked(fake_runtime):
+    """Public review remains usable without an API session while utilities are visibly gated."""
+
+    at = _app_test()
+    at.run(timeout=15)
+
+    assert at.button(key="snapshot_generate_button").disabled is False
+    assert at.button(key="scenario_plan_preview_button").disabled is False
+    for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
+        assert at.button(key=key).disabled is True
+
+    public_status = " ".join(str(element.value) for element in [*at.info, *at.caption, *at.warning])
+    assert "Snapshot Review is a public/local evidence workflow" in public_status
+    assert "Scenario Plan Preview is public" in public_status
+    assert "Review Utilities require an authenticated API session" in public_status
+    assert "Protected utilities locked" in public_status
+    protected_paths = ("/reports/budget-vs-actual", "/reports/cashflow-forecast", "/fx/sync", "/market/sync")
+    assert not any(call.url.endswith(protected_paths) for call in fake_runtime.outbound_calls)
+
+
+def test_successful_sidebar_login_normalizes_and_unlocks_protected_actions(fake_runtime):
+    """The sidebar uses the shared helper and never retains the submitted password."""
+
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+
+    auth_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/auth/token"))
+    assert auth_call.data == {"username": "user@example.com", "password": "not-retained"}
+    assert at.session_state[ACCESS_TOKEN_KEY] == fake_runtime.token_value
+    assert at.session_state[SESSION_ID_KEY] == "streamlit-session"
+    assert at.session_state[AUTH_EMAIL_KEY] == "user@example.com"
+    assert at.session_state[ORGANIZATION_ID_KEY] == 7
+    assert "api_login_password" not in at.session_state
+    assert any(element.value == "Authenticated" for element in at.success)
+    assert any("user@example.com" in str(element.value) for element in at.markdown)
+
+    for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
+        assert at.button(key=key).disabled is False
+
+
+def test_failed_sidebar_login_shows_api_detail_and_keeps_utilities_locked(fake_runtime):
+    """Failed credentials clear any partial state and retain the actionable API message."""
+
+    fake_runtime.post_responses["/auth/token"] = DummyResponse(
+        {"detail": "Incorrect username or password"},
+        status_code=401,
+    )
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+
+    assert any("Incorrect username or password" in str(element.value) for element in at.error)
+    for key in (ACCESS_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
+        assert key not in at.session_state
+    for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
+        assert at.button(key=key).disabled is True
+
+
+def test_logout_clears_only_api_session_and_relocks_protected_actions(fake_runtime):
+    """Logout uses the shared clear helper without losing public workflow state."""
+
+    at = _app_test()
+    at.run(timeout=15)
+    at.text_input(key="snapshot_base_input").set_value("EUR")
+    at.run(timeout=15)
+    _login(at)
+
+    at.button(key="api_logout_button").click()
+    at.run(timeout=15)
+
+    for key in (ACCESS_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
+        assert key not in at.session_state
+    assert at.session_state["snapshot_base_input"] == "EUR"
+    for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
+        assert at.button(key=key).disabled is True
+
+
+def test_protected_request_contracts_use_shared_session_scope(fake_runtime):
+    """All utility requests include the authenticated tenant scope and bearer header."""
+
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at, organization_id=12)
+
+    at.number_input(key="budget_id_input").set_value(31)
+    at.number_input(key="budget_horizon_input").set_value(45)
+    at.checkbox(key="budget_refresh_toggle").set_value(True)
+    at.run(timeout=15)
+    at.button(key="budget_report_button").click()
+    at.run(timeout=15)
+
+    at.number_input(key="cashflow_horizon_input").set_value(75)
+    at.checkbox(key="cashflow_refresh_toggle").set_value(False)
+    at.run(timeout=15)
+    at.button(key="cashflow_report_button").click()
+    at.run(timeout=15)
+
+    at.text_input(key="fx_base_input").set_value(" eur ")
+    at.run(timeout=15)
+    at.button(key="fx_sync_button").click()
+    at.run(timeout=15)
+
+    at.text_input(key="market_symbol_input").set_value(" msft ")
+    at.run(timeout=15)
+    at.button(key="market_sync_button").click()
+    at.run(timeout=15)
+
+    auth_header = {"Authorization": f"Bearer {fake_runtime.token_value}"}
+    budget_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/reports/budget-vs-actual"))
+    assert budget_call.headers == auth_header
+    assert budget_call.params == {"budget_id": 31, "organization_id": 12, "horizon": 45, "refresh": True}
+
+    cashflow_call = next(
+        call for call in fake_runtime.outbound_calls if call.url.endswith("/reports/cashflow-forecast")
+    )
+    assert cashflow_call.headers == auth_header
+    assert cashflow_call.params == {"organization_id": 12, "horizon": 75, "refresh": False}
+
+    fx_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/fx/sync"))
+    assert fx_call.headers == auth_header
+    assert fx_call.params == {"organization_id": 12, "base": "EUR", "provider_key": "fx:ecb"}
+
+    market_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/market/sync"))
+    assert market_call.headers == auth_header
+    assert market_call.params == {
+        "organization_id": 12,
+        "symbol": "MSFT",
+        "start": "2024-01-01",
+        "end": "2024-12-31",
+        "provider_key": "market:commodities_stub",
+    }
+
+
+def test_protected_api_errors_are_actionable_and_clear_stale_cashflow_success(fake_runtime):
+    """FastAPI detail strings and validation lists are safe to display and clear stale results."""
+
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+
+    at.button(key="cashflow_report_button").click()
+    at.run(timeout=15)
+    assert "cashflow_report_payload" in at.session_state
+
+    fake_runtime.get_responses["/reports/cashflow-forecast"] = DummyResponse(
+        {"detail": [{"msg": "Field required"}]},
+        status_code=422,
+    )
+    at.button(key="cashflow_report_button").click()
+    at.run(timeout=15)
+    assert "cashflow_report_payload" not in at.session_state
+    assert any("Field required" in str(element.value) for element in at.error)
+
+    fake_runtime.get_responses["/reports/budget-vs-actual"] = DummyResponse(
+        {"detail": "Not authorized for this organization"},
+        status_code=403,
+    )
+    at.button(key="budget_report_button").click()
+    at.run(timeout=15)
+    assert any("Not authorized for this organization" in str(element.value) for element in at.error)
 
 
 def test_snapshot_request_execution_and_diagnostics(fake_runtime):
