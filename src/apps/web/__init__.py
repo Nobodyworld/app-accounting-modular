@@ -1,5 +1,8 @@
-"""Streamlit analyst console for Modular Accounting."""
+"""Streamlit analyst console package for Modular Accounting.
 
-from . import app
+Importing :mod:`apps.web` must not execute the Streamlit application. The app
+remains available explicitly as :mod:`apps.web.app` and through the configured
+Streamlit launch commands.
+"""
 
-__all__ = ["app"]
+__all__: list[str] = []
