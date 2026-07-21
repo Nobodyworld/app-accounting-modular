@@ -8,12 +8,14 @@ from apps.web.api_session import (
     ACCESS_TOKEN_KEY,
     AUTH_EMAIL_KEY,
     ORGANIZATION_ID_KEY,
+    PROTECTED_UTILITY_STATE_KEYS,
     SESSION_ID_KEY,
     ApiLoginResult,
     api_error_detail,
     auth_headers,
     authenticated_workspace_ready,
     clear_api_session,
+    clear_protected_utility_state,
     request_access_token,
     store_api_session,
 )
@@ -125,8 +127,55 @@ def test_api_error_detail_falls_back_to_text_and_status() -> None:
     assert api_error_detail(DummyResponse(503, ValueError("invalid json"))) == "Request failed with status 503"
 
 
-def test_store_and_clear_api_session_do_not_store_passwords() -> None:
-    state: dict[str, Any] = {"unrelated": "keep"}
+def test_clear_protected_utility_state_preserves_public_workflows() -> None:
+    state: dict[str, Any] = {
+        **{key: {"tenant": 7} for key in PROTECTED_UTILITY_STATE_KEYS},
+        "snapshot_controls_payload": {"public": True},
+        "scenario_plan_preview": {"scenario_count": 1},
+        "uploaded_budget_preview": "local-preview",
+    }
+
+    clear_protected_utility_state(state)
+
+    assert all(key not in state for key in PROTECTED_UTILITY_STATE_KEYS)
+    assert state == {
+        "snapshot_controls_payload": {"public": True},
+        "scenario_plan_preview": {"scenario_count": 1},
+        "uploaded_budget_preview": "local-preview",
+    }
+
+
+def test_store_api_session_purges_prior_tenant_state_before_organization_change() -> None:
+    state: dict[str, Any] = {
+        ACCESS_TOKEN_KEY: "old-token",
+        SESSION_ID_KEY: "old-session",
+        AUTH_EMAIL_KEY: "old@example.com",
+        ORGANIZATION_ID_KEY: 7,
+        "cashflow_report_payload": {"organization_id": 7},
+        "budget_report_error": "organization 7 error",
+        "snapshot_base_input": "EUR",
+    }
+    token_value = "-".join(("new", "session", "token"))
+    result = ApiLoginResult(access_token=token_value, token_type="bearer", session_id="new-session")
+
+    store_api_session(state, result, email=" New@Example.com ", organization_id=12)
+
+    assert state[ACCESS_TOKEN_KEY] == token_value
+    assert state[SESSION_ID_KEY] == "new-session"
+    assert state[AUTH_EMAIL_KEY] == "new@example.com"
+    assert state[ORGANIZATION_ID_KEY] == 12
+    assert "cashflow_report_payload" not in state
+    assert "budget_report_error" not in state
+    assert state["snapshot_base_input"] == "EUR"
+
+
+def test_store_and_clear_api_session_do_not_store_passwords_or_tenant_results() -> None:
+    state: dict[str, Any] = {
+        "unrelated": "keep",
+        "cashflow_report_payload": {"organization_id": 7},
+        "market_sync_error": "stale tenant error",
+        "snapshot_base_input": "EUR",
+    }
     token_value = "-".join(("session", "token"))
     result = ApiLoginResult(access_token=token_value, token_type="bearer", session_id="session")
 
@@ -137,7 +186,14 @@ def test_store_and_clear_api_session_do_not_store_passwords() -> None:
     assert state[AUTH_EMAIL_KEY] == "user@example.com"
     assert state[ORGANIZATION_ID_KEY] == 7
     assert "password" not in state
+    assert "cashflow_report_payload" not in state
+    assert "market_sync_error" not in state
 
+    state["budget_report_payload"] = {"organization_id": 7}
+    state["fx_sync_error"] = "stale tenant error"
     clear_api_session(state)
 
-    assert state == {"unrelated": "keep"}
+    assert state == {
+        "unrelated": "keep",
+        "snapshot_base_input": "EUR",
+    }
