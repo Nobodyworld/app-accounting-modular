@@ -271,28 +271,35 @@ def build_cashflow_result_view(payload: Any) -> CashflowResultView:
     )
 
 
-def _coerce_count(value: Any) -> int:
+def _coerce_nonnegative_int(value: Any) -> int | None:
     if isinstance(value, bool):
-        return 0
+        return None
     try:
-        return max(int(value), 0)
+        coerced = int(value)
     except (TypeError, ValueError):
-        return 0
+        return None
+    return coerced if coerced >= 0 else None
 
 
 def build_fx_sync_result_view(payload: Any, *, organization_id: int | None) -> SyncResultView:
     """Normalize the FX synchronization response."""
 
     root = _mapping(payload)
-    count = _coerce_count(root.get("synced"))
+    count_value = _coerce_nonnegative_int(root.get("synced"))
+    count = count_value or 0
     base = str(root.get("base") or "").strip().upper() or None
     provider = str(root.get("provider") or "").strip() or None
     provider_key = str(root.get("provider_key") or "").strip() or None
-    backfill_days = _coerce_count(root.get("backfill_days"))
-    state: ResultState = "success" if count else "no_change"
-    message = (
-        f"Synchronized {count} FX rate record(s)." if count else "No FX rate changes were persisted."
-    )
+    backfill_days = _coerce_nonnegative_int(root.get("backfill_days")) or 0
+    if count_value is None:
+        state: ResultState = "empty"
+        message = "FX synchronization returned no usable result count."
+    elif count:
+        state = "success"
+        message = f"Synchronized {count} FX rate record(s)."
+    else:
+        state = "no_change"
+        message = "No FX rate changes were persisted."
     effective_range = f"Latest plus {backfill_days} backfill day(s)" if backfill_days else "Latest available rates"
     return SyncResultView(
         state=state,
@@ -312,17 +319,23 @@ def build_market_sync_result_view(payload: Any, *, organization_id: int | None) 
     """Normalize the market-price synchronization response."""
 
     root = _mapping(payload)
-    count = _coerce_count(root.get("synced"))
+    count_value = _coerce_nonnegative_int(root.get("synced"))
+    count = count_value or 0
     symbol = str(root.get("symbol") or "").strip().upper() or None
     provider = str(root.get("provider") or "").strip() or None
     provider_key = str(root.get("provider_key") or "").strip() or None
     start = str(root.get("start") or "").strip()
     end = str(root.get("end") or "").strip()
     effective_range = f"{start} through {end}" if start and end else None
-    state: ResultState = "success" if count else "no_change"
-    message = (
-        f"Synchronized {count} market price record(s)." if count else "No market price changes were persisted."
-    )
+    if count_value is None:
+        state: ResultState = "empty"
+        message = "Market synchronization returned no usable result count."
+    elif count:
+        state = "success"
+        message = f"Synchronized {count} market price record(s)."
+    else:
+        state = "no_change"
+        message = "No market price changes were persisted."
     return SyncResultView(
         state=state,
         message=message,
