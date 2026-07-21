@@ -12,6 +12,14 @@ ACCESS_TOKEN_KEY = "api_access_token"
 SESSION_ID_KEY = "api_session_id"
 AUTH_EMAIL_KEY = "api_authenticated_email"
 ORGANIZATION_ID_KEY = "api_organization_id"
+PROTECTED_UTILITY_STATE_KEYS = (
+    "budget_report_payload",
+    "budget_report_error",
+    "cashflow_report_payload",
+    "cashflow_report_error",
+    "fx_sync_error",
+    "market_sync_error",
+)
 
 
 class HttpResponse(Protocol):
@@ -144,6 +152,13 @@ def request_access_token(
     )
 
 
+def clear_protected_utility_state(state: MutableMapping[str, Any]) -> None:
+    """Remove tenant-scoped utility payloads and errors while preserving public state."""
+
+    for key in PROTECTED_UTILITY_STATE_KEYS:
+        state.pop(key, None)
+
+
 def store_api_session(
     state: MutableMapping[str, Any],
     result: ApiLoginResult,
@@ -153,6 +168,7 @@ def store_api_session(
 ) -> None:
     """Persist validated session values without storing the submitted password."""
 
+    clear_protected_utility_state(state)
     state[ACCESS_TOKEN_KEY] = result.access_token
     state[SESSION_ID_KEY] = result.session_id
     state[AUTH_EMAIL_KEY] = email.strip().lower()
@@ -160,7 +176,8 @@ def store_api_session(
 
 
 def clear_api_session(state: MutableMapping[str, Any]) -> None:
-    """Remove authentication and organization scope from the UI session."""
+    """Remove authentication, organization scope, and tenant-scoped utility state."""
 
+    clear_protected_utility_state(state)
     for key in (ACCESS_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
         state.pop(key, None)
