@@ -77,9 +77,10 @@ def _decimal(value: Any) -> Decimal | None:
     if value is None or isinstance(value, bool):
         return None
     try:
-        return Decimal(str(value))
+        amount = Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return None
+    return amount if amount.is_finite() else None
 
 
 def format_number(value: Any, *, places: int = 2) -> str:
@@ -200,8 +201,14 @@ def _point_rows(value: Any, *, currency: str | None) -> tuple[dict[str, str], ..
         period: Any = None
         amount: Any = None
         if isinstance(item, Mapping):
-            period = item.get("period") or item.get("date") or item.get("timestamp")
-            amount = item.get("amount") or item.get("value")
+            period = item.get("period")
+            if period is None:
+                period = item.get("date")
+            if period is None:
+                period = item.get("timestamp")
+            amount = item.get("amount")
+            if amount is None:
+                amount = item.get("value")
         elif isinstance(item, Sequence) and not isinstance(item, str | bytes | bytearray) and len(item) >= 2:
             period, amount = item[0], item[1]
         if period is None:
