@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Literal
 
 ResultState = Literal["success", "empty", "partial", "no_change"]
@@ -191,7 +191,9 @@ def build_budget_result_view(payload: Any) -> BudgetResultView:
         rows=tuple(rows),
         warnings=tuple(dict.fromkeys(warnings)),
         metadata=sanitized_details(metadata),
-        csv_export=root.get("csv_export") if isinstance(root.get("csv_export"), str) else None,
+        csv_export=root.get("csv_export")
+        if isinstance(root.get("csv_export"), str)
+        else None,
     )
 
 
@@ -209,7 +211,11 @@ def _point_rows(value: Any, *, currency: str | None) -> tuple[dict[str, str], ..
             amount = item.get("amount")
             if amount is None:
                 amount = item.get("value")
-        elif isinstance(item, Sequence) and not isinstance(item, str | bytes | bytearray) and len(item) >= 2:
+        elif (
+            isinstance(item, Sequence)
+            and not isinstance(item, str | bytes | bytearray)
+            and len(item) >= 2
+        ):
             period, amount = item[0], item[1]
         if period is None:
             continue
@@ -232,14 +238,18 @@ def build_cashflow_result_view(payload: Any) -> CashflowResultView:
     model_order_value = root.get("model_order")
     model_order_parts = _sequence(model_order_value)
     model_order = (
-        f"({', '.join(str(part) for part in model_order_parts)})" if model_order_parts else "Not available"
+        f"({', '.join(str(part) for part in model_order_parts)})"
+        if model_order_parts
+        else "Not available"
     )
 
     warnings: list[str] = []
     if forecast_status and forecast_status not in {"success", "complete"}:
         warnings.append(f"Forecast status: {forecast_status}.")
     if historical_rows and not forecast_rows:
-        warnings.append("Historical activity is available, but no forecast points were returned.")
+        warnings.append(
+            "Historical activity is available, but no forecast points were returned."
+        )
 
     if not historical_rows and not forecast_rows:
         state: ResultState = "empty"
@@ -257,7 +267,10 @@ def build_cashflow_result_view(payload: Any) -> CashflowResultView:
         currency=currency,
         metrics=(
             ("Current cash", format_money(root.get("current_cash"), currency)),
-            ("Average monthly flow", format_money(root.get("average_monthly_flow"), currency)),
+            (
+                "Average monthly flow",
+                format_money(root.get("average_monthly_flow"), currency),
+            ),
             ("Historical periods", str(len(historical_rows))),
             ("Forecast periods", str(len(forecast_rows))),
         ),
@@ -267,7 +280,9 @@ def build_cashflow_result_view(payload: Any) -> CashflowResultView:
         diagnostics=sanitized_details(diagnostics),
         warnings=tuple(dict.fromkeys(warnings)),
         metadata=sanitized_details(metadata),
-        csv_export=root.get("csv_export") if isinstance(root.get("csv_export"), str) else None,
+        csv_export=root.get("csv_export")
+        if isinstance(root.get("csv_export"), str)
+        else None,
     )
 
 
@@ -281,7 +296,9 @@ def _coerce_nonnegative_int(value: Any) -> int | None:
     return coerced if coerced >= 0 else None
 
 
-def build_fx_sync_result_view(payload: Any, *, organization_id: int | None) -> SyncResultView:
+def build_fx_sync_result_view(
+    payload: Any, *, organization_id: int | None
+) -> SyncResultView:
     """Normalize the FX synchronization response."""
 
     root = _mapping(payload)
@@ -300,7 +317,11 @@ def build_fx_sync_result_view(payload: Any, *, organization_id: int | None) -> S
     else:
         state = "no_change"
         message = "No FX rate changes were persisted."
-    effective_range = f"Latest plus {backfill_days} backfill day(s)" if backfill_days else "Latest available rates"
+    effective_range = (
+        f"Latest plus {backfill_days} backfill day(s)"
+        if backfill_days
+        else "Latest available rates"
+    )
     return SyncResultView(
         state=state,
         message=message,
@@ -315,7 +336,9 @@ def build_fx_sync_result_view(payload: Any, *, organization_id: int | None) -> S
     )
 
 
-def build_market_sync_result_view(payload: Any, *, organization_id: int | None) -> SyncResultView:
+def build_market_sync_result_view(
+    payload: Any, *, organization_id: int | None
+) -> SyncResultView:
     """Normalize the market-price synchronization response."""
 
     root = _mapping(payload)
