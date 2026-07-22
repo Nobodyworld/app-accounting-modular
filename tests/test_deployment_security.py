@@ -1,5 +1,3 @@
-"""Regression tests for secure local Compose deployment defaults."""
-
 from pathlib import Path
 
 
