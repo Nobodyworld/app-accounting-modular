@@ -35,12 +35,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
-      - name: Capture deployment formatter output
-        run: |
-          python -m ruff format tests/test_deployment_security.py
-          cp tests/test_deployment_security.py formatter-output.py
-          git checkout -- tests/test_deployment_security.py
-
       - name: Run quality gate and tests
         env:
           PYTHONPATH: ${{ github.workspace }}/src
@@ -68,7 +62,6 @@ jobs:
             coverage.xml
             coverage.json
             quality-gate.log
-            formatter-output.py
           if-no-files-found: error
           retention-days: 14
 
