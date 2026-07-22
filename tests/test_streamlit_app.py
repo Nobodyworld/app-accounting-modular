@@ -262,6 +262,75 @@ def _login(at: AppTest, *, email: str = "User@Example.COM", organization_id: int
     at.run(timeout=15)
 
 
+def _utility_text(at: AppTest) -> str:
+    """Collect visible utility output without exposing Streamlit internals in assertions."""
+
+    elements = [*at.markdown, *at.caption, *at.info, *at.success, *at.warning, *at.error]
+    return " ".join(str(element.value) for element in elements)
+
+
+def _budget_payload() -> dict[str, Any]:
+    return {
+        "summary": {
+            "total_budget": "1200.00",
+            "total_actual": "1080.25",
+            "total_variance": "119.75",
+            "burn_rate": "0.9002083333",
+        },
+        "lines": [
+            {
+                "account_code": "6100",
+                "account_name": "Operations",
+                "period_start": "2026-07-01",
+                "budget_amount": "1200.00",
+                "actual_amount": "1080.25",
+                "variance": "119.75",
+                "burn_rate": "0.9002083333",
+                "forecast": [{"period": "2026-08-01", "amount": "1180.00"}],
+            }
+        ],
+        "metadata": {
+            "reporting_currency": "USD",
+            "accounts_without_actuals": ["6101"],
+            "missing_fx_rates": ["EUR/USD"],
+            "actuals_status": "partial",
+        },
+        "csv_export": "account_code,budget\n6100,1200.00\n",
+    }
+
+
+def _cashflow_payload() -> dict[str, Any]:
+    return {
+        "current_cash": "5200.50",
+        "average_monthly_flow": "340.25",
+        "historical": [{"period": "2026-05", "amount": "300.00"}],
+        "forecast": [{"period": "2026-06", "amount": "380.00"}],
+        "model_order": [1, 1, 1],
+        "metadata": {
+            "reporting_currency": "USD",
+            "forecast_status": "partial",
+            "forecast_diagnostics": {"observations": 12},
+        },
+        "csv_export": "period,amount\n2026-06,380.00\n",
+    }
+
+
+def _sync_payload(*, synced: int | None, symbol: str | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "provider": "Reference provider",
+        "provider_key": "fx:ecb" if symbol is None else "market:commodities_stub",
+        "backfill_days": 7,
+        "base": "USD",
+        "start": "2026-01-01",
+        "end": "2026-01-31",
+    }
+    if synced is not None:
+        payload["synced"] = synced
+    if symbol is not None:
+        payload["symbol"] = symbol
+    return payload
+
+
 def test_primary_snapshot_tab_renders(fake_runtime):
     at = _app_test()
     at.run(timeout=15)
@@ -443,6 +512,196 @@ def test_protected_api_errors_are_actionable_and_clear_stale_cashflow_success(fa
     at.button(key="budget_report_button").click()
     at.run(timeout=15)
     assert any("Not authorized for this organization" in str(element.value) for element in at.error)
+
+
+def test_budget_result_panel_renders_accounting_summary_warnings_and_csv(fake_runtime):
+    """Budget result rendering uses the supplied presentation view, not raw payloads."""
+
+    sensitive_key = "_".join(("access", "token"))
+    payload = _budget_payload()
+    payload["metadata"][sensitive_key] = "not-for-display"
+    fake_runtime.get_responses["/reports/budget-vs-actual"] = DummyResponse(payload)
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.button(key="budget_report_button").click()
+    at.run(timeout=15)
+
+    metric_labels = [element.label for element in at.metric]
+    assert {"Total budget", "Total actual", "Total variance", "Burn rate"}.issubset(metric_labels)
+    report_frame = next(frame.value for frame in at.dataframe if "Account code" in frame.value.columns)
+    assert list(report_frame.columns) == [
+        "Account code",
+        "Account",
+        "Period",
+        "Budget",
+        "Actual",
+        "Variance",
+        "Burn rate",
+        "Forecast points",
+    ]
+    assert "Budget report loaded with review warnings." in _utility_text(at)
+    assert "account(s) have no actual activity" in _utility_text(at)
+    assert "FX conversion rate(s) were unavailable" in _utility_text(at)
+    assert "not-for-display" not in _utility_text(at)
+    assert any(element.label == "Download budget report CSV" for element in at.get("download_button"))
+
+
+def test_budget_empty_and_failed_requests_do_not_leave_stale_results(fake_runtime):
+    """Empty and failed reports do not masquerade as successful accounting results."""
+
+    fake_runtime.get_responses["/reports/budget-vs-actual"] = DummyResponse(_budget_payload())
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.button(key="budget_report_button").click()
+    at.run(timeout=15)
+    assert "budget_report_payload" in at.session_state
+
+    fake_runtime.get_responses["/reports/budget-vs-actual"] = DummyResponse({"lines": []})
+    at.button(key="budget_report_button").click()
+    at.run(timeout=15)
+    assert "No budget report lines were returned." in _utility_text(at)
+
+    fake_runtime.get_responses["/reports/budget-vs-actual"] = DummyResponse(
+        {"detail": "Budget access denied"}, status_code=403
+    )
+    at.button(key="budget_report_button").click()
+    at.run(timeout=15)
+    assert "budget_report_payload" not in at.session_state
+    assert "Budget access denied" in _utility_text(at)
+
+
+def test_cashflow_result_panel_separates_history_forecast_and_csv(fake_runtime):
+    """Cashflow rendering keeps actual history distinct from forecast evidence."""
+
+    fake_runtime.get_responses["/reports/cashflow-forecast"] = DummyResponse(_cashflow_payload())
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.button(key="cashflow_report_button").click()
+    at.run(timeout=15)
+
+    metric_labels = [element.label for element in at.metric]
+    assert {"Current cash", "Average monthly flow", "Historical periods", "Forecast periods"}.issubset(metric_labels)
+    point_frames = [frame.value for frame in at.dataframe if list(frame.value.columns) == ["Period", "Amount"]]
+    assert len(point_frames) == 2
+    assert "Historical activity" in _utility_text(at)
+    assert "Forecast" in _utility_text(at)
+    assert "Model order: (1, 1, 1)" in _utility_text(at)
+    assert "Forecast status: partial." in _utility_text(at)
+    assert any(element.label == "Download cashflow report CSV" for element in at.get("download_button"))
+
+
+def test_cashflow_empty_and_failed_requests_clear_stale_results(fake_runtime):
+    """Cashflow empty and failure paths retain accurate state and clear stale data."""
+
+    fake_runtime.get_responses["/reports/cashflow-forecast"] = DummyResponse(_cashflow_payload())
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.button(key="cashflow_report_button").click()
+    at.run(timeout=15)
+    assert "cashflow_report_payload" in at.session_state
+
+    fake_runtime.get_responses["/reports/cashflow-forecast"] = DummyResponse({"historical": [], "forecast": []})
+    at.button(key="cashflow_report_button").click()
+    at.run(timeout=15)
+    assert "No historical or forecast cashflow activity was returned." in _utility_text(at)
+
+    fake_runtime.get_responses["/reports/cashflow-forecast"] = DummyResponse(
+        {"detail": "Cashflow access denied"}, status_code=403
+    )
+    at.button(key="cashflow_report_button").click()
+    at.run(timeout=15)
+    assert "cashflow_report_payload" not in at.session_state
+    assert "Cashflow access denied" in _utility_text(at)
+
+
+def test_sync_result_panels_preserve_provenance_and_result_states(fake_runtime):
+    """FX and market synchronization expose safe provenance for each model-provided outcome."""
+
+    sensitive_key = "_".join(("session", "id"))
+    fx_payload = _sync_payload(synced=3)
+    fx_payload[sensitive_key] = "not-for-display"
+    market_payload = _sync_payload(synced=2, symbol="MSFT")
+    fake_runtime.post_responses["/fx/sync"] = DummyResponse(fx_payload)
+    fake_runtime.post_responses["/market/sync"] = DummyResponse(market_payload)
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at, organization_id=12)
+
+    at.button(key="fx_sync_button").click()
+    at.run(timeout=15)
+    at.button(key="market_sync_button").click()
+    at.run(timeout=15)
+    rendered = _utility_text(at)
+    assert "Synchronized 3 FX rate record(s)." in rendered
+    assert "Synchronized 2 market price record(s)." in rendered
+    assert "Organization ID: 12" in rendered
+    assert "Base currency: USD" in rendered
+    assert "Symbol: MSFT" in rendered
+    assert "not-for-display" not in rendered
+
+    fake_runtime.post_responses["/fx/sync"] = DummyResponse(_sync_payload(synced=0))
+    fake_runtime.post_responses["/market/sync"] = DummyResponse(_sync_payload(synced=None, symbol="MSFT"))
+    at.button(key="fx_sync_button").click()
+    at.run(timeout=15)
+    at.button(key="market_sync_button").click()
+    at.run(timeout=15)
+    rendered = _utility_text(at)
+    assert "No FX rate changes were persisted." in rendered
+    assert "Market synchronization returned no usable result count." in rendered
+
+    fake_runtime.post_responses["/fx/sync"] = DummyResponse(_sync_payload(synced=None))
+    fake_runtime.post_responses["/market/sync"] = DummyResponse(_sync_payload(synced=0, symbol="MSFT"))
+    at.button(key="fx_sync_button").click()
+    at.run(timeout=15)
+    at.button(key="market_sync_button").click()
+    at.run(timeout=15)
+    rendered = _utility_text(at)
+    assert "FX synchronization returned no usable result count." in rendered
+    assert "No market price changes were persisted." in rendered
+
+
+def test_failed_sync_requests_clear_stale_payloads_and_logout_isolates_tenants(fake_runtime):
+    """Tenant-scoped utility results clear on failures, login changes, and logout."""
+
+    fake_runtime.get_responses["/reports/budget-vs-actual"] = DummyResponse(_budget_payload())
+    fake_runtime.get_responses["/reports/cashflow-forecast"] = DummyResponse(_cashflow_payload())
+    fake_runtime.post_responses["/fx/sync"] = DummyResponse(_sync_payload(synced=1))
+    fake_runtime.post_responses["/market/sync"] = DummyResponse(_sync_payload(synced=1, symbol="AAPL"))
+    at = _app_test()
+    at.run(timeout=15)
+    at.text_input(key="snapshot_base_input").set_value("EUR")
+    at.run(timeout=15)
+    _login(at, organization_id=7)
+    for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
+        at.button(key=key).click()
+        at.run(timeout=15)
+    for key in ("budget_report_payload", "cashflow_report_payload", "fx_sync_payload", "market_sync_payload"):
+        assert key in at.session_state
+
+    at.button(key="api_logout_button").click()
+    at.run(timeout=15)
+    for key in ("budget_report_payload", "cashflow_report_payload", "fx_sync_payload", "market_sync_payload"):
+        assert key not in at.session_state
+    assert at.session_state["snapshot_base_input"] == "EUR"
+
+    _login(at, organization_id=8)
+    for key in ("budget_report_payload", "cashflow_report_payload", "fx_sync_payload", "market_sync_payload"):
+        assert key not in at.session_state
+
+    fake_runtime.post_responses["/fx/sync"] = DummyResponse({"detail": "FX denied"}, status_code=403)
+    fake_runtime.post_responses["/market/sync"] = DummyResponse({"detail": "Market denied"}, status_code=403)
+    at.button(key="fx_sync_button").click()
+    at.run(timeout=15)
+    at.button(key="market_sync_button").click()
+    at.run(timeout=15)
+    assert "fx_sync_payload" not in at.session_state
+    assert "market_sync_payload" not in at.session_state
+    assert "FX denied" in _utility_text(at)
+    assert "Market denied" in _utility_text(at)
 
 
 def test_snapshot_request_execution_and_diagnostics(fake_runtime):

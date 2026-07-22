@@ -30,6 +30,15 @@ from apps.web.api_session import (
     request_access_token,
     store_api_session,
 )
+from apps.web.utility_results import (
+    BudgetResultView,
+    CashflowResultView,
+    SyncResultView,
+    build_budget_result_view,
+    build_cashflow_result_view,
+    build_fx_sync_result_view,
+    build_market_sync_result_view,
+)
 
 API = os.getenv("API_BASE", "http://localhost:8000")
 BUDGET_TEMPLATE = "account_id,period_start,amount\n101,2024-01-01,2500\n101,2024-02-01,2600\n"
@@ -212,6 +221,122 @@ def _protected_response_payload(response: Any) -> tuple[Any | None, str | None]:
         return response.json(), None
     except Exception:
         return None, "API response was not valid JSON."
+
+
+def _render_result_state(state: str, message: str) -> None:
+    """Render a result outcome without relying on color alone."""
+
+    if state == "success":
+        st.success(message)
+    elif state == "partial":
+        st.warning(message)
+    else:
+        st.info(message)
+
+
+def _render_result_metrics(metrics: tuple[tuple[str, str], ...]) -> None:
+    """Render supplied presentation-model metrics without recomputation."""
+
+    if not metrics:
+        return
+    for column, (label, value) in zip(st.columns(len(metrics)), metrics, strict=True):
+        column.metric(label, value)
+
+
+def _render_budget_result(payload: Any) -> None:
+    """Render the validated budget result model for accountant review."""
+
+    view: BudgetResultView = build_budget_result_view(payload)
+    _render_result_state(view.state, view.message)
+    if view.state == "empty":
+        return
+
+    _render_result_metrics(view.metrics)
+    for warning in view.warnings:
+        st.warning(warning)
+
+    st.markdown("##### Report lines")
+    report_rows = [{key: value for key, value in row.items() if key != "Forecast"} for row in view.rows]
+    if report_rows:
+        st.dataframe(pd.DataFrame(report_rows), use_container_width=True, hide_index=True)
+        forecast_rows = [
+            {"Account code": row["Account code"], "Period": row["Period"], "Forecast": row["Forecast"]}
+            for row in view.rows
+            if row["Forecast"]
+        ]
+        if forecast_rows:
+            with st.expander("Forecast detail", expanded=False):
+                st.dataframe(pd.DataFrame(forecast_rows), use_container_width=True, hide_index=True)
+
+    with st.expander("Budget report details", expanded=False):
+        st.json(view.metadata)
+    if view.csv_export:
+        st.download_button(
+            "Download budget report CSV",
+            data=view.csv_export,
+            file_name="budget-vs-actual.csv",
+            mime="text/csv",
+            key="budget_report_download",
+        )
+
+
+def _render_cashflow_result(payload: Any) -> None:
+    """Render the validated cashflow result model with distinct timelines."""
+
+    view: CashflowResultView = build_cashflow_result_view(payload)
+    _render_result_state(view.state, view.message)
+    if view.state == "empty":
+        return
+
+    _render_result_metrics(view.metrics)
+    for warning in view.warnings:
+        st.warning(warning)
+
+    st.markdown("##### Historical activity")
+    if view.historical_rows:
+        st.dataframe(pd.DataFrame(view.historical_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("No historical cashflow activity was returned.")
+
+    st.markdown("##### Forecast")
+    if view.forecast_rows:
+        st.dataframe(pd.DataFrame(view.forecast_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("No forecast cashflow periods were returned.")
+
+    st.caption(f"Model order: {view.model_order}. This model metadata does not guarantee forecast quality.")
+    with st.expander("Forecast diagnostics", expanded=False):
+        st.json(view.diagnostics)
+    with st.expander("Cashflow report details", expanded=False):
+        st.json(view.metadata)
+    if view.csv_export:
+        st.download_button(
+            "Download cashflow report CSV",
+            data=view.csv_export,
+            file_name="cashflow-forecast.csv",
+            mime="text/csv",
+            key="cashflow_report_download",
+        )
+
+
+def _render_sync_result(view: SyncResultView, *, details_label: str) -> None:
+    """Render supplied synchronization provenance without exposing raw payloads."""
+
+    _render_result_state(view.state, view.message)
+    if view.state == "empty":
+        return
+
+    count_column, provider_column, organization_column = st.columns(3)
+    count_column.metric("Synced records", view.synced_count)
+    provider_column.metric("Provider", view.provider or "Not provided")
+    organization_column.metric("Organization ID", view.organization_id or "Not provided")
+    st.caption(
+        f"Provider key: {view.provider_key or 'Not provided'} · "
+        f"{view.subject_label}: {view.subject_value or 'Not provided'} · "
+        f"Effective range: {view.effective_range or 'Not provided'}"
+    )
+    with st.expander(details_label, expanded=False):
+        st.json(view.technical_details)
 
 
 def _render_snapshot_tables(payload: dict[str, Any]) -> None:
@@ -671,11 +796,13 @@ with utility_tab:
             else:
                 st.session_state["budget_report_payload"] = budget_payload
                 st.session_state.pop("budget_report_error", None)
-                st.success("Budget report loaded")
 
         budget_error = st.session_state.get("budget_report_error")
         if isinstance(budget_error, str) and budget_error:
             st.error(f"Budget report unavailable: {budget_error}")
+        budget_payload = st.session_state.get("budget_report_payload")
+        if budget_payload is not None:
+            _render_budget_result(budget_payload)
 
     with cashflow_tab:
         st.markdown("#### Cashflow forecast")
@@ -712,30 +839,14 @@ with utility_tab:
             else:
                 st.session_state["cashflow_report_payload"] = cashflow_payload
                 st.session_state.pop("cashflow_report_error", None)
-                st.success("Cashflow forecast generated")
 
         cashflow_error = st.session_state.get("cashflow_report_error")
         if isinstance(cashflow_error, str) and cashflow_error:
             st.error(f"Cashflow forecast unavailable: {cashflow_error}")
 
         cashflow_payload = st.session_state.get("cashflow_report_payload")
-        if isinstance(cashflow_payload, dict):
-            hist = pd.DataFrame(cashflow_payload.get("historical", []))
-            if not hist.empty:
-                hist["period"] = pd.to_datetime(hist["period"])
-                hist = hist.set_index("period")
-                st.line_chart(hist, use_container_width=True)
-            st.metric("Current cash", f"{cashflow_payload.get('current_cash', 0):,.2f}")
-            avg_flow = cashflow_payload.get("average_monthly_flow") or 0.0
-            st.metric("Average monthly flow", f"{avg_flow:,.2f}")
-            if _can_render_downloads() and cashflow_payload.get("csv_export"):
-                st.download_button(
-                    "Download cashflow CSV",
-                    data=cashflow_payload["csv_export"],
-                    file_name="cashflow_forecast.csv",
-                    mime="text/csv",
-                    key="cashflow_csv_download",
-                )
+        if cashflow_payload is not None:
+            _render_cashflow_result(cashflow_payload)
 
     with fx_tab:
         st.markdown("#### Sync FX rates")
@@ -771,17 +882,24 @@ with utility_tab:
             except Exception:  # pragma: no cover - defensive UI boundary
                 fx_error = "FX synchronization request could not be completed."
             else:
-                _, fx_error = _protected_response_payload(response)
+                fx_payload, fx_error = _protected_response_payload(response)
 
             if fx_error:
+                st.session_state.pop("fx_sync_payload", None)
                 st.session_state["fx_sync_error"] = fx_error
             else:
+                st.session_state["fx_sync_payload"] = fx_payload
                 st.session_state.pop("fx_sync_error", None)
-                st.success("FX rates synchronized")
 
         fx_error = st.session_state.get("fx_sync_error")
         if isinstance(fx_error, str) and fx_error:
             st.error(f"FX synchronization unavailable: {fx_error}")
+        fx_payload = st.session_state.get("fx_sync_payload")
+        if fx_payload is not None:
+            _render_sync_result(
+                build_fx_sync_result_view(fx_payload, organization_id=int(organization_id)),
+                details_label="FX synchronization details",
+            )
 
     with market_tab:
         st.markdown("#### Sync market prices")
@@ -827,17 +945,24 @@ with utility_tab:
             except Exception:  # pragma: no cover - defensive UI boundary
                 market_error = "Market synchronization request could not be completed."
             else:
-                _, market_error = _protected_response_payload(response)
+                market_payload, market_error = _protected_response_payload(response)
 
             if market_error:
+                st.session_state.pop("market_sync_payload", None)
                 st.session_state["market_sync_error"] = market_error
             else:
+                st.session_state["market_sync_payload"] = market_payload
                 st.session_state.pop("market_sync_error", None)
-                st.success("Market prices synchronized")
 
         market_error = st.session_state.get("market_sync_error")
         if isinstance(market_error, str) and market_error:
             st.error(f"Market synchronization unavailable: {market_error}")
+        market_payload = st.session_state.get("market_sync_payload")
+        if market_payload is not None:
+            _render_sync_result(
+                build_market_sync_result_view(market_payload, organization_id=int(organization_id)),
+                details_label="Market synchronization details",
+            )
 
 with plan_tab:
     st.subheader("Scenario Plan Review")
