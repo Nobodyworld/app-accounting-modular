@@ -31,3 +31,14 @@ def test_streamlit_result_details_remain_collapsed_by_default() -> None:
     assert "st.expander(details_label, expanded=False)" in source
     for label in shared_detail_labels:
         assert f'details_label="{label}"' in source
+
+
+def test_disabled_protected_actions_explain_their_blocker() -> None:
+    source = STREAMLIT_APP.read_text(encoding="utf-8")
+
+    assert source.count("help=protected_action_help") == 2
+    assert "help=fx_action_help" in source
+    assert "help=market_action_help" in source
+    assert "Configure an FX provider before synchronizing rates." in source
+    assert "Configure a market provider before synchronizing prices." in source
+    assert "Enter a market symbol before synchronizing prices." in source
