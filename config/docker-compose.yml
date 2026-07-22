@@ -3,6 +3,12 @@ services:
     build:
       context: ..
       dockerfile: config/Dockerfile.api
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     environment:
       MODACCT_DATABASE_URL: sqlite:////data/modacct.db
       MODACCT_JWT_SECRET_KEY: "${MODACCT_JWT_SECRET_KEY:?Set MODACCT_JWT_SECRET_KEY to a stable high-entropy value before starting Compose}"
@@ -13,6 +19,8 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - modacct-data:/data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001
     healthcheck:
       test:
         - CMD
@@ -29,10 +37,18 @@ services:
     build:
       context: ..
       dockerfile: config/Dockerfile.web
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     environment:
       API_BASE: http://api:8000
     ports:
       - "127.0.0.1:8501:8501"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001
     depends_on:
       api:
         condition: service_healthy
