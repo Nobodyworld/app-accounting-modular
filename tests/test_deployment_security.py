@@ -1,7 +1,5 @@
 """Regression tests for secure local Compose deployment defaults."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 
