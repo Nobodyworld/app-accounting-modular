@@ -90,12 +90,13 @@ def test_protected_route_rejects_client_supplied_audit_identity() -> None:
 
 def test_malformed_request_id_is_not_persisted_as_actor_identity() -> None:
     user = User(id=7, email="actual@example.com", password_hash="stub")
+    malformed_request_id = "contains spaces and punctuation!"
 
     with TestClient(_protected_app(user)) as client:
-        response = client.get("/protected", headers={"X-Request-Id": "contains spaces and control\tdata"})
+        response = client.get("/protected", headers={"X-Request-Id": malformed_request_id})
 
     assert response.status_code == 200
-    assert response.json()["request_id"] != "contains spaces and control\tdata"
+    assert response.json()["request_id"] != malformed_request_id
     assert len(response.json()["request_id"]) == 36
 
 
