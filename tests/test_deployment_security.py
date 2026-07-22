@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_FILE = REPOSITORY_ROOT / "config" / "docker-compose.yml"
+ENV_EXAMPLE = REPOSITORY_ROOT / "config" / ".env.example"
 CI_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml"
 
 
@@ -25,6 +26,13 @@ def test_compose_requires_an_explicit_jwt_secret_without_a_fallback() -> None:
     assert "${MODACCT_JWT_SECRET_KEY:?" in compose
     assert "${MODACCT_JWT_SECRET_KEY:-" not in compose
     assert "local-compose-demo-key" not in compose
+
+
+def test_environment_example_does_not_ship_a_repository_known_jwt_secret() -> None:
+    env_lines = ENV_EXAMPLE.read_text(encoding="utf-8").splitlines()
+    jwt_lines = [line for line in env_lines if line.startswith("MODACCT_JWT_SECRET_KEY=")]
+
+    assert jwt_lines == ["MODACCT_JWT_SECRET_KEY="]
 
 
 def test_container_smoke_generates_a_test_only_secret_before_compose_validation() -> None:
