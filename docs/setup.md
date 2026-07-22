@@ -144,11 +144,17 @@ For stable sessions across restarts, store a generated secret in a local, ignore
 The default Compose configuration:
 
 - builds both images from the repository root;
+- runs both application processes as numeric UID/GID `10001:10001`;
 - sets `/app/src` on `PYTHONPATH`;
-- gives the API a persistent SQLite volume;
+- gives the API a persistent SQLite volume mounted at `/data`;
+- uses read-only root filesystems for both services;
+- drops all Linux capabilities and enables `no-new-privileges`;
+- provides a bounded writable `/tmp` tmpfs to each service;
 - points Streamlit to `http://api:8000`;
 - waits for API health before starting the web service; and
 - publishes host ports explicitly on `127.0.0.1` only.
+
+The API may write to `/data` and `/tmp`. The web service may write only to `/tmp`. Application source under `/app` remains read-only at runtime.
 
 The application processes listen on the container network so the services can communicate, but the host port mappings remain loopback-only by default.
 
@@ -158,7 +164,7 @@ Endpoints:
 - OpenAPI: `http://127.0.0.1:8000/docs`
 - Streamlit: `http://127.0.0.1:8501`
 
-This Compose profile is validated only for local demonstration. Do not change the host bindings to `0.0.0.0`, a LAN address, or a public interface without a separate deployment review covering HTTPS termination, trusted proxies/hosts, network access controls, secret management, and the open findings in the post-UX security audit.
+This Compose profile is validated only for local demonstration. Do not change the host bindings to `0.0.0.0`, a LAN address, or a public interface without a separate deployment review covering HTTPS termination, trusted proxies/hosts, network access controls, secret management, and host/container security controls.
 
 Stop and remove the services:
 
@@ -178,6 +184,8 @@ Individual image builds from the repository root:
 docker build -f config/Dockerfile.api -t modacct-api .
 docker build -f config/Dockerfile.web -t modacct-web .
 ```
+
+The final images declare user `10001:10001`. Running them directly as root bypasses part of the validated Compose security boundary and is not the supported default.
 
 ## Validation
 
@@ -240,6 +248,14 @@ Generate a high-entropy value as shown in the Docker Compose section or set a st
 ### API starts with an ephemeral JWT warning
 
 Set a stable `MODACCT_JWT_SECRET_KEY` with at least 32 characters. The generated fallback is suitable only for temporary non-container local demonstrations and rotates on restart.
+
+### Container reports a permission or read-only filesystem error
+
+- API database files must be written under `/data`.
+- Temporary files must be written under `/tmp`.
+- Application files under `/app` are intentionally read-only.
+- Do not change the services to root to bypass a path error; identify and document the required writable path instead.
+- If an existing named volume was created with incompatible ownership, remove the demonstration volume with `docker compose -f config/docker-compose.yml down -v` and recreate it after confirming no data must be preserved.
 
 ### Database errors
 
