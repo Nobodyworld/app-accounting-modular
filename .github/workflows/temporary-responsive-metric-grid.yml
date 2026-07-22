@@ -1,0 +1,55 @@
+name: Temporary responsive metric grid migration
+
+on:
+  push:
+    branches:
+      - ux/streamlit-responsive-accessibility
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        # actions/checkout v4.2.2 (2024-12-10)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ux/streamlit-responsive-accessibility
+          persist-credentials: true
+
+      - name: Render result metrics in compact rows
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/apps/web/app.py")
+          source = path.read_text(encoding="utf-8")
+          replacements = {
+              'def _render_result_metrics(metrics: tuple[tuple[str, str], ...]) -> None:\n    """Render supplied presentation-model metrics without recomputation."""\n\n    if not metrics:\n        return\n    for column, (label, value) in zip(st.columns(len(metrics)), metrics, strict=True):\n        column.metric(label, value)':
+              'def _render_result_metrics(metrics: tuple[tuple[str, str], ...]) -> None:\n    """Render supplied metrics in rows of at most two readable columns."""\n\n    if not metrics:\n        return\n    for offset in range(0, len(metrics), 2):\n        row_metrics = metrics[offset : offset + 2]\n        for column, (label, value) in zip(st.columns(len(row_metrics)), row_metrics, strict=True):\n            column.metric(label, value)',
+              '    count_column, provider_column, organization_column = st.columns(3)\n    count_column.metric("Synced records", view.synced_count)\n    provider_column.metric("Provider", view.provider or "Not provided")\n    organization_column.metric("Organization ID", view.organization_id or "Not provided")':
+              '    _render_result_metrics(\n        (\n            ("Synced records", str(view.synced_count)),\n            ("Provider", view.provider or "Not provided"),\n            (\n                "Organization ID",\n                str(view.organization_id) if view.organization_id is not None else "Not provided",\n            ),\n        )\n    )',
+          }
+
+          migrated = source
+          for old, new in replacements.items():
+              count = migrated.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected one exact match, found {count}: {old[:80]!r}")
+              migrated = migrated.replace(old, new)
+
+          path.write_text(migrated, encoding="utf-8")
+          PY
+
+      - name: Commit migration and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temporary-responsive-metric-grid.yml
+          git add src/apps/web/app.py
+          git diff --cached --check
+          git commit -m "ux: wrap result metrics for narrow layouts"
+          git push origin HEAD:ux/streamlit-responsive-accessibility
