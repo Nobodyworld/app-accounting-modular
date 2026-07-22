@@ -1,0 +1,61 @@
+name: Temporary protected-action help migration
+
+on:
+  push:
+    branches:
+      - ux/streamlit-responsive-accessibility
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        # actions/checkout v4.2.2 (2024-12-10)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ux/streamlit-responsive-accessibility
+          persist-credentials: true
+
+      - name: Add contextual help to protected actions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/apps/web/app.py")
+          source = path.read_text(encoding="utf-8")
+          replacements = {
+              '    else:\n        st.success("Protected utilities ready for the authenticated organization scope.")\n\n    budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(["Budgets", "Cashflow", "FX Sync", "Market Sync"])':
+              '    else:\n        st.success("Protected utilities ready for the authenticated organization scope.")\n\n    protected_action_help = (\n        "Sign in through API Session with a positive organization ID to enable protected utilities."\n        if not protected_ready\n        else None\n    )\n    budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(["Budgets", "Cashflow", "FX Sync", "Market Sync"])',
+              '        if st.button("Generate Budget Report", key="budget_report_button", disabled=not protected_ready):':
+              '        if st.button(\n            "Generate Budget Report",\n            key="budget_report_button",\n            disabled=not protected_ready,\n            help=protected_action_help,\n        ):',
+              '        if st.button("Generate Cashflow Forecast", key="cashflow_report_button", disabled=not protected_ready):':
+              '        if st.button(\n            "Generate Cashflow Forecast",\n            key="cashflow_report_button",\n            disabled=not protected_ready,\n            help=protected_action_help,\n        ):',
+              '        can_sync_fx = protected_ready and provider_key is not None and fx_currency_error is None\n        if st.button("Sync FX Now", disabled=not can_sync_fx, key="fx_sync_button"):':
+              '        can_sync_fx = protected_ready and provider_key is not None and fx_currency_error is None\n        fx_action_help = protected_action_help\n        if protected_ready and provider_key is None:\n            fx_action_help = "Configure an FX provider before synchronizing rates."\n        elif protected_ready and fx_currency_error:\n            fx_action_help = fx_currency_error\n        if st.button(\n            "Sync FX Now",\n            disabled=not can_sync_fx,\n            key="fx_sync_button",\n            help=fx_action_help,\n        ):',
+              '        can_sync_market = (\n            protected_ready and market_provider is not None and bool(normalized_symbol) and not market_date_error\n        )\n        if st.button("Sync Prices", disabled=not can_sync_market, key="market_sync_button"):':
+              '        can_sync_market = (\n            protected_ready and market_provider is not None and bool(normalized_symbol) and not market_date_error\n        )\n        market_action_help = protected_action_help\n        if protected_ready and market_provider is None:\n            market_action_help = "Configure a market provider before synchronizing prices."\n        elif protected_ready and not normalized_symbol:\n            market_action_help = "Enter a market symbol before synchronizing prices."\n        elif protected_ready and market_date_error:\n            market_action_help = market_date_error\n        if st.button(\n            "Sync Prices",\n            disabled=not can_sync_market,\n            key="market_sync_button",\n            help=market_action_help,\n        ):',
+          }
+
+          migrated = source
+          for old, new in replacements.items():
+              count = migrated.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected one exact match, found {count}: {old[:80]!r}")
+              migrated = migrated.replace(old, new)
+
+          path.write_text(migrated, encoding="utf-8")
+          PY
+
+      - name: Commit migration and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temporary-protected-action-help.yml
+          git add src/apps/web/app.py
+          git diff --cached --check
+          git commit -m "ux: explain disabled protected actions"
+          git push origin HEAD:ux/streamlit-responsive-accessibility
