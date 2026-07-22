@@ -14,6 +14,7 @@ from apps.observability.metrics import RequestMetricsMiddleware, metrics_registr
 
 from .config import settings
 from .db import init_db
+from .dependencies import authenticated_audit_context
 from .routers import (
     audit,
     auth,
@@ -30,7 +31,6 @@ from .routers import (
     workflow,
 )
 from .scheduler import shutdown_scheduler, start_scheduler
-from .security import get_current_user
 from .services.extension_loader import load_configured_extensions
 from .services.health import register_default_health_checks
 from .startup import StartupContext, StartupManager, StartupStep
@@ -110,7 +110,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestMetricsMiddleware, registry=metrics_registry)
     app.state.startup_records = startup_records
     app.state.extension_manifests = startup_context.get("extensions", ())
-    protected = [Depends(get_current_user)]
+    protected = [Depends(authenticated_audit_context)]
     router_registry: Iterable[tuple[APIRouter, bool]] = (
         (core.router, False),
         (auth.router, False),
