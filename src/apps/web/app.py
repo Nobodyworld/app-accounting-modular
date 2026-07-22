@@ -258,7 +258,7 @@ def _render_budget_result(payload: Any) -> None:
     st.markdown("##### Report lines")
     report_rows = [{key: value for key, value in row.items() if key != "Forecast"} for row in view.rows]
     if report_rows:
-        st.dataframe(pd.DataFrame(report_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(report_rows), width="stretch", hide_index=True)
         forecast_rows = [
             {"Account code": row["Account code"], "Period": row["Period"], "Forecast": row["Forecast"]}
             for row in view.rows
@@ -266,7 +266,7 @@ def _render_budget_result(payload: Any) -> None:
         ]
         if forecast_rows:
             with st.expander("Forecast detail", expanded=False):
-                st.dataframe(pd.DataFrame(forecast_rows), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(forecast_rows), width="stretch", hide_index=True)
 
     with st.expander("Budget report details", expanded=False):
         st.json(view.metadata)
@@ -294,13 +294,13 @@ def _render_cashflow_result(payload: Any) -> None:
 
     st.markdown("##### Historical activity")
     if view.historical_rows:
-        st.dataframe(pd.DataFrame(view.historical_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(view.historical_rows), width="stretch", hide_index=True)
     else:
         st.info("No historical cashflow activity was returned.")
 
     st.markdown("##### Forecast")
     if view.forecast_rows:
-        st.dataframe(pd.DataFrame(view.forecast_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(view.forecast_rows), width="stretch", hide_index=True)
     else:
         st.info("No forecast cashflow periods were returned.")
 
@@ -369,7 +369,7 @@ def _render_snapshot_tables(payload: dict[str, Any]) -> None:
                 if isinstance(row, dict)
             ]
         )
-        st.dataframe(fx_frame, use_container_width=True)
+        st.dataframe(fx_frame, width="stretch")
     else:
         st.warning("No FX rates were returned. Check provider availability and network access.")
 
@@ -386,7 +386,7 @@ def _render_snapshot_tables(payload: dict[str, Any]) -> None:
                 if isinstance(row, dict)
             ]
         )
-        st.dataframe(commodity_frame, use_container_width=True)
+        st.dataframe(commodity_frame, width="stretch")
     else:
         st.warning("No commodity quotes were returned for the selected symbols.")
 
@@ -404,7 +404,7 @@ def _render_snapshot_tables(payload: dict[str, Any]) -> None:
                 if isinstance(row, dict)
             ]
         )
-        st.dataframe(tax_frame, use_container_width=True)
+        st.dataframe(tax_frame, width="stretch")
     else:
         st.warning("No tax rules were returned for the selected jurisdictions.")
 
@@ -479,7 +479,7 @@ with snapshot_tab:
                 for key, meta in sorted(providers_by_key.items())
             ]
         )
-        st.dataframe(provider_frame, use_container_width=True)
+        st.dataframe(provider_frame, width="stretch")
 
     left, right = st.columns([3, 2])
     with left:
@@ -632,7 +632,7 @@ with snapshot_tab:
                     }
                 )
         if provider_rows:
-            st.dataframe(pd.DataFrame(provider_rows), use_container_width=True)
+            st.dataframe(pd.DataFrame(provider_rows), width="stretch")
         else:
             st.warning("Provider provenance is not available for this run.")
 
@@ -652,7 +652,7 @@ with snapshot_tab:
                     }
                 )
             if cache_rows:
-                st.dataframe(pd.DataFrame(cache_rows), use_container_width=True)
+                st.dataframe(pd.DataFrame(cache_rows), width="stretch")
 
         st.markdown("#### Health and readiness state")
         health_cols = st.columns(2)
@@ -681,7 +681,7 @@ with snapshot_tab:
                     if isinstance(row, dict)
                 ]
             )
-            st.dataframe(report_frame, use_container_width=True)
+            st.dataframe(report_frame, width="stretch")
 
         st.markdown("#### Journal-control status")
         journal_status = _journal_control_status()
@@ -760,7 +760,7 @@ with utility_tab:
 
         preview_df = st.session_state.get("uploaded_budget_preview")
         if isinstance(preview_df, pd.DataFrame):
-            st.dataframe(preview_df, use_container_width=True)
+            st.dataframe(preview_df, width="stretch")
 
         budget_id = st.number_input("Budget ID", min_value=1, step=1, key="budget_id_input")
         budget_horizon = st.number_input(
