@@ -16,7 +16,7 @@ from jwt import InvalidTokenError
 from passlib.context import CryptContext
 from sqlmodel import Session, select
 
-from .audit import AuditAction, AuditActor, AuditLogger, use_actor
+from .audit import AuditAction, AuditActor, AuditLogger, get_current_actor, use_actor
 from .config import MAX_ACCESS_TOKEN_MINUTES, settings
 from .db import get_session
 from .models.models import Membership, Organization, User
@@ -152,8 +152,10 @@ def create_refresh_token(sub: int, *, expiry_minutes: int | None = None, session
 
 def _decode_token(token: str) -> dict[str, Any]:
     try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        return payload
+        decoded = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        if not isinstance(decoded, dict):
+            raise InvalidTokenError("JWT payload must be an object")
+        return {str(key): value for key, value in decoded.items()}
     except InvalidTokenError as exc:  # pragma: no cover - library raises numerous subclasses
         logger.warning("Failed to decode access token", exc_info=exc)
         raise HTTPException(
@@ -196,6 +198,17 @@ def get_current_user(
     return user
 
 
+def _bind_audit_actor(current_user: User, organization_id: int) -> None:
+    """Bind authorized tenant identity to the active request actor."""
+
+    actor = get_current_actor()
+    if actor is None:
+        return
+    actor.user_id = current_user.id
+    actor.user_label = current_user.email
+    actor.organization_id = organization_id
+
+
 def get_current_organization(
     organization_id: int,
     session: Session = Depends(get_session),
@@ -217,6 +230,7 @@ def get_current_organization(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized for this organization",
         )
+    _bind_audit_actor(current_user, organization_id)
     return OrganizationContext(organization=organization, membership=membership)
 
 
@@ -251,4 +265,5 @@ def get_current_organization_cached(
         _organization_context_cache[key] = (ctx.organization.id, ctx.membership)
         return ctx
 
+    _bind_audit_actor(current_user, organization_id)
     return OrganizationContext(organization=org, membership=membership)
