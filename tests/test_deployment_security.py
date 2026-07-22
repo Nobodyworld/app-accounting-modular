@@ -35,12 +35,14 @@ def test_environment_example_does_not_ship_a_repository_known_jwt_secret() -> No
     assert jwt_lines == ["MODACCT_JWT_SECRET_KEY="]
 
 
-def test_container_smoke_generates_a_test_only_secret_before_compose_validation() -> None:
+def test_container_smoke_proves_fail_closed_then_generates_a_test_only_secret() -> None:
     workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
+    reject_step = workflow.index("Verify Compose rejects missing JWT secret")
     generate_step = workflow.index("Generate ephemeral Compose JWT secret")
     validate_step = workflow.index("Validate Compose configuration")
 
-    assert generate_step < validate_step
+    assert reject_step < generate_step < validate_step
+    assert "env -u MODACCT_JWT_SECRET_KEY" in workflow
     assert "secrets.token_urlsafe(48)" in workflow
     assert "MODACCT_JWT_SECRET_KEY=" in workflow
