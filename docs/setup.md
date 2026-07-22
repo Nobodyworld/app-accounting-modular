@@ -64,13 +64,13 @@ cp config/.env.example .env
 export MODACCT_ENV_FILE="$PWD/.env"
 ```
 
-Replace every example credential value. At minimum, use a stable high-entropy `MODACCT_JWT_SECRET_KEY` for persistent authentication sessions.
+The example intentionally leaves `MODACCT_JWT_SECRET_KEY` empty. Generate and store a stable high-entropy value before using persistent authentication sessions or Docker Compose. Never commit the generated value.
 
 Common variables:
 
 ```text
 MODACCT_DATABASE_URL=sqlite:///./modacct.db
-MODACCT_JWT_SECRET_KEY=replace-with-a-stable-32-plus-character-secret
+MODACCT_JWT_SECRET_KEY=
 MODACCT_JWT_ALGORITHM=HS256
 MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 MODACCT_LOG_LEVEL=INFO
@@ -121,25 +121,44 @@ python -m cli.macli inspect-contracts
 
 ## Docker Compose
 
-Run Compose from the repository root and explicitly select the file under `config/`:
+Docker Compose requires an explicit JWT signing secret and fails before startup when `MODACCT_JWT_SECRET_KEY` is missing or empty.
 
-```bash
+Generate a temporary high-entropy secret for the current shell.
+
+### Windows PowerShell
+
+```powershell
+$env:MODACCT_JWT_SECRET_KEY = (python -c "import secrets; print(secrets.token_urlsafe(48))")
 docker compose -f config/docker-compose.yml up --build
 ```
 
-The Compose configuration:
+### macOS or Linux
+
+```bash
+export MODACCT_JWT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+docker compose -f config/docker-compose.yml up --build
+```
+
+For stable sessions across restarts, store a generated secret in a local, ignored `.env` file instead of regenerating it. Do not use the empty example value and do not commit the generated secret.
+
+The default Compose configuration:
 
 - builds both images from the repository root;
 - sets `/app/src` on `PYTHONPATH`;
 - gives the API a persistent SQLite volume;
-- points Streamlit to `http://api:8000`; and
-- waits for API health before starting the web service.
+- points Streamlit to `http://api:8000`;
+- waits for API health before starting the web service; and
+- publishes host ports explicitly on `127.0.0.1` only.
+
+The application processes listen on the container network so the services can communicate, but the host port mappings remain loopback-only by default.
 
 Endpoints:
 
 - API: `http://127.0.0.1:8000`
 - OpenAPI: `http://127.0.0.1:8000/docs`
 - Streamlit: `http://127.0.0.1:8501`
+
+This Compose profile is validated only for local demonstration. Do not change the host bindings to `0.0.0.0`, a LAN address, or a public interface without a separate deployment review covering HTTPS termination, trusted proxies/hosts, network access controls, secret management, and the open findings in the post-UX security audit.
 
 Stop and remove the services:
 
@@ -214,9 +233,13 @@ macOS or Linux:
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
+### Compose reports that `MODACCT_JWT_SECRET_KEY` is required
+
+Generate a high-entropy value as shown in the Docker Compose section or set a stable generated value in a local ignored `.env` file. The repository intentionally does not ship a fallback signing key.
+
 ### API starts with an ephemeral JWT warning
 
-Set a stable `MODACCT_JWT_SECRET_KEY` with at least 32 characters. The generated fallback is suitable only for temporary local demonstrations and rotates on restart.
+Set a stable `MODACCT_JWT_SECRET_KEY` with at least 32 characters. The generated fallback is suitable only for temporary non-container local demonstrations and rotates on restart.
 
 ### Database errors
 
@@ -233,7 +256,7 @@ Set a stable `MODACCT_JWT_SECRET_KEY` with at least 32 characters. The generated
 
 ### Port conflicts
 
-Change the local port passed to Uvicorn or Streamlit. For containers, edit the host-side port mapping in `config/docker-compose.yml`.
+Change the local port passed to Uvicorn or Streamlit. For containers, change only the host-side port number while preserving the explicit `127.0.0.1` bind unless a separate deployment security review authorizes broader exposure.
 
 ## Scope Reminder
 
