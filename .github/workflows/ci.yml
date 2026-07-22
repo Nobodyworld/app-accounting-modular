@@ -99,15 +99,6 @@ jobs:
       - name: Build containers
         run: docker compose -p modacct-ci -f config/docker-compose.yml build
 
-      - name: Verify image users are non-root
-        shell: bash
-        run: |
-          for service in api web; do
-            image_id="$(docker compose -p modacct-ci -f config/docker-compose.yml images -q "$service")"
-            test -n "$image_id"
-            test "$(docker image inspect "$image_id" --format '{{.Config.User}}')" = "10001:10001"
-          done
-
       - name: Start containers
         run: docker compose -p modacct-ci -f config/docker-compose.yml up -d
 
@@ -141,6 +132,13 @@ jobs:
           for service in api web; do
             container_id="$(docker compose -p modacct-ci -f config/docker-compose.yml ps -q "$service")"
             test -n "$container_id"
+            image_id="$(docker inspect "$container_id" --format '{{.Image}}')"
+            image_user="$(docker image inspect "$image_id" --format '{{.Config.User}}')"
+            echo "$service image user: $image_user"
+            case "$image_user" in
+              10001|10001:10001) ;;
+              *) echo "$service image does not declare the expected non-root user" >&2; exit 1 ;;
+            esac
             test "$(docker compose -p modacct-ci -f config/docker-compose.yml exec -T "$service" id -u)" = "10001"
             test "$(docker compose -p modacct-ci -f config/docker-compose.yml exec -T "$service" id -g)" = "10001"
             test "$(docker inspect "$container_id" --format '{{.HostConfig.ReadonlyRootfs}}')" = "true"
