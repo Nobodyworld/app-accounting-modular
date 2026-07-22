@@ -74,9 +74,9 @@ def test_container_smoke_inspects_built_image_and_live_runtime_identity() -> Non
     expected_snippets = (
         "Verify least-privilege runtime",
         "docker inspect \"$container_id\" --format '{{.Image}}'",
-        "docker image inspect \"$image_id\"",
-        "exec -T \"$service\" id -u",
-        "exec -T \"$service\" id -g",
+        'docker image inspect "$image_id"',
+        'exec -T "$service" id -u',
+        'exec -T "$service" id -g',
         "ReadonlyRootfs",
         "no-new-privileges:true",
         "touch /data/write-ok",
