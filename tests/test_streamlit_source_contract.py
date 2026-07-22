@@ -15,14 +15,19 @@ def test_streamlit_app_uses_supported_width_api() -> None:
 
 def test_streamlit_result_details_remain_collapsed_by_default() -> None:
     source = STREAMLIT_APP.read_text(encoding="utf-8")
-    expected_expanders = (
+    direct_expanders = (
         "Forecast detail",
         "Budget report details",
         "Forecast diagnostics",
         "Cashflow report details",
+    )
+    shared_detail_labels = (
         "FX synchronization details",
         "Market synchronization details",
     )
 
-    for label in expected_expanders:
+    for label in direct_expanders:
         assert f'st.expander("{label}", expanded=False)' in source
+    assert "st.expander(details_label, expanded=False)" in source
+    for label in shared_detail_labels:
+        assert f'details_label="{label}"' in source
