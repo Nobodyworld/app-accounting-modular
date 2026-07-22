@@ -17,7 +17,9 @@ PROTECTED_UTILITY_STATE_KEYS = (
     "budget_report_error",
     "cashflow_report_payload",
     "cashflow_report_error",
+    "fx_sync_payload",
     "fx_sync_error",
+    "market_sync_payload",
     "market_sync_error",
 )
 
