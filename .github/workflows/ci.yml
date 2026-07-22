@@ -74,6 +74,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Generate ephemeral Compose JWT secret
+        shell: bash
+        run: |
+          echo "MODACCT_JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+
       - name: Validate Compose configuration
         run: docker compose -p modacct-ci -f config/docker-compose.yml config
 
