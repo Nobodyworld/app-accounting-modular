@@ -59,24 +59,29 @@ def test_final_images_declare_a_non_root_runtime_user() -> None:
 
 def test_compose_applies_least_privilege_controls_to_both_services() -> None:
     compose = _read_repository_file(COMPOSE_FILE)
+    tmpfs_mount = "/tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001"
 
     assert compose.count('user: "10001:10001"') == 2
     assert compose.count("read_only: true") == 2
     assert compose.count("cap_drop:") == 2
     assert compose.count("- ALL") == 2
     assert compose.count("- no-new-privileges:true") == 2
-    assert compose.count("/tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001") == 2
+    assert compose.count(tmpfs_mount) == 2
 
 
 def test_container_smoke_inspects_built_image_and_live_runtime_identity() -> None:
     workflow = _read_repository_file(CI_WORKFLOW)
+    expected_snippets = (
+        "Verify least-privilege runtime",
+        "docker inspect \"$container_id\" --format '{{.Image}}'",
+        "docker image inspect \"$image_id\"",
+        "exec -T \"$service\" id -u",
+        "exec -T \"$service\" id -g",
+        "ReadonlyRootfs",
+        "no-new-privileges:true",
+        "touch /data/write-ok",
+        "touch /app/write-should-fail",
+    )
 
-    assert "Verify least-privilege runtime" in workflow
-    assert "docker inspect \"$container_id\" --format '{{.Image}}'" in workflow
-    assert "docker image inspect \"$image_id\"" in workflow
-    assert "exec -T \"$service\" id -u" in workflow
-    assert "exec -T \"$service\" id -g" in workflow
-    assert "ReadonlyRootfs" in workflow
-    assert "no-new-privileges:true" in workflow
-    assert "touch /data/write-ok" in workflow
-    assert "touch /app/write-should-fail" in workflow
+    for snippet in expected_snippets:
+        assert snippet in workflow
