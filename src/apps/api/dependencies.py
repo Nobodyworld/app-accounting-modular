@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from uuid import uuid4
 
 from fastapi import Depends, Header, HTTPException, status
@@ -69,14 +69,14 @@ def _reject_client_identity_headers(
     )
 
 
-def authenticated_audit_context(
+async def authenticated_audit_context(
     current_user: User = Depends(get_current_user),
     x_request_id: str | None = Header(default=None),
     x_user_id: str | None = Header(default=None),
     x_org_id: str | None = Header(default=None),
     x_user_label: str | None = Header(default=None),
-) -> Iterator[None]:
-    """Bind a trusted request actor derived from the authenticated principal."""
+) -> AsyncIterator[None]:
+    """Bind a trusted request actor in the async request context."""
 
     _reject_client_identity_headers(
         x_user_id=x_user_id,
