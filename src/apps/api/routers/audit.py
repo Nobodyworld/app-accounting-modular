@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
 
 from ..dependencies import session_with_audit_context
-from ..models.models import AuditLog, Membership, Organization, User
+from ..models.models import AuditLog, User
 from ..schemas import AuditLogSchema
-from ..security import get_current_user
+from ..security import get_current_organization, get_current_user
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -19,25 +19,12 @@ router = APIRouter(prefix="/audit", tags=["audit"])
 def _require_audit_administrator(session: Session, organization_id: int, current_user: User) -> None:
     """Require active organization membership with administrator privileges."""
 
-    organization = session.get(Organization, organization_id)
-    if organization is None or not organization.is_active:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
-
-    if current_user.id is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
-
-    membership = session.exec(
-        select(Membership).where(
-            Membership.organization_id == organization_id,
-            Membership.user_id == current_user.id,
-        )
-    ).one_or_none()
-    if membership is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized for this organization",
-        )
-    if not membership.is_admin:
+    org_ctx = get_current_organization(
+        organization_id=organization_id,
+        session=session,
+        current_user=current_user,
+    )
+    if not org_ctx.membership.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Organization administrator access is required",
