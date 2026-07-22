@@ -68,12 +68,12 @@ def test_compose_applies_least_privilege_controls_to_both_services() -> None:
     assert compose.count("/tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001") == 2
 
 
-def test_container_smoke_inspects_image_and_live_runtime_identity() -> None:
+def test_container_smoke_inspects_built_image_and_live_runtime_identity() -> None:
     workflow = _read_repository_file(CI_WORKFLOW)
 
-    assert "Verify image users are non-root" in workflow
     assert "Verify least-privilege runtime" in workflow
-    assert "docker image inspect" in workflow
+    assert "docker inspect \"$container_id\" --format '{{.Image}}'" in workflow
+    assert "docker image inspect \"$image_id\"" in workflow
     assert "exec -T \"$service\" id -u" in workflow
     assert "exec -T \"$service\" id -g" in workflow
     assert "ReadonlyRootfs" in workflow
