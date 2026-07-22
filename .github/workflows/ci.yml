@@ -126,6 +126,32 @@ jobs:
           docker compose -p modacct-ci -f config/docker-compose.yml logs web
           exit 1
 
+      - name: Verify least-privilege runtime
+        shell: bash
+        run: |
+          for service in api web; do
+            container_id="$(docker compose -p modacct-ci -f config/docker-compose.yml ps -q "$service")"
+            test -n "$container_id"
+            image_id="$(docker inspect "$container_id" --format '{{.Image}}')"
+            image_user="$(docker image inspect "$image_id" --format '{{.Config.User}}')"
+            echo "$service image user: $image_user"
+            case "$image_user" in
+              10001|10001:10001) ;;
+              *) echo "$service image does not declare the expected non-root user" >&2; exit 1 ;;
+            esac
+            test "$(docker compose -p modacct-ci -f config/docker-compose.yml exec -T "$service" id -u)" = "10001"
+            test "$(docker compose -p modacct-ci -f config/docker-compose.yml exec -T "$service" id -g)" = "10001"
+            test "$(docker inspect "$container_id" --format '{{.HostConfig.ReadonlyRootfs}}')" = "true"
+            docker inspect "$container_id" --format '{{json .HostConfig.CapDrop}}' | grep -q '"ALL"'
+            docker inspect "$container_id" --format '{{json .HostConfig.SecurityOpt}}' | grep -q 'no-new-privileges:true'
+          done
+          if docker compose -p modacct-ci -f config/docker-compose.yml exec -T web sh -c 'touch /app/write-should-fail'; then
+            echo "Web container unexpectedly wrote to the read-only application filesystem" >&2
+            exit 1
+          fi
+          docker compose -p modacct-ci -f config/docker-compose.yml exec -T web sh -c 'touch /tmp/write-ok && rm /tmp/write-ok'
+          docker compose -p modacct-ci -f config/docker-compose.yml exec -T api sh -c 'touch /data/write-ok && rm /data/write-ok'
+
       - name: Show container status
         run: docker compose -p modacct-ci -f config/docker-compose.yml ps
 
