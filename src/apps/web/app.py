@@ -722,6 +722,11 @@ with utility_tab:
     else:
         st.success("Protected utilities ready for the authenticated organization scope.")
 
+    protected_action_help = (
+        "Sign in through API Session with a positive organization ID to enable protected utilities."
+        if not protected_ready
+        else None
+    )
     budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(["Budgets", "Cashflow", "FX Sync", "Market Sync"])
 
     with budget_tab:
@@ -768,7 +773,12 @@ with utility_tab:
         )
         budget_refresh = st.checkbox("Force refresh", value=False, key="budget_refresh_toggle")
 
-        if st.button("Generate Budget Report", key="budget_report_button", disabled=not protected_ready):
+        if st.button(
+            "Generate Budget Report",
+            key="budget_report_button",
+            disabled=not protected_ready,
+            help=protected_action_help,
+        ):
             try:
                 budget_params = {
                     "budget_id": int(budget_id),
@@ -812,7 +822,12 @@ with utility_tab:
         )
         cashflow_refresh = st.checkbox("Force refresh", value=True, key="cashflow_refresh_toggle")
 
-        if st.button("Generate Cashflow Forecast", key="cashflow_report_button", disabled=not protected_ready):
+        if st.button(
+            "Generate Cashflow Forecast",
+            key="cashflow_report_button",
+            disabled=not protected_ready,
+            help=protected_action_help,
+        ):
             try:
                 cashflow_params = {
                     "organization_id": int(organization_id),
@@ -868,7 +883,17 @@ with utility_tab:
             st.info("No FX providers configured on the API")
 
         can_sync_fx = protected_ready and provider_key is not None and fx_currency_error is None
-        if st.button("Sync FX Now", disabled=not can_sync_fx, key="fx_sync_button"):
+        fx_action_help = protected_action_help
+        if protected_ready and provider_key is None:
+            fx_action_help = "Configure an FX provider before synchronizing rates."
+        elif protected_ready and fx_currency_error:
+            fx_action_help = fx_currency_error
+        if st.button(
+            "Sync FX Now",
+            disabled=not can_sync_fx,
+            key="fx_sync_button",
+            help=fx_action_help,
+        ):
             try:
                 fx_sync_params: dict[str, Any] = {
                     "organization_id": int(organization_id),
@@ -927,7 +952,19 @@ with utility_tab:
         can_sync_market = (
             protected_ready and market_provider is not None and bool(normalized_symbol) and not market_date_error
         )
-        if st.button("Sync Prices", disabled=not can_sync_market, key="market_sync_button"):
+        market_action_help = protected_action_help
+        if protected_ready and market_provider is None:
+            market_action_help = "Configure a market provider before synchronizing prices."
+        elif protected_ready and not normalized_symbol:
+            market_action_help = "Enter a market symbol before synchronizing prices."
+        elif protected_ready and market_date_error:
+            market_action_help = market_date_error
+        if st.button(
+            "Sync Prices",
+            disabled=not can_sync_market,
+            key="market_sync_button",
+            help=market_action_help,
+        ):
             try:
                 market_sync_params: dict[str, Any] = {
                     "organization_id": int(organization_id),
