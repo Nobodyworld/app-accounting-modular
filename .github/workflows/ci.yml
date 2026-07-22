@@ -35,6 +35,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
+      - name: Show deployment formatter diff
+        run: |
+          python -m ruff format tests/test_deployment_security.py
+          git diff -- tests/test_deployment_security.py
+          git checkout -- tests/test_deployment_security.py
+
       - name: Run quality gate and tests
         env:
           PYTHONPATH: ${{ github.workspace }}/src
