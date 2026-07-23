@@ -1,0 +1,339 @@
+name: Temporary scenario-plan auth alignment
+
+on:
+  push:
+    branches:
+      - ux/streamlit-responsive-accessibility
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        # actions/checkout v4.2.2 (2024-12-10)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ux/streamlit-responsive-accessibility
+          persist-credentials: true
+
+      - name: Align Scenario Plan Review with protected API boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              source = path.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:100]!r}")
+              path.write_text(source.replace(old, new), encoding="utf-8")
+
+          app = Path("src/apps/web/app.py")
+          replace_once(
+              app,
+              '        st.caption("Snapshot Review and Scenario Plan Preview remain public local evidence workflows.")',
+              '        st.caption("Snapshot Review remains a public/local evidence workflow. Scenario Plan Review and Review Utilities require sign-in.")',
+          )
+          replace_once(
+              app,
+              '''protected_ready = authenticated_workspace_ready(access_token, organization_id)
+          headers = auth_headers(access_token)
+
+          st.info(
+              "Snapshot Review is a public/local evidence workflow. Scenario Plan Preview is public. "
+              "Review Utilities require an authenticated API session and organization scope."
+          )'''.replace("          ", ""),
+              '''protected_ready = authenticated_workspace_ready(access_token, organization_id)
+          headers = auth_headers(access_token)
+          protected_action_help = (
+              "Sign in through API Session with a positive organization ID to enable protected actions."
+              if not protected_ready
+              else None
+          )
+
+          st.info(
+              "Snapshot Review is a public/local evidence workflow. "
+              "Scenario Plan Review and Review Utilities require an authenticated API session and organization scope."
+          )'''.replace("          ", ""),
+          )
+          replace_once(
+              app,
+              '''    protected_action_help = (
+                  "Sign in through API Session with a positive organization ID to enable protected utilities."
+                  if not protected_ready
+                  else None
+              )
+              budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(["Budgets", "Cashflow", "FX Sync", "Market Sync"])'''.replace("              ", ""),
+              '    budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(["Budgets", "Cashflow", "FX Sync", "Market Sync"])',
+          )
+          replace_once(
+              app,
+              '''with plan_tab:
+              st.subheader("Scenario Plan Review")
+              st.caption("Upload JSON or TOML plans to review scenario coverage before running scenario batches.")'''.replace("              ", ""),
+              '''with plan_tab:
+              st.subheader("Scenario Plan Review")
+              st.caption("Upload JSON or TOML plans to review scenario coverage before running scenario batches.")
+              if not protected_ready:
+                  st.warning(
+                      "Scenario Plan Review is locked. Sign in through API Session with a positive organization ID to continue."
+                  )'''.replace("              ", ""),
+          )
+          replace_once(
+              app,
+              '''    if st.button("Preview plan", key="scenario_plan_preview_button"):
+                  if not stored_plan:
+                      st.warning("Upload a scenario plan before requesting a preview.")
+                  else:
+                      parsed_plan, error = _parse_plan_bytes(stored_plan, stored_plan_name)
+                      if error:
+                          st.error(f"Plan parsing failed: {error}")
+                      elif not isinstance(parsed_plan, dict):
+                          st.error("Scenario plans must define a JSON or TOML object.")
+                      else:
+                          try:
+                              response = requests.post(f"{API}/snapshot/plans/preview", json=parsed_plan, timeout=30)
+                              response.raise_for_status()
+                          except Exception as exc:  # pragma: no cover - runtime feedback
+                              st.error(f"Failed to preview plan: {exc}")
+                          else:
+                              st.session_state["scenario_plan_preview"] = response.json()
+                              st.success("Plan preview generated")'''.replace("              ", ""),
+              '''    can_preview_plan = protected_ready and bool(stored_plan)
+              plan_action_help = protected_action_help
+              if protected_ready and not stored_plan:
+                  plan_action_help = "Upload a scenario plan before requesting a preview."
+
+              if st.button(
+                  "Preview plan",
+                  key="scenario_plan_preview_button",
+                  disabled=not can_preview_plan,
+                  help=plan_action_help,
+              ):
+                  parsed_plan, error = _parse_plan_bytes(stored_plan, stored_plan_name)
+                  if error:
+                      st.session_state.pop("scenario_plan_preview", None)
+                      st.error(f"Plan parsing failed: {error}")
+                  elif not isinstance(parsed_plan, dict):
+                      st.session_state.pop("scenario_plan_preview", None)
+                      st.error("Scenario plans must define a JSON or TOML object.")
+                  else:
+                      try:
+                          response = requests.post(
+                              f"{API}/snapshot/plans/preview",
+                              json=parsed_plan,
+                              headers=headers,
+                              timeout=30,
+                          )
+                      except requests.RequestException as exc:  # pragma: no cover - runtime feedback
+                          plan_payload, plan_error = None, f"Scenario plan service unavailable: {exc}"
+                      except Exception:  # pragma: no cover - defensive UI boundary
+                          plan_payload, plan_error = None, "Scenario plan preview request could not be completed."
+                      else:
+                          plan_payload, plan_error = _protected_response_payload(response)
+
+                      if plan_error:
+                          st.session_state.pop("scenario_plan_preview", None)
+                          st.error(f"Plan preview unavailable: {plan_error}")
+                      else:
+                          st.session_state["scenario_plan_preview"] = plan_payload
+                          st.success("Plan preview generated")'''.replace("              ", ""),
+          )
+
+          api_session = Path("src/apps/web/api_session.py")
+          replace_once(
+              api_session,
+              '    "market_sync_error",\n)',
+              '    "market_sync_error",\n    "scenario_plan_preview",\n)',
+          )
+          replace_once(
+              api_session,
+              '    """Remove tenant-scoped utility payloads and errors while preserving public state."""',
+              '    """Remove protected workspace payloads and errors while preserving public state."""',
+          )
+
+          tests = Path("tests/test_streamlit_app.py")
+          replace_once(
+              tests,
+              'def test_public_workflows_remain_available_and_protected_actions_start_locked(fake_runtime):\n    """Public review remains usable without an API session while utilities are visibly gated."""',
+              'def test_public_snapshot_remains_available_and_protected_actions_start_locked(fake_runtime):\n    """Public snapshot review remains usable while API-backed actions are visibly gated."""',
+          )
+          replace_once(
+              tests,
+              '''    assert at.button(key="snapshot_generate_button").disabled is False
+              assert at.button(key="scenario_plan_preview_button").disabled is False
+              for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
+                  assert at.button(key=key).disabled is True
+
+              public_status = " ".join(str(element.value) for element in [*at.info, *at.caption, *at.warning])
+              assert "Snapshot Review is a public/local evidence workflow" in public_status
+              assert "Scenario Plan Preview is public" in public_status
+              assert "Review Utilities require an authenticated API session" in public_status
+              assert "Protected utilities locked" in public_status
+              protected_paths = ("/reports/budget-vs-actual", "/reports/cashflow-forecast", "/fx/sync", "/market/sync")'''.replace("              ", ""),
+              '''    assert at.button(key="snapshot_generate_button").disabled is False
+              for key in (
+                  "budget_report_button",
+                  "cashflow_report_button",
+                  "fx_sync_button",
+                  "market_sync_button",
+                  "scenario_plan_preview_button",
+              ):
+                  assert at.button(key=key).disabled is True
+
+              public_status = " ".join(str(element.value) for element in [*at.info, *at.caption, *at.warning])
+              assert "Snapshot Review is a public/local evidence workflow" in public_status
+              assert "Scenario Plan Review and Review Utilities require an authenticated API session" in public_status
+              assert "Scenario Plan Review is locked" in public_status
+              assert "Protected utilities locked" in public_status
+              protected_paths = (
+                  "/reports/budget-vs-actual",
+                  "/reports/cashflow-forecast",
+                  "/fx/sync",
+                  "/market/sync",
+                  "/snapshot/plans/preview",
+              )'''.replace("              ", ""),
+          )
+          old_loop = '    for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):\n        assert at.button(key=key).disabled is False'
+          replace_once(
+              tests,
+              old_loop,
+              '''    for key in (
+                  "budget_report_button",
+                  "cashflow_report_button",
+                  "fx_sync_button",
+                  "market_sync_button",
+              ):
+                  assert at.button(key=key).disabled is False
+              assert at.button(key="scenario_plan_preview_button").disabled is True
+              at.session_state["scenario_plan_bytes"] = b"{}"
+              at.session_state["scenario_plan_name"] = "scenario-plan.json"
+              at.run(timeout=15)
+              assert at.button(key="scenario_plan_preview_button").disabled is False'''.replace("              ", ""),
+          )
+          replace_once(
+              tests,
+              '''    for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
+                  assert at.button(key=key).disabled is True'''.replace("              ", ""),
+              '''    for key in (
+                  "budget_report_button",
+                  "cashflow_report_button",
+                  "fx_sync_button",
+                  "market_sync_button",
+                  "scenario_plan_preview_button",
+              ):
+                  assert at.button(key=key).disabled is True'''.replace("              ", ""),
+          )
+          replace_once(
+              tests,
+              '''    for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
+                  assert at.button(key=key).disabled is True
+
+
+              def test_protected_request_contracts_use_shared_session_scope'''.replace("              ", ""),
+              '''    for key in (
+                  "budget_report_button",
+                  "cashflow_report_button",
+                  "fx_sync_button",
+                  "market_sync_button",
+                  "scenario_plan_preview_button",
+              ):
+                  assert at.button(key=key).disabled is True
+
+
+              def test_protected_request_contracts_use_shared_session_scope'''.replace("              ", ""),
+          )
+          replace_once(
+              tests,
+              '''    at.text_input(key="market_symbol_input").set_value(" msft ")
+              at.run(timeout=15)
+              at.button(key="market_sync_button").click()
+              at.run(timeout=15)
+
+              auth_header = {"Authorization": f"Bearer {fake_runtime.token_value}"}'''.replace("              ", ""),
+              '''    at.text_input(key="market_symbol_input").set_value(" msft ")
+              at.run(timeout=15)
+              at.button(key="market_sync_button").click()
+              at.run(timeout=15)
+
+              at.session_state["scenario_plan_bytes"] = b"{}"
+              at.session_state["scenario_plan_name"] = "scenario-plan.json"
+              at.run(timeout=15)
+              at.button(key="scenario_plan_preview_button").click()
+              at.run(timeout=15)
+
+              auth_header = {"Authorization": f"Bearer {fake_runtime.token_value}"}'''.replace("              ", ""),
+          )
+          replace_once(
+              tests,
+              '''    market_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/market/sync"))
+              assert market_call.headers == auth_header
+              assert market_call.params == {
+                  "organization_id": 12,
+                  "symbol": "MSFT",
+                  "start": "2024-01-01",
+                  "end": "2024-12-31",
+                  "provider_key": "market:commodities_stub",
+              }'''.replace("              ", ""),
+              '''    market_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/market/sync"))
+              assert market_call.headers == auth_header
+              assert market_call.params == {
+                  "organization_id": 12,
+                  "symbol": "MSFT",
+                  "start": "2024-01-01",
+                  "end": "2024-12-31",
+                  "provider_key": "market:commodities_stub",
+              }
+
+              plan_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/snapshot/plans/preview"))
+              assert plan_call.headers == auth_header
+              assert plan_call.json == {}'''.replace("              ", ""),
+          )
+
+          session_tests = Path("tests/test_web_api_session.py")
+          replace_once(
+              session_tests,
+              'def test_clear_protected_utility_state_preserves_public_workflows() -> None:',
+              'def test_clear_protected_utility_state_preserves_public_snapshot_and_local_uploads() -> None:',
+          )
+          replace_once(
+              session_tests,
+              '''    assert state == {
+                  "snapshot_controls_payload": {"public": True},
+                  "scenario_plan_preview": {"scenario_count": 1},
+                  "uploaded_budget_preview": "local-preview",
+              }'''.replace("              ", ""),
+              '''    assert state == {
+                  "snapshot_controls_payload": {"public": True},
+                  "uploaded_budget_preview": "local-preview",
+              }'''.replace("              ", ""),
+          )
+
+          release_notes = Path("docs/RELEASE_NOTES.md")
+          replace_once(
+              release_notes,
+              '- Public Streamlit review flow for financial snapshots, source evidence, freshness, journal-control status, and scenario-plan previews.\n- Authenticated tenant-scoped budget, cashflow, FX, and market review utilities.',
+              '- Public Streamlit Snapshot Review flow for financial snapshots, source evidence, freshness, and journal-control status.\n- Authenticated Scenario Plan Review plus tenant-scoped budget, cashflow, FX, and market review utilities.',
+          )
+
+          setup = Path("docs/setup.md")
+          replace_once(
+              setup,
+              'The interface is available at `http://127.0.0.1:8501` and expects the API at `http://localhost:8000` unless `API_BASE` is overridden.',
+              'The interface is available at `http://127.0.0.1:8501` and expects the API at `http://localhost:8000` unless `API_BASE` is overridden. Snapshot Review is a public/local workflow. Scenario Plan Review and Review Utilities call authenticated API routes and require a signed-in API session with a positive organization ID.',
+          )
+          PY
+
+      - name: Commit alignment and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temporary-scenario-plan-auth-alignment.yml
+          git add src/apps/web/app.py src/apps/web/api_session.py tests/test_streamlit_app.py tests/test_web_api_session.py docs/RELEASE_NOTES.md docs/setup.md
+          git diff --cached --check
+          git commit -m "ux: align scenario-plan preview with authentication"
+          git push origin HEAD:ux/streamlit-responsive-accessibility
