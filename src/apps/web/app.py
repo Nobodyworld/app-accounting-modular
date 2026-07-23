@@ -431,11 +431,16 @@ with st.sidebar:
         st.success("Authenticated")
         st.write(f"Authenticated email: {st.session_state.get(AUTH_EMAIL_KEY, 'Unknown')}")
         st.write(f"Organization ID: {st.session_state.get(ORGANIZATION_ID_KEY, 'Unknown')}")
-        st.caption("This organization scope applies to every protected Review Utilities request.")
+        st.caption(
+            "This organization scope applies to Scenario Plan Review and every protected Review Utilities request."
+        )
         st.button("Log out", key="api_logout_button", on_click=_logout_api_session)
     else:
-        st.info("Protected utilities locked")
-        st.caption("Snapshot Review and Scenario Plan Preview remain public local evidence workflows.")
+        st.info("Protected workflows locked")
+        st.caption(
+            "Snapshot Review remains public/local. Scenario Plan Review and Review Utilities "
+            "require sign-in and a positive organization ID."
+        )
         login_error = st.session_state.get("api_login_error")
         if isinstance(login_error, str) and login_error:
             st.error(login_error)
@@ -449,10 +454,15 @@ access_token = st.session_state.get(ACCESS_TOKEN_KEY)
 organization_id = st.session_state.get(ORGANIZATION_ID_KEY)
 protected_ready = authenticated_workspace_ready(access_token, organization_id)
 headers = auth_headers(access_token)
+protected_action_help = (
+    "Sign in through API Session with a positive organization ID to enable protected workflows."
+    if not protected_ready
+    else None
+)
 
 st.info(
-    "Snapshot Review is a public/local evidence workflow. Scenario Plan Preview is public. "
-    "Review Utilities require an authenticated API session and organization scope."
+    "Snapshot Review is a public/local evidence workflow. Scenario Plan Review and Review "
+    "Utilities require an authenticated API session and positive organization ID."
 )
 
 health_data, health_error = _load_health()
@@ -725,17 +735,10 @@ with utility_tab:
         "organization scope. Budget CSV preview and template behavior remain local."
     )
     if not protected_ready:
-        st.warning(
-            "Protected utilities locked. Sign in through API Session with a positive organization ID to continue."
-        )
+        st.warning(f"Protected utilities locked. {protected_action_help}")
     else:
         st.success("Protected utilities ready for the authenticated organization scope.")
 
-    protected_action_help = (
-        "Sign in through API Session with a positive organization ID to enable protected utilities."
-        if not protected_ready
-        else None
-    )
     budget_tab, cashflow_tab, fx_tab, market_tab = st.tabs(["Budgets", "Cashflow", "FX Sync", "Market Sync"])
 
     with budget_tab:
@@ -1012,7 +1015,15 @@ with utility_tab:
 
 with plan_tab:
     st.subheader("Scenario Plan Review")
-    st.caption("Upload JSON or TOML plans to review scenario coverage before running scenario batches.")
+    st.caption(
+        "Upload JSON or TOML plans locally, then use the authenticated API session and its "
+        "organization scope to review scenario coverage."
+    )
+    if not protected_ready:
+        st.warning(f"Scenario Plan Review locked. {protected_action_help}")
+    else:
+        st.success("Scenario Plan Review ready for the authenticated organization scope.")
+
     uploaded_plan = st.file_uploader(
         "Scenario plan",
         type=["json", "toml", "tml"],
@@ -1022,32 +1033,67 @@ with plan_tab:
 
     if uploaded_plan is not None:
         try:
-            st.session_state["scenario_plan_bytes"] = uploaded_plan.getvalue()
-            st.session_state["scenario_plan_name"] = uploaded_plan.name
+            uploaded_plan_bytes = uploaded_plan.getvalue()
+            if uploaded_plan_bytes != st.session_state.get(
+                "scenario_plan_bytes"
+            ) or uploaded_plan.name != st.session_state.get("scenario_plan_name"):
+                st.session_state["scenario_plan_bytes"] = uploaded_plan_bytes
+                st.session_state["scenario_plan_name"] = uploaded_plan.name
+                st.session_state.pop("scenario_plan_preview", None)
         except Exception as exc:
             st.error(f"Failed to read uploaded file: {exc}")
 
     stored_plan = st.session_state.get("scenario_plan_bytes")
     stored_plan_name = st.session_state.get("scenario_plan_name", "scenario_plan.json")
+    scenario_action_help = protected_action_help
+    if protected_ready and not stored_plan:
+        scenario_action_help = "Upload a scenario plan before requesting a preview."
 
-    if st.button("Preview plan", key="scenario_plan_preview_button"):
-        if not stored_plan:
-            st.warning("Upload a scenario plan before requesting a preview.")
+    preview_requested = st.button(
+        "Preview plan",
+        key="scenario_plan_preview_button",
+        disabled=not (protected_ready and bool(stored_plan)),
+        help=scenario_action_help,
+    )
+    if preview_requested and not protected_ready:
+        st.session_state.pop("scenario_plan_preview", None)
+        st.warning(protected_action_help)
+    elif preview_requested and not stored_plan:
+        st.session_state.pop("scenario_plan_preview", None)
+        st.warning("Upload a scenario plan before requesting a preview.")
+    elif preview_requested:
+        parsed_plan, error = _parse_plan_bytes(stored_plan, stored_plan_name)
+        if error:
+            st.session_state.pop("scenario_plan_preview", None)
+            st.error(f"Plan parsing failed: {error}")
+        elif not isinstance(parsed_plan, dict):
+            st.session_state.pop("scenario_plan_preview", None)
+            st.error("Scenario plans must define a JSON or TOML object.")
         else:
-            parsed_plan, error = _parse_plan_bytes(stored_plan, stored_plan_name)
-            if error:
-                st.error(f"Plan parsing failed: {error}")
-            elif not isinstance(parsed_plan, dict):
-                st.error("Scenario plans must define a JSON or TOML object.")
+            try:
+                response = requests.post(
+                    f"{API}/snapshot/plans/preview",
+                    json=parsed_plan,
+                    headers=headers,
+                    timeout=30,
+                )
+            except requests.RequestException:  # pragma: no cover - runtime feedback
+                preview_payload = None
+                preview_error = "Scenario Plan Review service unavailable. Try again when the API is reachable."
+            except Exception:  # pragma: no cover - defensive UI boundary
+                preview_payload = None
+                preview_error = "Scenario Plan Review request could not be completed."
             else:
-                try:
-                    response = requests.post(f"{API}/snapshot/plans/preview", json=parsed_plan, timeout=30)
-                    response.raise_for_status()
-                except Exception as exc:  # pragma: no cover - runtime feedback
-                    st.error(f"Failed to preview plan: {exc}")
-                else:
-                    st.session_state["scenario_plan_preview"] = response.json()
-                    st.success("Plan preview generated")
+                preview_payload, preview_error = _protected_response_payload(response)
+                if preview_error is None and not isinstance(preview_payload, dict):
+                    preview_payload, preview_error = None, "API response was malformed."
+
+            if preview_error:
+                st.session_state.pop("scenario_plan_preview", None)
+                st.error(f"Scenario plan preview unavailable: {preview_error}")
+            else:
+                st.session_state["scenario_plan_preview"] = preview_payload
+                st.success("Plan preview generated")
 
     preview_payload = st.session_state.get("scenario_plan_preview")
     if isinstance(preview_payload, dict):

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import requests
 import streamlit as st
 from apps.web.api_session import ACCESS_TOKEN_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY, SESSION_ID_KEY
 
@@ -28,6 +30,8 @@ class DummyResponse:
         self.text = text
 
     def json(self) -> Any:
+        if isinstance(self._payload, Exception):
+            raise self._payload
         return self._payload
 
     def raise_for_status(self) -> None:
@@ -152,6 +156,8 @@ def fake_runtime(monkeypatch):
         )
         for path, response in post_responses.items():
             if url.endswith(path):
+                if isinstance(response, Exception):
+                    raise response
                 return response
         if url.endswith("/auth/token"):
             return DummyResponse(
@@ -269,6 +275,16 @@ def _utility_text(at: AppTest) -> str:
     return " ".join(str(element.value) for element in elements)
 
 
+def _store_scenario_plan(at: AppTest, plan: dict[str, Any]) -> bytes:
+    """Retain a local plan in session state as the uploader would."""
+
+    plan_bytes = json.dumps(plan).encode("utf-8")
+    at.session_state["scenario_plan_bytes"] = plan_bytes
+    at.session_state["scenario_plan_name"] = "scenario-plan.json"
+    at.run(timeout=15)
+    return plan_bytes
+
+
 def _budget_payload() -> dict[str, Any]:
     return {
         "summary": {
@@ -351,23 +367,32 @@ def test_primary_snapshot_tab_renders(fake_runtime):
     assert at.selectbox(key="snapshot_tax_provider_select").value == "tax:oecd_stub"
 
 
-def test_public_workflows_remain_available_and_protected_actions_start_locked(fake_runtime):
-    """Public review remains usable without an API session while utilities are visibly gated."""
+def test_snapshot_remains_public_while_protected_workflows_start_locked(fake_runtime):
+    """Snapshot review remains usable while Scenario Plan Review and utilities are gated."""
 
     at = _app_test()
     at.run(timeout=15)
+    _store_scenario_plan(at, {"metadata": {"name": "Retained anonymous input"}, "scenarios": []})
 
     assert at.button(key="snapshot_generate_button").disabled is False
-    assert at.button(key="scenario_plan_preview_button").disabled is False
+    assert at.button(key="scenario_plan_preview_button").disabled is True
+    at.button(key="scenario_plan_preview_button").click()
+    at.run(timeout=15)
     for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
         assert at.button(key=key).disabled is True
 
     public_status = " ".join(str(element.value) for element in [*at.info, *at.caption, *at.warning])
     assert "Snapshot Review is a public/local evidence workflow" in public_status
-    assert "Scenario Plan Preview is public" in public_status
-    assert "Review Utilities require an authenticated API session" in public_status
-    assert "Protected utilities locked" in public_status
-    protected_paths = ("/reports/budget-vs-actual", "/reports/cashflow-forecast", "/fx/sync", "/market/sync")
+    assert "Scenario Plan Review and Review Utilities require an authenticated API session" in public_status
+    assert "Scenario Plan Review locked" in public_status
+    assert "positive organization ID" in public_status
+    protected_paths = (
+        "/snapshot/plans/preview",
+        "/reports/budget-vs-actual",
+        "/reports/cashflow-forecast",
+        "/fx/sync",
+        "/market/sync",
+    )
     assert not any(call.url.endswith(protected_paths) for call in fake_runtime.outbound_calls)
 
 
@@ -390,6 +415,11 @@ def test_successful_sidebar_login_normalizes_and_unlocks_protected_actions(fake_
 
     for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
         assert at.button(key=key).disabled is False
+    assert at.button(key="scenario_plan_preview_button").disabled is True
+
+    _store_scenario_plan(at, {"metadata": {"name": "Local acceptance plan"}, "scenarios": []})
+
+    assert at.button(key="scenario_plan_preview_button").disabled is False
 
 
 def test_failed_sidebar_login_shows_api_detail_and_keeps_utilities_locked(fake_runtime):
@@ -417,7 +447,12 @@ def test_logout_clears_only_api_session_and_relocks_protected_actions(fake_runti
     at.run(timeout=15)
     at.text_input(key="snapshot_base_input").set_value("EUR")
     at.run(timeout=15)
+    at.button(key="snapshot_generate_button").click()
+    at.run(timeout=20)
     _login(at)
+    plan_bytes = _store_scenario_plan(at, {"metadata": {"name": "Retained plan"}, "scenarios": []})
+    at.session_state["scenario_plan_preview"] = {"summary": {"scenario_count": 1}, "plan": {"metadata": {}}}
+    at.run(timeout=15)
 
     at.button(key="api_logout_button").click()
     at.run(timeout=15)
@@ -425,6 +460,11 @@ def test_logout_clears_only_api_session_and_relocks_protected_actions(fake_runti
     for key in (ACCESS_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
         assert key not in at.session_state
     assert at.session_state["snapshot_base_input"] == "EUR"
+    assert "snapshot_controls_payload" in at.session_state
+    assert "scenario_plan_preview" not in at.session_state
+    assert at.session_state["scenario_plan_bytes"] == plan_bytes
+    assert at.session_state["scenario_plan_name"] == "scenario-plan.json"
+    assert at.button(key="scenario_plan_preview_button").disabled is True
     for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
         assert at.button(key=key).disabled is True
 
@@ -459,6 +499,15 @@ def test_protected_request_contracts_use_shared_session_scope(fake_runtime):
     at.button(key="market_sync_button").click()
     at.run(timeout=15)
 
+    submitted_plan = {
+        "metadata": {"name": "Protected request contract"},
+        "defaults": {"base_currency": "USD"},
+        "scenarios": [{"name": "baseline", "tags": ["control"]}],
+    }
+    _store_scenario_plan(at, submitted_plan)
+    at.button(key="scenario_plan_preview_button").click()
+    at.run(timeout=15)
+
     auth_header = {"Authorization": f"Bearer {fake_runtime.token_value}"}
     budget_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/reports/budget-vs-actual"))
     assert budget_call.headers == auth_header
@@ -483,6 +532,89 @@ def test_protected_request_contracts_use_shared_session_scope(fake_runtime):
         "end": "2024-12-31",
         "provider_key": "market:commodities_stub",
     }
+
+    scenario_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/snapshot/plans/preview"))
+    assert scenario_call.headers == auth_header
+    assert scenario_call.json == submitted_plan
+    assert at.session_state["scenario_plan_preview"]["summary"]["scenario_count"] == 1
+    assert "Plan preview generated" in _utility_text(at)
+
+
+@pytest.mark.parametrize(
+    ("preview_response", "expected_message"),
+    [
+        (DummyResponse({"detail": "Not authenticated"}, status_code=401), "Not authenticated"),
+        (
+            DummyResponse({"detail": "Not authorized for this organization"}, status_code=403),
+            "Not authorized for this organization",
+        ),
+        (
+            DummyResponse({"detail": [{"msg": "Scenario name is required"}]}, status_code=422),
+            "Scenario name is required",
+        ),
+        (DummyResponse(ValueError("invalid JSON")), "API response was not valid JSON"),
+        (
+            requests.ConnectionError("private upstream detail"),
+            "Scenario Plan Review service unavailable",
+        ),
+        (
+            RuntimeError("private adapter detail"),
+            "Scenario Plan Review request could not be completed",
+        ),
+    ],
+)
+def test_scenario_preview_failures_clear_stale_success(
+    fake_runtime,
+    preview_response: DummyResponse | Exception,
+    expected_message: str,
+):
+    """Protected preview failures retain actionable safe errors without stale results."""
+
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    _store_scenario_plan(at, {"metadata": {"name": "Failure test"}, "scenarios": []})
+    at.session_state["scenario_plan_preview"] = {
+        "summary": {"scenario_count": 99},
+        "plan": {"metadata": {"name": "stale"}},
+    }
+    fake_runtime.post_responses["/snapshot/plans/preview"] = preview_response
+
+    at.button(key="scenario_plan_preview_button").click()
+    at.run(timeout=15)
+
+    assert "scenario_plan_preview" not in at.session_state
+    rendered = _utility_text(at)
+    assert expected_message in rendered
+    assert "private upstream detail" not in rendered
+    assert "private adapter detail" not in rendered
+    assert "99" not in [str(metric.value) for metric in at.metric if metric.label == "Scenarios"]
+
+
+def test_scenario_parse_failure_clears_stale_success_without_an_api_request(fake_runtime):
+    """Local parse failures clear protected output before any API request is attempted."""
+
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.session_state["scenario_plan_bytes"] = b"{not valid json"
+    at.session_state["scenario_plan_name"] = "invalid-plan.json"
+    at.session_state["scenario_plan_preview"] = {
+        "summary": {"scenario_count": 99},
+        "plan": {"metadata": {"name": "stale"}},
+    }
+    at.run(timeout=15)
+    previous_preview_calls = sum(call.url.endswith("/snapshot/plans/preview") for call in fake_runtime.outbound_calls)
+
+    at.button(key="scenario_plan_preview_button").click()
+    at.run(timeout=15)
+
+    assert "scenario_plan_preview" not in at.session_state
+    assert "Plan parsing failed" in _utility_text(at)
+    assert (
+        sum(call.url.endswith("/snapshot/plans/preview") for call in fake_runtime.outbound_calls)
+        == previous_preview_calls
+    )
 
 
 def test_protected_api_errors_are_actionable_and_clear_stale_cashflow_success(fake_runtime):

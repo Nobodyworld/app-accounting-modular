@@ -9,8 +9,8 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 
 ## Highlights
 
-- Public Streamlit review flow for financial snapshots, source evidence, freshness, journal-control status, and scenario-plan previews.
-- Authenticated tenant-scoped budget, cashflow, FX, and market review utilities.
+- Public/local Streamlit review flow for financial snapshots, source evidence, freshness, and journal-control status.
+- Authenticated organization-scoped scenario-plan, budget, cashflow, FX, and market review workflows.
 - Accountant-ready result panels with structured metrics, tables, partial/empty/no-change states, sanitized details, and CSV exports.
 - Provider-swappable FX, commodity, tax, market, macroeconomic, and bank-feed demonstration adapters.
 - Balanced journal-control examples, account traceability, and authenticated audit attribution.
@@ -30,6 +30,7 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - PR #96 hardened both containers with non-root users, read-only root filesystems, capability drops, `no-new-privileges`, and verified writable paths.
 - Issue #95 / PR #97 modernizes the remaining Streamlit width API and records responsive/accessibility evidence.
 - PR #97 caps accountant-result metrics at two per row after tablet acceptance showed currency values truncating in a four-column row.
+- Issue #98 aligns Scenario Plan Review with the existing protected API boundary and clears its rendered result on session changes.
 
 ## Validation
 
@@ -50,7 +51,7 @@ Hosted CI additionally validates Python 3.12, 3.13, and 3.14, builds and starts 
 Use [`setup.md`](setup.md) for supported local and container workflows. The primary review surfaces are:
 
 - FastAPI service and OpenAPI documentation;
-- Streamlit public snapshot/scenario review plus authenticated utility panels; and
+- Streamlit public/local Snapshot Review plus authenticated Scenario Plan Review and utility panels; and
 - `cli.macli` operational commands.
 
 Demo providers use controlled sample data unless external credentials are configured.
