@@ -239,8 +239,10 @@ def _render_result_metrics(metrics: tuple[tuple[str, str], ...]) -> None:
 
     if not metrics:
         return
-    for column, (label, value) in zip(st.columns(len(metrics)), metrics, strict=True):
-        column.metric(label, value)
+    for row_start in range(0, len(metrics), 2):
+        row_metrics = metrics[row_start : row_start + 2]
+        for column, (label, value) in zip(st.columns(len(row_metrics)), row_metrics, strict=True):
+            column.metric(label, value)
 
 
 def _render_budget_result(payload: Any) -> None:
@@ -258,15 +260,19 @@ def _render_budget_result(payload: Any) -> None:
     st.markdown("##### Report lines")
     report_rows = [{key: value for key, value in row.items() if key != "Forecast"} for row in view.rows]
     if report_rows:
-        st.dataframe(pd.DataFrame(report_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(report_rows), width="stretch", hide_index=True)
         forecast_rows = [
-            {"Account code": row["Account code"], "Period": row["Period"], "Forecast": row["Forecast"]}
+            {
+                "Account code": row["Account code"],
+                "Period": row["Period"],
+                "Forecast": json.dumps(row["Forecast"], default=str, ensure_ascii=False),
+            }
             for row in view.rows
             if row["Forecast"]
         ]
         if forecast_rows:
             with st.expander("Forecast detail", expanded=False):
-                st.dataframe(pd.DataFrame(forecast_rows), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(forecast_rows), width="stretch", hide_index=True)
 
     with st.expander("Budget report details", expanded=False):
         st.json(view.metadata)
@@ -294,13 +300,13 @@ def _render_cashflow_result(payload: Any) -> None:
 
     st.markdown("##### Historical activity")
     if view.historical_rows:
-        st.dataframe(pd.DataFrame(view.historical_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(view.historical_rows), width="stretch", hide_index=True)
     else:
         st.info("No historical cashflow activity was returned.")
 
     st.markdown("##### Forecast")
     if view.forecast_rows:
-        st.dataframe(pd.DataFrame(view.forecast_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(view.forecast_rows), width="stretch", hide_index=True)
     else:
         st.info("No forecast cashflow periods were returned.")
 
@@ -326,10 +332,13 @@ def _render_sync_result(view: SyncResultView, *, details_label: str) -> None:
     if view.state == "empty":
         return
 
-    count_column, provider_column, organization_column = st.columns(3)
-    count_column.metric("Synced records", view.synced_count)
-    provider_column.metric("Provider", view.provider or "Not provided")
-    organization_column.metric("Organization ID", view.organization_id or "Not provided")
+    _render_result_metrics(
+        (
+            ("Synced records", str(view.synced_count)),
+            ("Provider", view.provider or "Not provided"),
+            ("Organization ID", str(view.organization_id or "Not provided")),
+        )
+    )
     st.caption(
         f"Provider key: {view.provider_key or 'Not provided'} · "
         f"{view.subject_label}: {view.subject_value or 'Not provided'} · "
@@ -369,7 +378,7 @@ def _render_snapshot_tables(payload: dict[str, Any]) -> None:
                 if isinstance(row, dict)
             ]
         )
-        st.dataframe(fx_frame, use_container_width=True)
+        st.dataframe(fx_frame, width="stretch")
     else:
         st.warning("No FX rates were returned. Check provider availability and network access.")
 
@@ -386,7 +395,7 @@ def _render_snapshot_tables(payload: dict[str, Any]) -> None:
                 if isinstance(row, dict)
             ]
         )
-        st.dataframe(commodity_frame, use_container_width=True)
+        st.dataframe(commodity_frame, width="stretch")
     else:
         st.warning("No commodity quotes were returned for the selected symbols.")
 
@@ -404,7 +413,7 @@ def _render_snapshot_tables(payload: dict[str, Any]) -> None:
                 if isinstance(row, dict)
             ]
         )
-        st.dataframe(tax_frame, use_container_width=True)
+        st.dataframe(tax_frame, width="stretch")
     else:
         st.warning("No tax rules were returned for the selected jurisdictions.")
 
@@ -422,11 +431,16 @@ with st.sidebar:
         st.success("Authenticated")
         st.write(f"Authenticated email: {st.session_state.get(AUTH_EMAIL_KEY, 'Unknown')}")
         st.write(f"Organization ID: {st.session_state.get(ORGANIZATION_ID_KEY, 'Unknown')}")
-        st.caption("This organization scope applies to every protected Review Utilities request.")
+        st.caption(
+            "This organization scope applies to Scenario Plan Review and every protected Review Utilities request."
+        )
         st.button("Log out", key="api_logout_button", on_click=_logout_api_session)
     else:
-        st.info("Protected utilities locked")
-        st.caption("Snapshot Review and Scenario Plan Preview remain public local evidence workflows.")
+        st.info("Protected workflows locked")
+        st.caption(
+            "Snapshot Review remains public/local. Scenario Plan Review and Review Utilities "
+            "require sign-in and a positive organization ID."
+        )
         login_error = st.session_state.get("api_login_error")
         if isinstance(login_error, str) and login_error:
             st.error(login_error)
@@ -440,10 +454,15 @@ access_token = st.session_state.get(ACCESS_TOKEN_KEY)
 organization_id = st.session_state.get(ORGANIZATION_ID_KEY)
 protected_ready = authenticated_workspace_ready(access_token, organization_id)
 headers = auth_headers(access_token)
+protected_action_help = (
+    "Sign in through API Session with a positive organization ID to enable protected workflows."
+    if not protected_ready
+    else None
+)
 
 st.info(
-    "Snapshot Review is a public/local evidence workflow. Scenario Plan Preview is public. "
-    "Review Utilities require an authenticated API session and organization scope."
+    "Snapshot Review is a public/local evidence workflow. Scenario Plan Review and Review "
+    "Utilities require an authenticated API session and positive organization ID."
 )
 
 health_data, health_error = _load_health()
@@ -479,7 +498,7 @@ with snapshot_tab:
                 for key, meta in sorted(providers_by_key.items())
             ]
         )
-        st.dataframe(provider_frame, use_container_width=True)
+        st.dataframe(provider_frame, width="stretch")
 
     left, right = st.columns([3, 2])
     with left:
@@ -632,7 +651,7 @@ with snapshot_tab:
                     }
                 )
         if provider_rows:
-            st.dataframe(pd.DataFrame(provider_rows), use_container_width=True)
+            st.dataframe(pd.DataFrame(provider_rows), width="stretch")
         else:
             st.warning("Provider provenance is not available for this run.")
 
@@ -652,7 +671,7 @@ with snapshot_tab:
                     }
                 )
             if cache_rows:
-                st.dataframe(pd.DataFrame(cache_rows), use_container_width=True)
+                st.dataframe(pd.DataFrame(cache_rows), width="stretch")
 
         st.markdown("#### Health and readiness state")
         health_cols = st.columns(2)
@@ -681,7 +700,7 @@ with snapshot_tab:
                     if isinstance(row, dict)
                 ]
             )
-            st.dataframe(report_frame, use_container_width=True)
+            st.dataframe(report_frame, width="stretch")
 
         st.markdown("#### Journal-control status")
         journal_status = _journal_control_status()
@@ -716,9 +735,7 @@ with utility_tab:
         "organization scope. Budget CSV preview and template behavior remain local."
     )
     if not protected_ready:
-        st.warning(
-            "Protected utilities locked. Sign in through API Session with a positive organization ID to continue."
-        )
+        st.warning(f"Protected utilities locked. {protected_action_help}")
     else:
         st.success("Protected utilities ready for the authenticated organization scope.")
 
@@ -760,7 +777,7 @@ with utility_tab:
 
         preview_df = st.session_state.get("uploaded_budget_preview")
         if isinstance(preview_df, pd.DataFrame):
-            st.dataframe(preview_df, use_container_width=True)
+            st.dataframe(preview_df, width="stretch")
 
         budget_id = st.number_input("Budget ID", min_value=1, step=1, key="budget_id_input")
         budget_horizon = st.number_input(
@@ -768,7 +785,12 @@ with utility_tab:
         )
         budget_refresh = st.checkbox("Force refresh", value=False, key="budget_refresh_toggle")
 
-        if st.button("Generate Budget Report", key="budget_report_button", disabled=not protected_ready):
+        if st.button(
+            "Generate Budget Report",
+            key="budget_report_button",
+            disabled=not protected_ready,
+            help=protected_action_help,
+        ):
             try:
                 budget_params = {
                     "budget_id": int(budget_id),
@@ -812,7 +834,12 @@ with utility_tab:
         )
         cashflow_refresh = st.checkbox("Force refresh", value=True, key="cashflow_refresh_toggle")
 
-        if st.button("Generate Cashflow Forecast", key="cashflow_report_button", disabled=not protected_ready):
+        if st.button(
+            "Generate Cashflow Forecast",
+            key="cashflow_report_button",
+            disabled=not protected_ready,
+            help=protected_action_help,
+        ):
             try:
                 cashflow_params = {
                     "organization_id": int(organization_id),
@@ -868,7 +895,17 @@ with utility_tab:
             st.info("No FX providers configured on the API")
 
         can_sync_fx = protected_ready and provider_key is not None and fx_currency_error is None
-        if st.button("Sync FX Now", disabled=not can_sync_fx, key="fx_sync_button"):
+        fx_action_help = protected_action_help
+        if protected_ready and provider_key is None:
+            fx_action_help = "Configure an FX provider before synchronizing rates."
+        elif protected_ready and fx_currency_error:
+            fx_action_help = fx_currency_error
+        if st.button(
+            "Sync FX Now",
+            disabled=not can_sync_fx,
+            key="fx_sync_button",
+            help=fx_action_help,
+        ):
             try:
                 fx_sync_params: dict[str, Any] = {
                     "organization_id": int(organization_id),
@@ -927,7 +964,19 @@ with utility_tab:
         can_sync_market = (
             protected_ready and market_provider is not None and bool(normalized_symbol) and not market_date_error
         )
-        if st.button("Sync Prices", disabled=not can_sync_market, key="market_sync_button"):
+        market_action_help = protected_action_help
+        if protected_ready and market_provider is None:
+            market_action_help = "Configure a market provider before synchronizing prices."
+        elif protected_ready and not normalized_symbol:
+            market_action_help = "Enter a market symbol before synchronizing prices."
+        elif protected_ready and market_date_error:
+            market_action_help = market_date_error
+        if st.button(
+            "Sync Prices",
+            disabled=not can_sync_market,
+            key="market_sync_button",
+            help=market_action_help,
+        ):
             try:
                 market_sync_params: dict[str, Any] = {
                     "organization_id": int(organization_id),
@@ -966,7 +1015,15 @@ with utility_tab:
 
 with plan_tab:
     st.subheader("Scenario Plan Review")
-    st.caption("Upload JSON or TOML plans to review scenario coverage before running scenario batches.")
+    st.caption(
+        "Upload JSON or TOML plans locally, then use the authenticated API session and its "
+        "organization scope to review scenario coverage."
+    )
+    if not protected_ready:
+        st.warning(f"Scenario Plan Review locked. {protected_action_help}")
+    else:
+        st.success("Scenario Plan Review ready for the authenticated organization scope.")
+
     uploaded_plan = st.file_uploader(
         "Scenario plan",
         type=["json", "toml", "tml"],
@@ -976,32 +1033,67 @@ with plan_tab:
 
     if uploaded_plan is not None:
         try:
-            st.session_state["scenario_plan_bytes"] = uploaded_plan.getvalue()
-            st.session_state["scenario_plan_name"] = uploaded_plan.name
+            uploaded_plan_bytes = uploaded_plan.getvalue()
+            if uploaded_plan_bytes != st.session_state.get(
+                "scenario_plan_bytes"
+            ) or uploaded_plan.name != st.session_state.get("scenario_plan_name"):
+                st.session_state["scenario_plan_bytes"] = uploaded_plan_bytes
+                st.session_state["scenario_plan_name"] = uploaded_plan.name
+                st.session_state.pop("scenario_plan_preview", None)
         except Exception as exc:
             st.error(f"Failed to read uploaded file: {exc}")
 
     stored_plan = st.session_state.get("scenario_plan_bytes")
     stored_plan_name = st.session_state.get("scenario_plan_name", "scenario_plan.json")
+    scenario_action_help = protected_action_help
+    if protected_ready and not stored_plan:
+        scenario_action_help = "Upload a scenario plan before requesting a preview."
 
-    if st.button("Preview plan", key="scenario_plan_preview_button"):
-        if not stored_plan:
-            st.warning("Upload a scenario plan before requesting a preview.")
+    preview_requested = st.button(
+        "Preview plan",
+        key="scenario_plan_preview_button",
+        disabled=not (protected_ready and bool(stored_plan)),
+        help=scenario_action_help,
+    )
+    if preview_requested and not protected_ready:
+        st.session_state.pop("scenario_plan_preview", None)
+        st.warning(protected_action_help)
+    elif preview_requested and not stored_plan:
+        st.session_state.pop("scenario_plan_preview", None)
+        st.warning("Upload a scenario plan before requesting a preview.")
+    elif preview_requested:
+        parsed_plan, error = _parse_plan_bytes(stored_plan, stored_plan_name)
+        if error:
+            st.session_state.pop("scenario_plan_preview", None)
+            st.error(f"Plan parsing failed: {error}")
+        elif not isinstance(parsed_plan, dict):
+            st.session_state.pop("scenario_plan_preview", None)
+            st.error("Scenario plans must define a JSON or TOML object.")
         else:
-            parsed_plan, error = _parse_plan_bytes(stored_plan, stored_plan_name)
-            if error:
-                st.error(f"Plan parsing failed: {error}")
-            elif not isinstance(parsed_plan, dict):
-                st.error("Scenario plans must define a JSON or TOML object.")
+            try:
+                response = requests.post(
+                    f"{API}/snapshot/plans/preview",
+                    json=parsed_plan,
+                    headers=headers,
+                    timeout=30,
+                )
+            except requests.RequestException:  # pragma: no cover - runtime feedback
+                preview_payload = None
+                preview_error = "Scenario Plan Review service unavailable. Try again when the API is reachable."
+            except Exception:  # pragma: no cover - defensive UI boundary
+                preview_payload = None
+                preview_error = "Scenario Plan Review request could not be completed."
             else:
-                try:
-                    response = requests.post(f"{API}/snapshot/plans/preview", json=parsed_plan, timeout=30)
-                    response.raise_for_status()
-                except Exception as exc:  # pragma: no cover - runtime feedback
-                    st.error(f"Failed to preview plan: {exc}")
-                else:
-                    st.session_state["scenario_plan_preview"] = response.json()
-                    st.success("Plan preview generated")
+                preview_payload, preview_error = _protected_response_payload(response)
+                if preview_error is None and not isinstance(preview_payload, dict):
+                    preview_payload, preview_error = None, "API response was malformed."
+
+            if preview_error:
+                st.session_state.pop("scenario_plan_preview", None)
+                st.error(f"Scenario plan preview unavailable: {preview_error}")
+            else:
+                st.session_state["scenario_plan_preview"] = preview_payload
+                st.success("Plan preview generated")
 
     preview_payload = st.session_state.get("scenario_plan_preview")
     if isinstance(preview_payload, dict):

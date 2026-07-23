@@ -127,11 +127,12 @@ def test_api_error_detail_falls_back_to_text_and_status() -> None:
     assert api_error_detail(DummyResponse(503, ValueError("invalid json"))) == "Request failed with status 503"
 
 
-def test_clear_protected_utility_state_preserves_public_workflows() -> None:
+def test_clear_protected_utility_state_preserves_public_and_local_input_state() -> None:
     state: dict[str, Any] = {
         **{key: {"tenant": 7} for key in PROTECTED_UTILITY_STATE_KEYS},
         "snapshot_controls_payload": {"public": True},
-        "scenario_plan_preview": {"scenario_count": 1},
+        "scenario_plan_bytes": b'{"scenarios": []}',
+        "scenario_plan_name": "retained-plan.json",
         "uploaded_budget_preview": "local-preview",
     }
 
@@ -140,7 +141,8 @@ def test_clear_protected_utility_state_preserves_public_workflows() -> None:
     assert all(key not in state for key in PROTECTED_UTILITY_STATE_KEYS)
     assert state == {
         "snapshot_controls_payload": {"public": True},
-        "scenario_plan_preview": {"scenario_count": 1},
+        "scenario_plan_bytes": b'{"scenarios": []}',
+        "scenario_plan_name": "retained-plan.json",
         "uploaded_budget_preview": "local-preview",
     }
 
@@ -153,6 +155,9 @@ def test_store_api_session_purges_prior_tenant_state_before_organization_change(
         ORGANIZATION_ID_KEY: 7,
         "cashflow_report_payload": {"organization_id": 7},
         "budget_report_error": "organization 7 error",
+        "scenario_plan_preview": {"scenario_count": 1},
+        "scenario_plan_bytes": b'{"scenarios": []}',
+        "scenario_plan_name": "retained-plan.json",
         "snapshot_base_input": "EUR",
     }
     token_value = "-".join(("new", "session", "token"))
@@ -166,6 +171,9 @@ def test_store_api_session_purges_prior_tenant_state_before_organization_change(
     assert state[ORGANIZATION_ID_KEY] == 12
     assert "cashflow_report_payload" not in state
     assert "budget_report_error" not in state
+    assert "scenario_plan_preview" not in state
+    assert state["scenario_plan_bytes"] == b'{"scenarios": []}'
+    assert state["scenario_plan_name"] == "retained-plan.json"
     assert state["snapshot_base_input"] == "EUR"
 
 
@@ -174,7 +182,11 @@ def test_store_and_clear_api_session_do_not_store_passwords_or_tenant_results() 
         "unrelated": "keep",
         "cashflow_report_payload": {"organization_id": 7},
         "market_sync_error": "stale tenant error",
+        "scenario_plan_preview": {"scenario_count": 1},
+        "scenario_plan_bytes": b'{"scenarios": []}',
+        "scenario_plan_name": "retained-plan.json",
         "snapshot_base_input": "EUR",
+        "snapshot_controls_payload": {"public": True},
     }
     token_value = "-".join(("session", "token"))
     result = ApiLoginResult(access_token=token_value, token_type="bearer", session_id="session")
@@ -188,12 +200,17 @@ def test_store_and_clear_api_session_do_not_store_passwords_or_tenant_results() 
     assert "password" not in state
     assert "cashflow_report_payload" not in state
     assert "market_sync_error" not in state
+    assert "scenario_plan_preview" not in state
 
     state["budget_report_payload"] = {"organization_id": 7}
     state["fx_sync_error"] = "stale tenant error"
+    state["scenario_plan_preview"] = {"scenario_count": 2}
     clear_api_session(state)
 
     assert state == {
         "unrelated": "keep",
+        "scenario_plan_bytes": b'{"scenarios": []}',
+        "scenario_plan_name": "retained-plan.json",
         "snapshot_base_input": "EUR",
+        "snapshot_controls_payload": {"public": True},
     }
