@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 STREAMLIT_APP = Path(__file__).resolve().parents[1] / "src" / "apps" / "web" / "app.py"
 
 
@@ -42,3 +41,18 @@ def test_disabled_protected_actions_explain_their_blocker() -> None:
     assert "Configure an FX provider before synchronizing rates." in source
     assert "Configure a market provider before synchronizing prices." in source
     assert "Enter a market symbol before synchronizing prices." in source
+
+
+def test_result_metrics_use_two_column_rows_for_responsive_readability() -> None:
+    source = STREAMLIT_APP.read_text(encoding="utf-8")
+
+    assert "for row_start in range(0, len(metrics), 2):" in source
+    assert "st.columns(len(row_metrics))" in source
+    assert source.count("_render_result_metrics(") == 4
+    assert "count_column, provider_column, organization_column = st.columns(3)" not in source
+
+
+def test_budget_forecast_details_are_serialized_for_arrow_compatibility() -> None:
+    source = STREAMLIT_APP.read_text(encoding="utf-8")
+
+    assert '"Forecast": json.dumps(row["Forecast"], default=str, ensure_ascii=False)' in source

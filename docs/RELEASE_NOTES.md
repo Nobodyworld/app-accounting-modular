@@ -29,6 +29,7 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - PR #94 bound audit actor identity to the authenticated principal and authorized organization.
 - PR #96 hardened both containers with non-root users, read-only root filesystems, capability drops, `no-new-privileges`, and verified writable paths.
 - Issue #95 / PR #97 modernizes the remaining Streamlit width API and records responsive/accessibility evidence.
+- PR #97 caps accountant-result metrics at two per row after tablet acceptance showed currency values truncating in a four-column row.
 
 ## Validation
 
@@ -61,7 +62,7 @@ Demo providers use controlled sample data unless external credentials are config
 - The React directory is experimental and is not part of the validated runtime.
 - OTLP export remains optional and requires the OpenTelemetry extras described in the operations documentation.
 - Provider catalog persistence and several legacy TODOs remain future work.
-- The current primary screenshot emphasizes the public snapshot workflow and does not fully depict the authenticated result panels; PR #97 must either refresh it or document its retained scope explicitly.
+- The retained primary screenshot represents the public Snapshot Review flow; it does not depict the authenticated Review Utilities panels.
 
 ## Release Decision
 

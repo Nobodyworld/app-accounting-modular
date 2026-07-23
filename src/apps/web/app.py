@@ -239,8 +239,10 @@ def _render_result_metrics(metrics: tuple[tuple[str, str], ...]) -> None:
 
     if not metrics:
         return
-    for column, (label, value) in zip(st.columns(len(metrics)), metrics, strict=True):
-        column.metric(label, value)
+    for row_start in range(0, len(metrics), 2):
+        row_metrics = metrics[row_start : row_start + 2]
+        for column, (label, value) in zip(st.columns(len(row_metrics)), row_metrics, strict=True):
+            column.metric(label, value)
 
 
 def _render_budget_result(payload: Any) -> None:
@@ -260,7 +262,11 @@ def _render_budget_result(payload: Any) -> None:
     if report_rows:
         st.dataframe(pd.DataFrame(report_rows), width="stretch", hide_index=True)
         forecast_rows = [
-            {"Account code": row["Account code"], "Period": row["Period"], "Forecast": row["Forecast"]}
+            {
+                "Account code": row["Account code"],
+                "Period": row["Period"],
+                "Forecast": json.dumps(row["Forecast"], default=str, ensure_ascii=False),
+            }
             for row in view.rows
             if row["Forecast"]
         ]
@@ -326,10 +332,13 @@ def _render_sync_result(view: SyncResultView, *, details_label: str) -> None:
     if view.state == "empty":
         return
 
-    count_column, provider_column, organization_column = st.columns(3)
-    count_column.metric("Synced records", view.synced_count)
-    provider_column.metric("Provider", view.provider or "Not provided")
-    organization_column.metric("Organization ID", view.organization_id or "Not provided")
+    _render_result_metrics(
+        (
+            ("Synced records", str(view.synced_count)),
+            ("Provider", view.provider or "Not provided"),
+            ("Organization ID", str(view.organization_id or "Not provided")),
+        )
+    )
     st.caption(
         f"Provider key: {view.provider_key or 'Not provided'} · "
         f"{view.subject_label}: {view.subject_value or 'Not provided'} · "
