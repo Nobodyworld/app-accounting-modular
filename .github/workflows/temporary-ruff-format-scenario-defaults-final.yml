@@ -1,0 +1,40 @@
+name: Temporary final Ruff format scenario defaults
+
+on:
+  push:
+    branches:
+      - bug/scenario-plan-api-defaults
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout issue branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: bug/scenario-plan-api-defaults
+          persist-credentials: true
+
+      - name: Install repository formatter
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Apply Ruff formatting
+        run: |
+          python -m ruff format src/apps/api/schemas.py tests/test_snapshot_api.py tests/test_scenario_plan_api_defaults.py
+          python -m ruff format --check src/apps/api/schemas.py tests/test_snapshot_api.py tests/test_scenario_plan_api_defaults.py
+
+      - name: Commit formatting and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temporary-ruff-format-scenario-defaults-final.yml
+          git add src/apps/api/schemas.py tests/test_snapshot_api.py tests/test_scenario_plan_api_defaults.py
+          git diff --cached --check
+          git commit -m "style: finalize scenario plan defaults formatting"
+          git push origin HEAD:bug/scenario-plan-api-defaults
