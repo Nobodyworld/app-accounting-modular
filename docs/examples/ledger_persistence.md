@@ -17,7 +17,6 @@ transaction = {
     ],
 }
 
-
 def to_quickbooks_payload(txn: dict) -> dict:
     return {
         "TxnDate": txn["date"],
@@ -35,7 +34,6 @@ def to_quickbooks_payload(txn: dict) -> dict:
             for p in txn["postings"]
         ],
     }
-
 
 payload = to_quickbooks_payload(transaction)
 requests.post(
