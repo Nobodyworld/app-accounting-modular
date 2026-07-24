@@ -1,5 +1,7 @@
+import json
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from apps.api import main as api_main
 from apps.api.models.models import User
@@ -238,3 +240,75 @@ def test_snapshot_plan_preview_endpoint(monkeypatch) -> None:
         assert payload["plan"]["metadata"]["name"] == "QA Plan"
         assert payload["summary"]["scenario_count"] == 2
         assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]
+
+
+
+def _stub_plan_user() -> User:
+    return User(
+        id=2,
+        email="plan-defaults@example.com",
+        password_hash="stub",
+        is_active=True,
+    )
+
+
+def test_snapshot_plan_preview_accepts_checked_in_defaults_example(monkeypatch) -> None:
+    app = _create_app_without_db(monkeypatch)
+    app.dependency_overrides[get_current_user] = _stub_plan_user
+    example_path = (
+        Path(__file__).resolve().parents[1]
+        / "docs"
+        / "examples"
+        / "scenario-plan.json"
+    )
+    request_payload = json.loads(example_path.read_text(encoding="utf-8"))
+
+    with TestClient(app) as client:
+        response = client.post("/snapshot/plans/preview", json=request_payload)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["plan"]["metadata"]["name"] == "demo_portfolio"
+    assert payload["summary"]["scenario_count"] == 2
+    assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]
+    assert payload["plan"]["scenarios"][0]["base_currency"] == "USD"
+    assert payload["plan"]["scenarios"][1]["base_currency"] == "EUR"
+    assert payload["plan"]["scenarios"][1]["jurisdictions"] is None
+
+
+def test_snapshot_plan_preview_rejects_missing_base_without_default(monkeypatch) -> None:
+    app = _create_app_without_db(monkeypatch)
+    app.dependency_overrides[get_current_user] = _stub_plan_user
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/snapshot/plans/preview",
+            json={
+                "metadata": {"name": "Missing Base"},
+                "scenarios": [{"name": "baseline"}],
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "base_currency must be a non-empty string"
+
+
+def test_snapshot_plan_preview_rejects_unsupported_default_keys(monkeypatch) -> None:
+    app = _create_app_without_db(monkeypatch)
+    app.dependency_overrides[get_current_user] = _stub_plan_user
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/snapshot/plans/preview",
+            json={
+                "metadata": {"name": "Unsupported Defaults"},
+                "defaults": {
+                    "base_currency": "USD",
+                    "provider_key": "fx:stub",
+                },
+                "scenarios": [{"name": "baseline"}],
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Unsupported default field 'provider_key'"
