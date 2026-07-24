@@ -53,6 +53,9 @@ def test_plan_payload_applies_defaults_and_preserves_scenario_overrides() -> Non
         }
     )
 
+    assert payload.scenarios[0].to_mapping() == {"name": "defaulted"}
+    assert payload.scenarios[1].to_mapping()["jurisdictions"] is None
+
     plan = payload.to_plan()
 
     assert plan.scenarios[0].base_currency == "USD"
