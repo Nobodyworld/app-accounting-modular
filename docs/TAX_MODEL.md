@@ -40,7 +40,7 @@ TaxRule(
     scope="vat",
     expression=Decimal("0.21"),
     description="EU Standard VAT Rate",
-    effective_from=date(2024, 1, 1),
+    effective_from=date(2024, 1, 1)
 )
 ```
 
@@ -54,11 +54,11 @@ TaxRule(
         "brackets": [
             {"min": 0, "max": 100000, "rate": 0.15},
             {"min": 100000, "max": 500000, "rate": 0.25},
-            {"min": 500000, "rate": 0.35},
-        ],
+            {"min": 500000, "rate": 0.35}
+        ]
     },
     description="US Federal Corporate Income Tax",
-    effective_from=date(2024, 1, 1),
+    effective_from=date(2024, 1, 1)
 )
 ```
 
