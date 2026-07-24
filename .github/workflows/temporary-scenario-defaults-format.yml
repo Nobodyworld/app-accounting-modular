@@ -1,0 +1,44 @@
+name: Temporary scenario defaults format fix
+
+on:
+  push:
+    branches:
+      - bug/scenario-plan-api-defaults
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout issue branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: bug/scenario-plan-api-defaults
+          persist-credentials: true
+
+      - name: Normalize test spacing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_snapshot_api.py")
+          source = path.read_text(encoding="utf-8")
+          old = '        assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]\n\n\n\ndef _stub_plan_user()'
+          new = '        assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]\n\n\ndef _stub_plan_user()'
+          if source.count(old) != 1:
+              raise SystemExit("Expected extra-spacing pattern was not found exactly once")
+          path.write_text(source.replace(old, new), encoding="utf-8")
+          PY
+
+      - name: Commit fix and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temporary-scenario-defaults-format.yml
+          git add tests/test_snapshot_api.py
+          git diff --cached --check
+          git commit -m "style: normalize scenario plan API tests"
+          git push origin HEAD:bug/scenario-plan-api-defaults
