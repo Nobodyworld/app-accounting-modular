@@ -27,9 +27,11 @@ from apps.modular_accounting.domain import TaxRule
 
 fx = InMemoryFXAdapter({"USD": Decimal("1.08")})
 commodities = InMemoryCommodityAdapter({"XAU": Decimal("2029.12")}, currency="EUR")
-taxes = InMemoryTaxAdapter([
-    TaxRule("eu", Decimal("0.21"), "EU VAT", effective_from=date(2024, 1, 1)),
-])
+taxes = InMemoryTaxAdapter(
+    [
+        TaxRule("eu", Decimal("0.21"), "EU VAT", effective_from=date(2024, 1, 1)),
+    ]
+)
 
 # Positional arguments
 service = DataSnapshotService(fx, commodities, taxes)

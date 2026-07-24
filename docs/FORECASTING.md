@@ -235,13 +235,12 @@ Response (counterfactual vs observed):
 ```python
 import requests
 
-response = requests.post('http://localhost:8000/forecast/series', json={
-    'series': [[1640995200, 100.0], [1641081600, 105.0], ...],
-    'horizon': 7,
-    'model': 'arima'
-})
+response = requests.post(
+    "http://localhost:8000/forecast/series",
+    json={"series": [[1640995200, 100.0], [1641081600, 105.0], ...], "horizon": 7, "model": "arima"},
+)
 
-forecast = response.json()['forecast']
+forecast = response.json()["forecast"]
 ```
 
 ### CLI Usage
