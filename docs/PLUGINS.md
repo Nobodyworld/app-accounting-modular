@@ -32,7 +32,6 @@ import requests
 from typing import Iterable
 from apps.modular_accounting.domain import FXRate, Money
 
-
 class ECBProvider:
     def get_rates(self, base_currency: str) -> Iterable[FXRate]:
         # Fetch rates from ECB API
@@ -40,8 +39,11 @@ class ECBProvider:
         data = response.json()
 
         for currency, rate in data.items():
-            yield FXRate(currency=currency, rate=Money(amount=rate, currency=base_currency), as_of=datetime.now())
-
+            yield FXRate(
+                currency=currency,
+                rate=Money(amount=rate, currency=base_currency),
+                as_of=datetime.now()
+            )
 
 def provider() -> ECBProvider:
     return ECBProvider()
@@ -53,15 +55,17 @@ def provider() -> ECBProvider:
 # src/plugins/commodity_gold/provider.py
 from apps.modular_accounting.domain import CommodityQuote, Money
 
-
 class GoldPriceProvider:
     def get_quotes(self, symbols: list[str]) -> Iterable[CommodityQuote]:
         for symbol in symbols:
             if symbol == "XAU":
                 # Fetch gold price
                 price = self._fetch_gold_price()
-                yield CommodityQuote(symbol=symbol, price=Money(amount=price, currency="USD"), as_of=datetime.now())
-
+                yield CommodityQuote(
+                    symbol=symbol,
+                    price=Money(amount=price, currency="USD"),
+                    as_of=datetime.now()
+                )
 
 def provider() -> GoldPriceProvider:
     return GoldPriceProvider()
@@ -82,7 +86,11 @@ Configure which plugins to use in your settings:
 
 ```python
 # In config.py or environment variables
-DEFAULT_ALLOWED_PROVIDERS = {"fx": ["ecb"], "commodity": ["gold"], "tax": ["oecd"]}
+DEFAULT_ALLOWED_PROVIDERS = {
+    "fx": ["ecb"],
+    "commodity": ["gold"],
+    "tax": ["oecd"]
+}
 ```
 
 ## Best Practices
