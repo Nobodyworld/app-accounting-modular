@@ -242,7 +242,6 @@ def test_snapshot_plan_preview_endpoint(monkeypatch) -> None:
         assert sorted(payload["summary"]["base_currencies"]) == ["EUR", "USD"]
 
 
-
 def _stub_plan_user() -> User:
     return User(
         id=2,
