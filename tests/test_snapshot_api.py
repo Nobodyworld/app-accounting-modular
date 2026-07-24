@@ -254,12 +254,7 @@ def _stub_plan_user() -> User:
 def test_snapshot_plan_preview_accepts_checked_in_defaults_example(monkeypatch) -> None:
     app = _create_app_without_db(monkeypatch)
     app.dependency_overrides[get_current_user] = _stub_plan_user
-    example_path = (
-        Path(__file__).resolve().parents[1]
-        / "docs"
-        / "examples"
-        / "scenario-plan.json"
-    )
+    example_path = Path(__file__).resolve().parents[1] / "docs" / "examples" / "scenario-plan.json"
     request_payload = json.loads(example_path.read_text(encoding="utf-8"))
 
     with TestClient(app) as client:
