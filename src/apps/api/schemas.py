@@ -65,6 +65,7 @@ __all__ = [
     "SnapshotDiagnosticsSchema",
     "TaxRuleSchema",
     "ScenarioDefinition",
+    "ScenarioPlanDefinition",
     "ScenarioBatchRequest",
     "ScenarioResultSchema",
     "ScenarioSummarySchema",
@@ -596,6 +597,23 @@ class ScenarioDefinition(BaseModel):
         }
 
 
+class ScenarioPlanDefinition(BaseModel):
+    """Scenario input whose defaultable fields may be supplied by a plan."""
+
+    name: str = Field(min_length=1)
+    base_currency: str | None = None
+    commodity_symbols: list[str] | None = None
+    jurisdictions: list[str] | None = None
+    tags: list[str] | None = None
+
+    def to_mapping(self) -> dict[str, object]:
+        payload: dict[str, object] = {"name": self.name}
+        for field_name in ("base_currency", "commodity_symbols", "jurisdictions", "tags"):
+            if field_name in self.model_fields_set:
+                payload[field_name] = getattr(self, field_name)
+        return payload
+
+
 class ScenarioBatchRequest(BaseModel):
     """Request payload for executing snapshot scenarios in bulk."""
 
@@ -751,7 +769,7 @@ class ScenarioPlanPayload(BaseModel):
     """Request payload describing a scenario plan for preview."""
 
     metadata: ScenarioPlanMetadataSchema
-    scenarios: list[ScenarioDefinition] = Field(min_length=1)
+    scenarios: list[ScenarioPlanDefinition] = Field(min_length=1)
     defaults: dict[str, object] = Field(default_factory=dict)
 
     @model_validator(mode="after")
