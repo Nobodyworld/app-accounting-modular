@@ -1,0 +1,147 @@
+name: Temporary token type boundary remediation
+
+on:
+  push:
+    branches:
+      - security/reject-refresh-token-access-boundary
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout remediation branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: security/reject-refresh-token-access-boundary
+          persist-credentials: true
+
+      - name: Enforce token type boundaries and add regression tests
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              source = path.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:120]!r}")
+              path.write_text(source.replace(old, new), encoding="utf-8")
+
+          security = Path("src/apps/api/security.py")
+          replace_once(
+              security,
+              '''def _decode_token(token: str) -> dict[str, Any]:
+              try:
+                  decoded = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+                  if not isinstance(decoded, dict):
+                      raise InvalidTokenError("JWT payload must be an object")
+                  return {str(key): value for key, value in decoded.items()}
+              except InvalidTokenError as exc:  # pragma: no cover - library raises numerous subclasses
+                  logger.warning("Failed to decode access token", exc_info=exc)
+                  raise HTTPException(
+                      status_code=status.HTTP_401_UNAUTHORIZED,
+                      detail="Could not validate credentials",
+                      headers={"WWW-Authenticate": "Bearer"},
+                  ) from exc'''.replace("              ", ""),
+              '''def _credentials_exception() -> HTTPException:
+              """Return a fresh generic bearer-credential rejection."""
+
+              return HTTPException(
+                  status_code=status.HTTP_401_UNAUTHORIZED,
+                  detail="Could not validate credentials",
+                  headers={"WWW-Authenticate": "Bearer"},
+              )
+
+
+              def _decode_token(token: str, *, expected_type: str) -> dict[str, Any]:
+              """Decode a JWT and require its declared token type."""
+
+              try:
+                  decoded = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+                  if not isinstance(decoded, dict):
+                      raise InvalidTokenError("JWT payload must be an object")
+                  if decoded.get("type") != expected_type:
+                      raise InvalidTokenError(f"Expected {expected_type} token")
+                  return {str(key): value for key, value in decoded.items()}
+              except InvalidTokenError as exc:  # pragma: no cover - library raises numerous subclasses
+                  logger.warning("Failed to decode %s token", expected_type, exc_info=exc)
+                  raise _credentials_exception() from exc'''.replace("              ", ""),
+          )
+          replace_once(
+              security,
+              '    payload = _decode_token(token)\n',
+              '    payload = _decode_token(token, expected_type="access")\n',
+          )
+
+          tests = Path("tests/test_security_integration.py")
+          replace_once(
+              tests,
+              'from apps.api.security import create_access_token, create_refresh_token, get_password_hash\n',
+              'from apps.api.security import _decode_token, create_access_token, create_refresh_token, get_password_hash\n',
+          )
+          replace_once(
+              tests,
+              'from fastapi.testclient import TestClient\n',
+              'from fastapi import HTTPException\nfrom fastapi.testclient import TestClient\n',
+          )
+          marker = '''def test_refresh_token_generation() -> None:
+              token = create_refresh_token(123)
+              decoded = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+              assert decoded["sub"] == "123"
+              assert decoded["type"] == "refresh"
+              assert "sid" in decoded
+
+
+              '''.replace("              ", "")
+          addition = marker + '''def test_refresh_token_is_rejected_by_protected_route(api_context) -> None:
+              client, ctx, _ = api_context
+              access_claims = jwt.decode(
+                  ctx["tokens"]["admin"],
+                  settings.jwt_secret_key,
+                  algorithms=[settings.jwt_algorithm],
+              )
+              refresh_token = create_refresh_token(int(access_claims["sub"]))
+
+              response = client.get(
+                  "/ledger/trial-balance",
+                  params={"organization_id": ctx["org1_id"]},
+                  headers={"Authorization": f"Bearer {refresh_token}"},
+              )
+
+              assert response.status_code == 401
+              assert response.json()["detail"] == "Could not validate credentials"
+
+
+              def test_access_token_is_rejected_by_refresh_validation(api_context) -> None:
+              _, ctx, _ = api_context
+
+              with pytest.raises(HTTPException) as exc_info:
+                  _decode_token(ctx["tokens"]["admin"], expected_type="refresh")
+
+              assert exc_info.value.status_code == 401
+              assert exc_info.value.detail == "Could not validate credentials"
+
+
+              '''.replace("              ", "")
+          replace_once(tests, marker, addition)
+          PY
+
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m ruff format src/apps/api/security.py tests/test_security_integration.py
+          python -m ruff check src/apps/api/security.py tests/test_security_integration.py
+          pytest -q tests/test_security_integration.py
+
+      - name: Commit remediation and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temporary-token-type-boundary-fix.yml
+          git add src/apps/api/security.py tests/test_security_integration.py
+          git diff --cached --check
+          git commit -m "security: enforce JWT token type boundaries"
+          git push origin HEAD:security/reject-refresh-token-access-boundary
