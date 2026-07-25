@@ -1,4 +1,4 @@
-"""Authenticated API-session helpers for the Streamlit utility workspace."""
+"""Authenticated API-session helpers for the Streamlit protected workspace."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ PROTECTED_UTILITY_STATE_KEYS = (
     "fx_sync_error",
     "market_sync_payload",
     "market_sync_error",
+    "scenario_plan_preview",
 )
 
 
@@ -56,7 +57,7 @@ def auth_headers(access_token: str | None) -> dict[str, str]:
 
 
 def authenticated_workspace_ready(access_token: str | None, organization_id: int | None) -> bool:
-    """Return whether protected utility actions have authentication and tenant scope."""
+    """Return whether protected workspace actions have authentication and organization scope."""
 
     if not (access_token or "").strip():
         return False
@@ -155,7 +156,7 @@ def request_access_token(
 
 
 def clear_protected_utility_state(state: MutableMapping[str, Any]) -> None:
-    """Remove tenant-scoped utility payloads and errors while preserving public state."""
+    """Remove protected workspace results while preserving public and local-input state."""
 
     for key in PROTECTED_UTILITY_STATE_KEYS:
         state.pop(key, None)
@@ -178,7 +179,7 @@ def store_api_session(
 
 
 def clear_api_session(state: MutableMapping[str, Any]) -> None:
-    """Remove authentication, organization scope, and tenant-scoped utility state."""
+    """Remove authentication, organization scope, and protected workspace state."""
 
     clear_protected_utility_state(state)
     for key in (ACCESS_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):

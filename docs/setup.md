@@ -107,6 +107,15 @@ streamlit run src/apps/web/app.py
 
 The interface is available at `http://127.0.0.1:8501` and expects the API at `http://localhost:8000` unless `API_BASE` is overridden.
 
+Snapshot Review is a public/local evidence workflow. Scenario Plan Review and
+Review Utilities require an authenticated API session and a positive
+organization ID. Uploading a scenario-plan file remains local input, while
+requesting its rendered preview uses the protected FastAPI boundary.
+
+The retained primary repository screenshot represents the public Snapshot
+Review flow; it does not depict the authenticated Scenario Plan Review or
+Review Utilities panels.
+
 ### CLI
 
 ```bash
