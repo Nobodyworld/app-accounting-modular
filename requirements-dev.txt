@@ -8,4 +8,4 @@ mypy>=1.11.2,<2.0
 pandas-stubs>=2.2.3.241126
 types-requests>=2.33.0.20260712
 types-passlib>=1.7.7.20240819
-pip-audit==2.9.0
+pip-audit==2.10.1
