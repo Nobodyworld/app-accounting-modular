@@ -25,8 +25,9 @@ that application tree was this report scaffold.
   72.40% branch coverage, 52 focused accounting-control tests, lint, format,
   mypy, dependency resolution, dependency audit, and current-tree secret scan.
 - The all-history Gitleaks scan covered 227 commits and found no leaks.
-- Docker is not installed on the audit host. Local container execution is
-  blocked; exact-head hosted container CI remains required evidence.
+- Docker is not installed on the audit host. Local container execution was
+  blocked, but hosted run `30172787047` passed `container-smoke` on evidence
+  commit `480f8d659fd4c2454174a8162508144df09af5b1`.
 - The repository is not release-ready. Local demonstration remains the only
   documented operating boundary, subject to the open findings and nonproduction
   data/identity restrictions.
@@ -106,7 +107,7 @@ from PyPI. No global tool was installed.
 | Full-history secrets | Gitleaks 8.30.1 | Pass | 227 commits, zero findings |
 | Dependency and supply chain | pip check, pip-audit, workflow/config review | Partial | A87-006 Medium |
 | GitHub configuration | GitHub API/CLI read-only queries | Partial | Ruleset/scan controls recorded; no code-scanning analysis |
-| Container/runtime | Static Compose/Dockerfile tests | Blocked locally | Docker unavailable; hosted CI required |
+| Container/runtime | Static tests and hosted run `30172787047` | Pass with local limitation | Docker unavailable locally; hosted `container-smoke` passed |
 | SBOM | pip-audit CycloneDX JSON in temporary storage | Pass with limitations | 121 components; no hashes/licenses/PURLs |
 | Static analysis | Bandit 1.9.4 plus manual review | Pass with reviewed Low results | 18 Low, no actionable Bandit finding |
 
@@ -458,9 +459,13 @@ published ports, UID/GID 10001, read-only roots, dropped capabilities,
 `no-new-privileges`, `/data` and bounded `/tmp` write paths, and CI teardown.
 
 Local runtime validation is **blocked** because Docker/Compose are not installed.
-No container was started or exposed. API/Streamlit live health, actual runtime
-UID/GID, filesystem writes, capability state, image SBOM, shutdown, and volume
-cleanup require exact-head hosted `container-smoke` evidence.
+No local container was started or exposed. Hosted Actions run `30172787047`
+completed successfully on `480f8d659fd4c2454174a8162508144df09af5b1`;
+its `container-smoke` job validated Compose fail-closed behavior, builds, API
+and Streamlit health, runtime UID/GID 10001, read-only roots, dropped
+capabilities, `no-new-privileges`, declared writable paths, status, shutdown,
+and volume/orphan cleanup. Local independent reproduction and image SBOM remain
+blocked.
 
 ## Findings register
 
@@ -488,8 +493,8 @@ open. Broad remediation is intentionally not mixed into audit PR #105.
 
 ## Unresolved limitations and required follow-up
 
-- Docker/Compose/image SBOM and live container checks are locally blocked.
-- Exact-head hosted CI must finish and be linked after the audit commit is pushed.
+- Docker/Compose/image SBOM and independent live container checks are locally
+  blocked; hosted container runtime evidence passed on evidence commit `480f8d6`.
 - Semgrep, Syft, and CodeQL/code-scanning evidence are absent.
 - No multi-process/distributed rate-limit, concurrency, or production database
   exercise was performed.
@@ -513,8 +518,8 @@ open. Broad remediation is intentionally not mixed into audit PR #105.
 - Medium findings open: **5**
 - Documentation updated: **in progress**
 - Release/deployment statement approved by owner: **no**
-- PR #105 draft and unmerged: **must be reverified after push**
-- Issue #87 open: **must be reverified after push**
+- PR #105 draft and unmerged: **verified after evidence push**
+- Issue #87 open: **verified after evidence push**
 
 This report must remain **In progress**. It does not declare the repository
 release-ready.
