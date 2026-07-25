@@ -53,8 +53,14 @@ jobs:
           )
           replace_once(
               path,
-              '                    "period_start": line.period_start.isoformat(),\n',
-              '                    "period_start": safe_csv_text(line.period_start.isoformat()),\n',
+              '''                    "account_name": safe_csv_text(line.account_name),
+                    "period_start": line.period_start.isoformat(),
+                    "budget_amount": f"{line.budget_amount:.2f}",
+''',
+              '''                    "account_name": safe_csv_text(line.account_name),
+                    "period_start": safe_csv_text(line.period_start.isoformat()),
+                    "budget_amount": f"{line.budget_amount:.2f}",
+''',
           )
           replace_once(
               path,
