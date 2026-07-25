@@ -4,13 +4,17 @@ on:
   push:
     branches:
       - security/neutralize-csv-formulas
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   wire:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event_name == 'push' || github.head_ref == 'security/neutralize-csv-formulas'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout remediation branch
