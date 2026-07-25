@@ -19,6 +19,8 @@ Omission and explicit `null` are distinct. An omitted field inherits its plan de
 
 The checked-in [`examples/scenario-plan.json`](examples/scenario-plan.json) demonstrates a default USD base currency and a scenario-specific EUR override.
 
+Validation still occurs after defaults are merged. A required value that is absent from both the scenario and plan defaults returns `422`, as does an unsupported default key.
+
 ## Direct batch execution
 
 `POST /snapshot/scenarios` does not accept plan defaults. Each scenario continues to use the strict `ScenarioDefinition` contract and must provide its own `base_currency`.
