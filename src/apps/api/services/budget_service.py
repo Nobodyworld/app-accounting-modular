@@ -33,6 +33,7 @@ from ..models.models import (
     Rate,
     Transaction,
 )
+from ..utils.csv_safety import safe_csv_text
 from ..utils.metadata import merge_forecast_diagnostics
 from .forecast_service import ForecastResult, ForecastService
 
@@ -667,9 +668,9 @@ class BudgetService:
             writer.writerow(
                 {
                     "account_id": line.account_id,
-                    "account_code": line.account_code or "",
-                    "account_name": line.account_name,
-                    "period_start": line.period_start.isoformat(),
+                    "account_code": safe_csv_text(line.account_code),
+                    "account_name": safe_csv_text(line.account_name),
+                    "period_start": safe_csv_text(line.period_start.isoformat()),
                     "budget_amount": f"{line.budget_amount:.2f}",
                     "actual_amount": f"{line.actual_amount:.2f}",
                     "variance": f"{line.variance:.2f}",
@@ -685,10 +686,22 @@ class BudgetService:
         writer.writerow(["period", "amount", "type"])
         for period, amount in historical:
             label = period.isoformat() if isinstance(period, date) else str(period)
-            writer.writerow([label, f"{amount:.2f}", "historical"])
+            writer.writerow(
+                [
+                    safe_csv_text(label),
+                    f"{amount:.2f}",
+                    safe_csv_text("historical"),
+                ]
+            )
         if forecast:
             for period, amount in forecast.points:
-                writer.writerow([period, f"{amount:.2f}", "forecast"])
+                writer.writerow(
+                    [
+                        safe_csv_text(period),
+                        f"{amount:.2f}",
+                        safe_csv_text("forecast"),
+                    ]
+                )
         return buffer.getvalue()
 
     @staticmethod

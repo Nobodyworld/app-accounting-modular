@@ -60,9 +60,9 @@ def test_budget_csv_neutralizes_tenant_text_and_preserves_numeric_fields() -> No
 
 def test_cashflow_csv_neutralizes_text_periods_and_preserves_negative_amounts() -> None:
     csv_export = BudgetService._render_cashflow_csv(
-        [("=HYPERLINK(\"https://example.invalid\")", -12.5)],
+        [('=HYPERLINK("https://example.invalid")', -12.5)],
         forecast=None,
     )
     rows = list(csv.reader(StringIO(csv_export)))
 
-    assert rows[1] == ["'=HYPERLINK(\"https://example.invalid\")", "-12.50", "historical"]
+    assert rows[1] == ['\'=HYPERLINK("https://example.invalid")', "-12.50", "historical"]
