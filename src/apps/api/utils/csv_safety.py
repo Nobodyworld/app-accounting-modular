@@ -10,7 +10,8 @@ def safe_csv_text(value: object) -> str:
 
     Generated numeric fields should remain numeric and must not be passed through
     this helper. Text cells beginning with a spreadsheet formula prefix receive
-    a leading apostrophe, which common spreadsheet applications display as text.
+    a leading apostrophe, which common spreadsheet applications treat as an
+    explicit text marker rather than executable spreadsheet syntax.
     """
 
     text = "" if value is None else str(value)
