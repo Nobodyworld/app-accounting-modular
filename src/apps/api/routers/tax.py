@@ -24,14 +24,14 @@ def sync_tax(
 ) -> dict[str, str | int]:
     """Fetch the latest tax rules from an upstream provider."""
 
+    org_ctx = get_current_organization(organization_id=organization_id, session=session, current_user=current_user)
+    if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_tax):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     try:
         handle = load_provider(provider_key)
     except ValueError as exc:  # pragma: no cover - FastAPI integration
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    org_ctx = get_current_organization(organization_id=organization_id, session=session, current_user=current_user)
-    if not (org_ctx.membership.is_admin or org_ctx.membership.can_manage_tax):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     service = TaxService(
         session,
