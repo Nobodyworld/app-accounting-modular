@@ -1,0 +1,81 @@
+name: Temporary CSV safety wiring
+
+on:
+  push:
+    branches:
+      - security/neutralize-csv-formulas
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout remediation branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: security/neutralize-csv-formulas
+          persist-credentials: true
+
+      - name: Apply centralized CSV safety policy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              source = path.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              path.write_text(source.replace(old, new), encoding="utf-8")
+
+          path = Path("src/apps/api/services/budget_service.py")
+          replace_once(
+              path,
+              "from ..utils.metadata import merge_forecast_diagnostics\n",
+              "from ..utils.csv_safety import safe_csv_text\nfrom ..utils.metadata import merge_forecast_diagnostics\n",
+          )
+          replace_once(
+              path,
+              '                    "account_code": line.account_code or "",\n',
+              '                    "account_code": safe_csv_text(line.account_code),\n',
+          )
+          replace_once(
+              path,
+              '                    "account_name": line.account_name,\n',
+              '                    "account_name": safe_csv_text(line.account_name),\n',
+          )
+          replace_once(
+              path,
+              '                    "period_start": line.period_start.isoformat(),\n',
+              '                    "period_start": safe_csv_text(line.period_start.isoformat()),\n',
+          )
+          replace_once(
+              path,
+              '            writer.writerow([label, f"{amount:.2f}", "historical"])\n',
+              '            writer.writerow([safe_csv_text(label), f"{amount:.2f}", safe_csv_text("historical")])\n',
+          )
+          replace_once(
+              path,
+              '                writer.writerow([period, f"{amount:.2f}", "forecast"])\n',
+              '                writer.writerow([safe_csv_text(period), f"{amount:.2f}", safe_csv_text("forecast")])\n',
+          )
+          PY
+
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m ruff format src/apps/api/services/budget_service.py src/apps/api/utils/csv_safety.py tests/test_csv_export_safety.py
+          python -m ruff check src/apps/api/services/budget_service.py src/apps/api/utils/csv_safety.py tests/test_csv_export_safety.py
+          pytest -q tests/test_csv_export_safety.py
+
+      - name: Commit remediation and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temporary-csv-safety-wiring.yml
+          git add src/apps/api/services/budget_service.py src/apps/api/utils/csv_safety.py tests/test_csv_export_safety.py
+          git diff --cached --check
+          git commit -m "security: neutralize spreadsheet formulas in CSV exports"
+          git push origin HEAD:security/neutralize-csv-formulas
