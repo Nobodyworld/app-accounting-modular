@@ -33,6 +33,8 @@ The default Docker Compose profile is for local demonstration only.
 - Both root filesystems are read-only, all Linux capabilities are dropped, and `no-new-privileges` is enabled.
 - The API may write only to its `/data` volume and the bounded `/tmp` tmpfs; the web service may write only to its bounded `/tmp` tmpfs.
 - Container-internal listeners remain available for API/web service-to-service communication, but that does not authorize LAN or public exposure.
+- FastAPI rejects request bodies over the configured maximum before route execution; every proxy or ingress must enforce an equal or smaller cap.
+- Budget and scenario-plan files are constrained by both Streamlit configuration and the stricter application upload policy.
 
 Do not publish the API or Streamlit ports on `0.0.0.0`, a LAN address, or a public interface without a separate review covering HTTPS termination, trusted proxies and hosts, network access control, production secret management, host/container runtime hardening, and the open findings in the post-UX security audit.
 
@@ -51,3 +53,9 @@ The application may generate an ephemeral JWT secret for direct temporary local 
 - Use environment variables (see `config/.env.example`) to configure sensitive settings.
 - Review [`DEPENDENCIES.md`](DEPENDENCIES.md) quarterly for updated security posture notes and dependency audit status.
 - Audit startup failure logs for sensitive payloads; `StartupManager` surfaces exception metadata for diagnostics, so ensure startup steps raise errors without embedding secrets or personal data.
+- Preserve the centralized inbound request, collection, metadata, and upload limits documented in [`resource-limits.md`](resource-limits.md).
+
+External provider response limits are a separate outbound trust boundary tracked
+in issue
+[#118](https://github.com/Nobodyworld/app-accounting-modular/issues/118);
+the inbound controls documented here do not resolve it.

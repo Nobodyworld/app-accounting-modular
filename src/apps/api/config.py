@@ -13,6 +13,8 @@ from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
+from .limits import MAX_REQUEST_BODY_BYTES
+
 
 def _fallback_load_dotenv(*args: object, **kwargs: object) -> bool:
     # python-dotenv is not installed in this environment (type stubs may be missing);
@@ -239,6 +241,7 @@ class Settings(BaseModel):
     access_token_expire_minutes: int = Field(
         default_factory=lambda: int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     )
+    max_request_body_bytes: int = Field(default=MAX_REQUEST_BODY_BYTES, gt=0, le=MAX_REQUEST_BODY_BYTES)
 
     @model_validator(mode="after")
     def _normalise(self) -> Settings:
@@ -427,6 +430,10 @@ class Settings(BaseModel):
         expire_minutes = lookup("access_token_expire_minutes", "ACCESS_TOKEN_EXPIRE_MINUTES")
         if expire_minutes is not None:
             settings_data["access_token_expire_minutes"] = int(expire_minutes)
+
+        max_request_body_bytes = lookup("max_request_body_bytes")
+        if max_request_body_bytes is not None:
+            settings_data["max_request_body_bytes"] = int(max_request_body_bytes)
 
         cfg = cls(**cast("dict[str, Any]", settings_data))
         try:
