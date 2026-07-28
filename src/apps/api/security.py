@@ -150,19 +150,29 @@ def create_refresh_token(sub: int, *, expiry_minutes: int | None = None, session
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def _decode_token(token: str) -> dict[str, Any]:
+def _credentials_exception() -> HTTPException:
+    """Return a fresh generic bearer-credential rejection."""
+
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _decode_token(token: str, *, expected_type: str) -> dict[str, Any]:
+    """Decode a JWT and require its declared token type."""
+
     try:
         decoded = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         if not isinstance(decoded, dict):
             raise InvalidTokenError("JWT payload must be an object")
+        if decoded.get("type") != expected_type:
+            raise InvalidTokenError(f"Expected {expected_type} token")
         return {str(key): value for key, value in decoded.items()}
     except InvalidTokenError as exc:  # pragma: no cover - library raises numerous subclasses
-        logger.warning("Failed to decode access token", exc_info=exc)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
+        logger.warning("Failed to decode %s token", expected_type, exc_info=exc)
+        raise _credentials_exception() from exc
 
 
 def get_current_user(
@@ -171,7 +181,7 @@ def get_current_user(
 ) -> User:
     """Resolve the current user from the Authorization bearer token."""
 
-    payload = _decode_token(token)
+    payload = _decode_token(token, expected_type="access")
     sub = payload.get("sub")
     if sub is None:
         raise HTTPException(
