@@ -54,6 +54,10 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    and surfaced in logs for incident response, while fatal failures emit an
    aggregated "startup sequence aborted" summary before bubbling the error so
    operators can see which steps executed or failed.
+   `RequestBodyLimitMiddleware` performs a bounded ASGI receive before route
+   execution. It is wrapped by tracing, request context, and metrics so
+   sanitized `413` rejections remain observable without retaining or logging
+   rejected content.
 2. **Extension loader** imports every enabled module declared in
    `Settings.allowed_extensions`. Extensions register an `ExtensionManifest`
    with `src.apps.extensions.registry.extension_registry` and can contribute health
@@ -110,6 +114,10 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 * Cache observers feed Prometheus-compatible counters and gauges so cache hit
   rates and entry counts can be monitored over time, while
   `ExtensionTelemetryAdapter` tracks load latency and success counts.
+* `src/apps/api/limits.py` is the single policy source for inbound body,
+  collection, metadata, numeric-control, and Streamlit upload bounds. Deployment
+  requirements and exact response contracts are documented in
+  `docs/resource-limits.md`.
 
 ## Extension lifecycle
 

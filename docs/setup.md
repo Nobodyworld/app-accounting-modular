@@ -73,6 +73,7 @@ MODACCT_DATABASE_URL=sqlite:///./modacct.db
 MODACCT_JWT_SECRET_KEY=
 MODACCT_JWT_ALGORITHM=HS256
 MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+MODACCT_MAX_REQUEST_BODY_BYTES=2097152
 MODACCT_LOG_LEVEL=INFO
 MODACCT_LOG_FORMAT=JSON
 MODACCT_OPENEX_APP_ID=
@@ -82,6 +83,10 @@ MODACCT_GDELT_USER_AGENT=
 ```
 
 Provider and extension catalogs are currently defined in `src/apps/api/config.py`; nested `MODACCT_ALLOWED_PROVIDERS__...` environment keys are not a supported configuration interface.
+
+`MODACCT_MAX_REQUEST_BODY_BYTES` defaults to 2 MiB and may only be lowered.
+See the [application resource-limits guide](resource-limits.md) for schema,
+metadata, upload, response-contract, and reverse-proxy requirements.
 
 ## Run the Application
 
@@ -106,6 +111,10 @@ streamlit run src/apps/web/app.py
 ```
 
 The interface is available at `http://127.0.0.1:8501` and expects the API at `http://localhost:8000` unless `API_BASE` is overridden.
+
+Budget CSV and scenario-plan uploads have a 1 MiB application limit.
+`.streamlit/config.toml` also configures Streamlit's framework cap at 2 decimal
+megabytes as defense in depth; the application check remains authoritative.
 
 Snapshot Review is a public/local evidence workflow. Scenario Plan Review and
 Review Utilities require an authenticated API session and a positive
@@ -174,6 +183,9 @@ Endpoints:
 - Streamlit: `http://127.0.0.1:8501`
 
 This Compose profile is validated only for local demonstration. Do not change the host bindings to `0.0.0.0`, a LAN address, or a public interface without a separate deployment review covering HTTPS termination, trusted proxies/hosts, network access controls, secret management, and host/container security controls.
+
+Any reverse proxy or ingress placed in front of the API must enforce a request
+body limit equal to or smaller than the configured application limit.
 
 Stop and remove the services:
 

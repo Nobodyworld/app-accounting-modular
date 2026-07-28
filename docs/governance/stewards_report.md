@@ -28,6 +28,9 @@ audit verdict.
 - Quality automation covers Ruff, Ruff format, mypy, pytest with coverage,
   focused accounting-control tests, `pip check`, project-scoped `pip-audit`, and
   the lightweight current-tree secret scanner.
+- Central inbound resource policy bounds API bodies, expensive Pydantic
+  collections, nested metadata, numeric controls, and retained Streamlit
+  uploads while keeping rejected requests observable.
 - Runtime path truth is now documented as `src/apps/`, `src/cli/`,
   `src/plugins/`, and `src/tools/`; top-level `apps/` is documented as frontend
   placeholder territory.
