@@ -15,6 +15,7 @@ from apps.observability.metrics import RequestMetricsMiddleware, metrics_registr
 from .config import settings
 from .db import init_db
 from .dependencies import authenticated_audit_context
+from .middleware import RequestBodyLimitMiddleware
 from .routers import (
     audit,
     auth,
@@ -105,6 +106,10 @@ def create_app() -> FastAPI:
             shutdown_scheduler()
 
     app = FastAPI(title="Modular Accounting API", version=API_VERSION, lifespan=lifespan)
+    # Starlette wraps middleware in reverse registration order. Register the
+    # body limiter first so tracing, request context, and metrics remain outside
+    # it and can observe sanitized 413 responses without accessing body data.
+    app.add_middleware(RequestBodyLimitMiddleware, max_body_bytes=settings.max_request_body_bytes)
     app.add_middleware(RequestTraceMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(RequestMetricsMiddleware, registry=metrics_registry)
