@@ -30,6 +30,13 @@ from apps.web.api_session import (
     request_access_token,
     store_api_session,
 )
+from apps.web.upload_limits import (
+    clear_budget_upload_state,
+    clear_scenario_upload_state,
+    read_bounded_upload,
+    upload_limit_label,
+    validate_stored_upload,
+)
 from apps.web.utility_results import (
     BudgetResultView,
     CashflowResultView,
@@ -748,7 +755,7 @@ with utility_tab:
             "Budget CSV",
             type=["csv"],
             key="budget_uploader",
-            help="Use the template to ensure required columns are present.",
+            help=f"Use the template to ensure required columns are present. Maximum size: {upload_limit_label()}.",
         )
 
         if _can_render_downloads():
@@ -761,19 +768,31 @@ with utility_tab:
             )
 
         if uploaded_file is not None:
-            file_bytes = uploaded_file.getvalue()
-            st.session_state["uploaded_budget_bytes"] = file_bytes
-            try:
-                st.session_state["uploaded_budget_preview"] = pd.read_csv(BytesIO(file_bytes)).head(100)
-            except Exception as exc:
-                st.error(f"Failed to parse CSV: {exc}")
+            file_bytes, upload_error = read_bounded_upload(uploaded_file)
+            if upload_error:
+                clear_budget_upload_state(st.session_state)
+                st.error(upload_error)
+            elif file_bytes is not None:
+                st.session_state["uploaded_budget_bytes"] = file_bytes
+                st.session_state.pop("uploaded_budget_preview", None)
+                try:
+                    st.session_state["uploaded_budget_preview"] = pd.read_csv(BytesIO(file_bytes)).head(100)
+                except Exception as exc:
+                    st.session_state.pop("uploaded_budget_preview", None)
+                    st.error(f"Failed to parse CSV: {exc}")
 
         stored_bytes = st.session_state.get("uploaded_budget_bytes")
         if stored_bytes and "uploaded_budget_preview" not in st.session_state:
-            try:
-                st.session_state["uploaded_budget_preview"] = pd.read_csv(BytesIO(stored_bytes)).head(100)
-            except Exception as exc:
-                st.error(f"Failed to parse stored CSV: {exc}")
+            validated_bytes, stored_error = validate_stored_upload(stored_bytes)
+            if stored_error:
+                clear_budget_upload_state(st.session_state)
+                st.error(stored_error)
+            elif validated_bytes is not None:
+                try:
+                    st.session_state["uploaded_budget_preview"] = pd.read_csv(BytesIO(validated_bytes)).head(100)
+                except Exception as exc:
+                    st.session_state.pop("uploaded_budget_preview", None)
+                    st.error(f"Failed to parse stored CSV: {exc}")
 
         preview_df = st.session_state.get("uploaded_budget_preview")
         if isinstance(preview_df, pd.DataFrame):
@@ -1028,23 +1047,38 @@ with plan_tab:
         "Scenario plan",
         type=["json", "toml", "tml"],
         key="scenario_plan_uploader",
-        help="Preview metadata, defaults, and coverage via the API before running scenarios.",
+        help=(
+            "Preview metadata, defaults, and coverage via the API before running scenarios. "
+            f"Maximum size: {upload_limit_label()}."
+        ),
     )
 
     if uploaded_plan is not None:
         try:
-            uploaded_plan_bytes = uploaded_plan.getvalue()
-            if uploaded_plan_bytes != st.session_state.get(
-                "scenario_plan_bytes"
-            ) or uploaded_plan.name != st.session_state.get("scenario_plan_name"):
+            uploaded_plan_bytes, upload_error = read_bounded_upload(uploaded_plan)
+            if upload_error:
+                clear_scenario_upload_state(st.session_state)
+                st.error(upload_error)
+            elif uploaded_plan_bytes is not None and (
+                uploaded_plan_bytes != st.session_state.get("scenario_plan_bytes")
+                or uploaded_plan.name != st.session_state.get("scenario_plan_name")
+            ):
                 st.session_state["scenario_plan_bytes"] = uploaded_plan_bytes
                 st.session_state["scenario_plan_name"] = uploaded_plan.name
                 st.session_state.pop("scenario_plan_preview", None)
         except Exception as exc:
+            clear_scenario_upload_state(st.session_state)
             st.error(f"Failed to read uploaded file: {exc}")
 
     stored_plan = st.session_state.get("scenario_plan_bytes")
     stored_plan_name = st.session_state.get("scenario_plan_name", "scenario_plan.json")
+    if stored_plan is not None:
+        stored_plan, stored_plan_error = validate_stored_upload(stored_plan)
+        if stored_plan_error:
+            clear_scenario_upload_state(st.session_state)
+            st.error(stored_plan_error)
+            stored_plan = None
+            stored_plan_name = "scenario_plan.json"
     scenario_action_help = protected_action_help
     if protected_ready and not stored_plan:
         scenario_action_help = "Upload a scenario plan before requesting a preview."

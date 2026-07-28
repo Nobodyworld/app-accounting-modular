@@ -1,0 +1,4 @@
+# Streamlit uses decimal megabytes here. Keep this defense-in-depth cap aligned
+# above the application's stricter 1 MiB (1,048,576-byte) upload policy.
+[server]
+maxUploadSize = 2
