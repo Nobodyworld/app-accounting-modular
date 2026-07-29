@@ -90,6 +90,14 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 4. **Domain ports and providers** continue to act as the integration boundary
    for external data. Providers are loaded via the existing plugin loader and
    the new extension registry complements rather than replaces this system.
+   The ECB and OpenExchangeRates adapters share a bounded HTTPS JSON transport:
+   streamed reads, declared and measured 1 MiB byte enforcement, 5/20-second
+   connect/read timeouts, two selected-transient attempts, sanitized domain
+   errors, and a 512-rate cap. YFinance makes one non-threaded high-level call
+   with a 20-second timeout and 10,000-day/row limits. Because that dependency
+   materializes its DataFrame internally, its HTTP response cannot be
+   independently streamed or byte-counted at this adapter layer. Demo/reference
+   providers perform no external I/O.
 5. **Observability** collects metrics, traces, and health reports. Metrics are
    exposed through `/health/metrics` while `/health/telemetry` and
    `apps.observability.diagnostics.collect_observability_snapshot` aggregate the

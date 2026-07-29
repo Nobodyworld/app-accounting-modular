@@ -35,6 +35,12 @@ audit verdict.
   credentials rotate once through a conditional digest swap, reuse revokes the
   complete session, and tenant administrators can revoke only same-organization
   member sessions.
+- Network-backed providers enforce a centralized outbound trust boundary: 1 MiB
+  streamed HTTP reads, 512 FX records, explicit connect/read timeouts, bounded
+  selected-transient retries, sanitized provider errors, and a single bounded
+  YFinance call with 10,000-day/row limits. Tests use stubs without live
+  credentials. Container locking and attestations remain the separate #111
+  supply-chain tranche.
 - Runtime path truth is now documented as `src/apps/`, `src/cli/`,
   `src/plugins/`, and `src/tools/`; top-level `apps/` is documented as frontend
   placeholder territory.

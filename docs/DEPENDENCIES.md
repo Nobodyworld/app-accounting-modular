@@ -22,6 +22,15 @@ Key runtime groups:
 - Providers: `requests`, `yfinance`, `python-jose`, `python-dateutil`
 - Operations/web: `APScheduler`, `streamlit`, `python-dotenv`
 
+`requests` provider calls are centralized behind the outbound response boundary
+documented in [`PLUGINS.md`](PLUGINS.md). The `yfinance` dependency exposes a
+high-level download API that returns a fully materialized DataFrame. The
+application therefore constrains requested range, timeout, threading, call
+count, and returned rows, but cannot independently stream or byte-count
+YFinance's internal HTTP body. Dependency audit success does not establish
+container lockfile reproducibility or attestation; that remains the separate
+issue #111 supply-chain tranche.
+
 ## Development Dependencies
 
 Development dependencies are declared in `requirements-dev.txt` and include:
