@@ -58,6 +58,11 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    execution. It is wrapped by tracing, request context, and metrics so
    sanitized `413` rejections remain observable without retaining or logging
    rejected content.
+   Authentication routes delegate persisted session creation, access
+   enforcement, refresh compare-and-swap rotation, revocation, and expiration
+   cleanup to `src/apps/api/services/auth_session_service.py`. Streamlit retains
+   the returned token pair only in memory and performs at most one refresh and
+   one retry for a protected request.
 2. **Extension loader** imports every enabled module declared in
    `Settings.allowed_extensions`. Extensions register an `ExtensionManifest`
    with `src.apps.extensions.registry.extension_registry` and can contribute health
@@ -118,6 +123,10 @@ touching the core. The diagram below illustrates the major runtime surfaces.
   collection, metadata, numeric-control, and Streamlit upload bounds. Deployment
   requirements and exact response contracts are documented in
   `docs/resource-limits.md`.
+* Access JWTs are authorized against `AuthSession` persistence rather than
+  signature validity alone. Hourly APScheduler cleanup and opportunistic bounded
+  cleanup remove only refresh-expired session rows; refresh reuse revokes the
+  session family conservatively.
 
 ## Extension lifecycle
 

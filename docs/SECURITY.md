@@ -40,6 +40,18 @@ Do not publish the API or Streamlit ports on `0.0.0.0`, a LAN address, or a publ
 
 The application may generate an ephemeral JWT secret for direct temporary local API demonstrations. That mode rotates sessions on restart and is not a substitute for an explicit persistent secret in containers or any production-like deployment.
 
+## Authentication Session Lifecycle
+
+Successful password authentication creates an `AuthSession` row through the existing SQLModel `create_all` lifecycle. The row contains a random session identifier, user reference, SHA-256 digest of the currently valid refresh-token `jti`, refresh/session expiration, creation and last-rotation timestamps, a rotation counter, and optional bounded revocation metadata. Access tokens, refresh tokens, passwords, authorization headers, token payloads, raw IP addresses, and user-agent fingerprints are never stored in this table.
+
+Every newly issued access and refresh JWT contains only `sub`, `sid`, `jti`, `type`, `iat`, and `exp`. An access token is accepted only while its referenced persisted session exists, belongs to the subject user, is unexpired and unrevoked, and the user remains active. The API returns the same generic credential error for invalid claims, missing sessions, revoked or expired sessions, and inactive users.
+
+`POST /auth/refresh` consumes a refresh token once. Rotation conditionally replaces the stored digest only when the session identifier, current digest, unrevoked state, and expiration still match. A stale but otherwise valid refresh token is treated as reuse and revokes the complete session, including any access and refresh tokens issued by the preceding successful rotation. Session revocation is available through current-session logout and an organization-scoped administrator route; the administrator must belong to and administer the organization, and target users outside that tenant are reported as not found.
+
+Expired session rows are removed in bounded batches opportunistically during login and refresh and by the hourly `auth-session-cleanup` APScheduler job. Active unexpired rows, including revoked rows retained for deterministic revocation evidence, are not removed.
+
+Streamlit keeps access, refresh, and session identifiers only in in-memory session state. Refresh credentials are private state: they are not rendered, logged, placed in URLs, written to disk, or included in downloads. Protected requests may perform one refresh and one retry after a `401`; refresh failure clears local authentication state. Logout attempts server revocation first and always clears local authentication and protected-result state, even when the API is unavailable.
+
 ## Hardening Checklist
 
 - Rotate API keys and secrets regularly; never commit secrets to the repository.
