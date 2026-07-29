@@ -10,7 +10,13 @@ from typing import Any
 import pytest
 import requests
 import streamlit as st
-from apps.web.api_session import ACCESS_TOKEN_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY, SESSION_ID_KEY
+from apps.web.api_session import (
+    ACCESS_TOKEN_KEY,
+    AUTH_EMAIL_KEY,
+    ORGANIZATION_ID_KEY,
+    REFRESH_TOKEN_KEY,
+    SESSION_ID_KEY,
+)
 
 pytest.importorskip("streamlit", reason="streamlit dependencies not available")
 from streamlit.testing.v1 import AppTest  # type: ignore[import-not-found]
@@ -163,6 +169,7 @@ def fake_runtime(monkeypatch):
             return DummyResponse(
                 {
                     "access_token": token_value,
+                    "refresh_token": "streamlit-refresh-token",
                     "token_type": "bearer",
                     "session_id": "streamlit-session",
                 }
@@ -406,6 +413,7 @@ def test_successful_sidebar_login_normalizes_and_unlocks_protected_actions(fake_
     auth_call = next(call for call in fake_runtime.outbound_calls if call.url.endswith("/auth/token"))
     assert auth_call.data == {"username": "user@example.com", "password": "not-retained"}
     assert at.session_state[ACCESS_TOKEN_KEY] == fake_runtime.token_value
+    assert at.session_state[REFRESH_TOKEN_KEY] == "streamlit-refresh-token"
     assert at.session_state[SESSION_ID_KEY] == "streamlit-session"
     assert at.session_state[AUTH_EMAIL_KEY] == "user@example.com"
     assert at.session_state[ORGANIZATION_ID_KEY] == 7
@@ -434,7 +442,7 @@ def test_failed_sidebar_login_shows_api_detail_and_keeps_utilities_locked(fake_r
     _login(at)
 
     assert any("Incorrect username or password" in str(element.value) for element in at.error)
-    for key in (ACCESS_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
+    for key in (ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
         assert key not in at.session_state
     for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
         assert at.button(key=key).disabled is True
@@ -457,7 +465,8 @@ def test_logout_clears_only_api_session_and_relocks_protected_actions(fake_runti
     at.button(key="api_logout_button").click()
     at.run(timeout=15)
 
-    for key in (ACCESS_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
+    assert any(call.url.endswith("/auth/logout") for call in fake_runtime.outbound_calls)
+    for key in (ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
         assert key not in at.session_state
     assert at.session_state["snapshot_base_input"] == "EUR"
     assert "snapshot_controls_payload" in at.session_state
@@ -467,6 +476,22 @@ def test_logout_clears_only_api_session_and_relocks_protected_actions(fake_runti
     assert at.button(key="scenario_plan_preview_button").disabled is True
     for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
         assert at.button(key=key).disabled is True
+
+
+def test_unreachable_server_logout_still_clears_local_session_with_sanitized_warning(fake_runtime):
+    fake_runtime.post_responses["/auth/logout"] = requests.ConnectionError("private credential detail")
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+
+    at.button(key="api_logout_button").click()
+    at.run(timeout=15)
+
+    for key in (ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
+        assert key not in at.session_state
+    rendered = _utility_text(at)
+    assert "Server logout was unavailable; local session data was cleared." in rendered
+    assert "private credential detail" not in rendered
 
 
 def test_protected_request_contracts_use_shared_session_scope(fake_runtime):
@@ -543,7 +568,10 @@ def test_protected_request_contracts_use_shared_session_scope(fake_runtime):
 @pytest.mark.parametrize(
     ("preview_response", "expected_message"),
     [
-        (DummyResponse({"detail": "Not authenticated"}, status_code=401), "Not authenticated"),
+        (
+            DummyResponse({"detail": "Not authenticated"}, status_code=401),
+            "Your API session expired. Sign in again.",
+        ),
         (
             DummyResponse({"detail": "Not authorized for this organization"}, status_code=403),
             "Not authorized for this organization",

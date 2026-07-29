@@ -12,7 +12,8 @@ from apps.api.db import get_session
 from apps.api.main import create_app
 from apps.api.models.models import AuditLog, Membership, Organization, User
 from apps.api.routers import auth as auth_router
-from apps.api.security import create_access_token, create_refresh_token, get_password_hash
+from apps.api.security import create_refresh_token, get_password_hash
+from apps.api.services.auth_session_service import AuthSessionService
 from apps.api.services.ledger_service import LedgerService
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
@@ -106,15 +107,13 @@ def api_context():
             ],
         )
 
+        session_service = AuthSessionService(session)
+        admin_pair = session_service.create_session(admin)
+        member_pair = session_service.create_session(member)
+
         org1_id = org1.id
         org2_id = org2.id
-        admin_id = admin.id
-        member_id = member.id
-
-    tokens = {
-        "admin": create_access_token({"sub": str(admin_id)}),
-        "member": create_access_token({"sub": str(member_id)}),
-    }
+    tokens = {"admin": admin_pair.access_token, "member": member_pair.access_token}
 
     try:
         yield client, {"org1_id": org1_id, "org2_id": org2_id, "tokens": tokens}, engine

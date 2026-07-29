@@ -10,7 +10,8 @@ from apps.api import db
 from apps.api.db import get_session
 from apps.api.main import create_app
 from apps.api.models.models import Account, JournalEntry, Membership, Organization, Transaction, User
-from apps.api.security import create_access_token, get_password_hash
+from apps.api.security import get_password_hash
+from apps.api.services.auth_session_service import AuthSessionService
 from apps.api.services.ledger_service import LedgerService
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
@@ -71,7 +72,7 @@ def ledger_api_context() -> Iterator[tuple[TestClient, dict[str, object], object
 
         context = {
             "organization_id": organization.id,
-            "token": create_access_token({"sub": str(user.id)}),
+            "token": AuthSessionService(session).create_session(user).access_token,
             "usd_cash_id": usd_cash.id,
             "usd_revenue_id": usd_revenue.id,
             "eur_revenue_id": eur_revenue.id,

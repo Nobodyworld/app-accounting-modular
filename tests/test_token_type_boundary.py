@@ -11,6 +11,7 @@ from apps.api.security import (
     get_current_user,
     get_password_hash,
 )
+from apps.api.services.auth_session_service import AuthSessionService
 from fastapi import HTTPException
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
@@ -35,13 +36,14 @@ def persisted_user_session():
         session.commit()
         session.refresh(user)
         assert user.id is not None
-        yield session, user
+        pair = AuthSessionService(session).create_session(user)
+        yield session, user, pair
     engine.dispose()
 
 
 def test_access_token_resolves_current_user(persisted_user_session) -> None:
-    session, user = persisted_user_session
-    token = create_access_token({"sub": str(user.id)})
+    session, user, pair = persisted_user_session
+    token = pair.access_token
 
     resolved = get_current_user(token=token, session=session)
 
@@ -49,7 +51,7 @@ def test_access_token_resolves_current_user(persisted_user_session) -> None:
 
 
 def test_refresh_token_is_rejected_by_access_boundary(persisted_user_session) -> None:
-    session, user = persisted_user_session
+    session, user, _ = persisted_user_session
     token = create_refresh_token(user.id)
 
     with pytest.raises(HTTPException) as exc_info:
@@ -60,7 +62,7 @@ def test_refresh_token_is_rejected_by_access_boundary(persisted_user_session) ->
 
 
 def test_access_token_is_rejected_by_refresh_validation(persisted_user_session) -> None:
-    _, user = persisted_user_session
+    _, user, _ = persisted_user_session
     token = create_access_token({"sub": str(user.id)})
 
     with pytest.raises(HTTPException) as exc_info:
@@ -71,7 +73,7 @@ def test_access_token_is_rejected_by_refresh_validation(persisted_user_session) 
 
 
 def test_refresh_token_passes_refresh_validation(persisted_user_session) -> None:
-    _, user = persisted_user_session
+    _, user, _ = persisted_user_session
     token = create_refresh_token(user.id)
 
     payload = _decode_token(token, expected_type="refresh")
