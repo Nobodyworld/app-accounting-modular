@@ -24,10 +24,11 @@ from apps.web.api_session import (
     AUTH_EMAIL_KEY,
     ORGANIZATION_ID_KEY,
     api_error_detail,
-    auth_headers,
     authenticated_workspace_ready,
     clear_api_session,
     request_access_token,
+    request_server_logout,
+    request_with_one_refresh,
     store_api_session,
 )
 from apps.web.upload_limits import (
@@ -210,13 +211,23 @@ def _submit_api_login() -> None:
         organization_id=organization_id,
     )
     st.session_state.pop("api_login_error", None)
+    st.session_state.pop("api_logout_warning", None)
 
 
 def _logout_api_session() -> None:
-    """Clear authenticated workspace values without touching public workflow state."""
+    """Attempt server revocation and always clear retained local session values."""
 
+    _, warning = request_server_logout(
+        API,
+        st.session_state.get(ACCESS_TOKEN_KEY),
+        post=requests.post,
+    )
     clear_api_session(st.session_state)
     st.session_state.pop("api_login_error", None)
+    if warning:
+        st.session_state["api_logout_warning"] = warning
+    else:
+        st.session_state.pop("api_logout_warning", None)
 
 
 def _protected_response_payload(response: Any) -> tuple[Any | None, str | None]:
@@ -444,6 +455,9 @@ with st.sidebar:
         st.button("Log out", key="api_logout_button", on_click=_logout_api_session)
     else:
         st.info("Protected workflows locked")
+        logout_warning = st.session_state.get("api_logout_warning")
+        if isinstance(logout_warning, str) and logout_warning:
+            st.warning(logout_warning)
         st.caption(
             "Snapshot Review remains public/local. Scenario Plan Review and Review Utilities "
             "require sign-in and a positive organization ID."
@@ -460,7 +474,6 @@ with st.sidebar:
 access_token = st.session_state.get(ACCESS_TOKEN_KEY)
 organization_id = st.session_state.get(ORGANIZATION_ID_KEY)
 protected_ready = authenticated_workspace_ready(access_token, organization_id)
-headers = auth_headers(access_token)
 protected_action_help = (
     "Sign in through API Session with a positive organization ID to enable protected workflows."
     if not protected_ready
@@ -818,18 +831,26 @@ with utility_tab:
                     "refresh": budget_refresh,
                 }
                 with st.spinner("Generating budget report..."):
-                    response = requests.get(
-                        f"{API}/reports/budget-vs-actual",
-                        params=budget_params,
-                        headers=headers,
-                        timeout=60,
+                    response, session_error = request_with_one_refresh(
+                        st.session_state,
+                        API,
+                        lambda request_headers: requests.get(
+                            f"{API}/reports/budget-vs-actual",
+                            params=budget_params,
+                            headers=request_headers,
+                            timeout=60,
+                        ),
+                        post=requests.post,
                     )
             except requests.RequestException as exc:  # pragma: no cover - runtime feedback
                 budget_payload, budget_error = None, f"Budget service unavailable: {exc}"
             except Exception:  # pragma: no cover - defensive UI boundary
                 budget_payload, budget_error = None, "Budget report request could not be completed."
             else:
-                budget_payload, budget_error = _protected_response_payload(response)
+                if session_error:
+                    budget_payload, budget_error = None, session_error
+                else:
+                    budget_payload, budget_error = _protected_response_payload(response)
 
             if budget_error:
                 st.session_state.pop("budget_report_payload", None)
@@ -866,18 +887,26 @@ with utility_tab:
                     "refresh": cashflow_refresh,
                 }
                 with st.spinner("Generating cashflow forecast..."):
-                    response = requests.get(
-                        f"{API}/reports/cashflow-forecast",
-                        params=cashflow_params,
-                        headers=headers,
-                        timeout=60,
+                    response, session_error = request_with_one_refresh(
+                        st.session_state,
+                        API,
+                        lambda request_headers: requests.get(
+                            f"{API}/reports/cashflow-forecast",
+                            params=cashflow_params,
+                            headers=request_headers,
+                            timeout=60,
+                        ),
+                        post=requests.post,
                     )
             except requests.RequestException as exc:  # pragma: no cover - runtime feedback
                 cashflow_payload, cashflow_error = None, f"Cashflow service unavailable: {exc}"
             except Exception:  # pragma: no cover - defensive UI boundary
                 cashflow_payload, cashflow_error = None, "Cashflow forecast request could not be completed."
             else:
-                cashflow_payload, cashflow_error = _protected_response_payload(response)
+                if session_error:
+                    cashflow_payload, cashflow_error = None, session_error
+                else:
+                    cashflow_payload, cashflow_error = _protected_response_payload(response)
 
             if cashflow_error:
                 st.session_state.pop("cashflow_report_payload", None)
@@ -932,13 +961,26 @@ with utility_tab:
                     "provider_key": provider_key,
                 }
                 with st.spinner("Synchronizing FX rates..."):
-                    response = requests.post(f"{API}/fx/sync", params=fx_sync_params, headers=headers, timeout=30)
+                    response, session_error = request_with_one_refresh(
+                        st.session_state,
+                        API,
+                        lambda request_headers: requests.post(
+                            f"{API}/fx/sync",
+                            params=fx_sync_params,
+                            headers=request_headers,
+                            timeout=30,
+                        ),
+                        post=requests.post,
+                    )
             except requests.RequestException as exc:  # pragma: no cover - runtime feedback
                 fx_error = f"FX service unavailable: {exc}"
             except Exception:  # pragma: no cover - defensive UI boundary
                 fx_error = "FX synchronization request could not be completed."
             else:
-                fx_payload, fx_error = _protected_response_payload(response)
+                if session_error:
+                    fx_payload, fx_error = None, session_error
+                else:
+                    fx_payload, fx_error = _protected_response_payload(response)
 
             if fx_error:
                 st.session_state.pop("fx_sync_payload", None)
@@ -1005,15 +1047,26 @@ with utility_tab:
                     "provider_key": market_provider,
                 }
                 with st.spinner("Synchronizing market prices..."):
-                    response = requests.post(
-                        f"{API}/market/sync", params=market_sync_params, headers=headers, timeout=30
+                    response, session_error = request_with_one_refresh(
+                        st.session_state,
+                        API,
+                        lambda request_headers: requests.post(
+                            f"{API}/market/sync",
+                            params=market_sync_params,
+                            headers=request_headers,
+                            timeout=30,
+                        ),
+                        post=requests.post,
                     )
             except requests.RequestException as exc:  # pragma: no cover - runtime feedback
                 market_error = f"Market service unavailable: {exc}"
             except Exception:  # pragma: no cover - defensive UI boundary
                 market_error = "Market synchronization request could not be completed."
             else:
-                market_payload, market_error = _protected_response_payload(response)
+                if session_error:
+                    market_payload, market_error = None, session_error
+                else:
+                    market_payload, market_error = _protected_response_payload(response)
 
             if market_error:
                 st.session_state.pop("market_sync_payload", None)
@@ -1105,11 +1158,16 @@ with plan_tab:
             st.error("Scenario plans must define a JSON or TOML object.")
         else:
             try:
-                response = requests.post(
-                    f"{API}/snapshot/plans/preview",
-                    json=parsed_plan,
-                    headers=headers,
-                    timeout=30,
+                response, session_error = request_with_one_refresh(
+                    st.session_state,
+                    API,
+                    lambda request_headers: requests.post(
+                        f"{API}/snapshot/plans/preview",
+                        json=parsed_plan,
+                        headers=request_headers,
+                        timeout=30,
+                    ),
+                    post=requests.post,
                 )
             except requests.RequestException:  # pragma: no cover - runtime feedback
                 preview_payload = None
@@ -1118,7 +1176,10 @@ with plan_tab:
                 preview_payload = None
                 preview_error = "Scenario Plan Review request could not be completed."
             else:
-                preview_payload, preview_error = _protected_response_payload(response)
+                if session_error:
+                    preview_payload, preview_error = None, session_error
+                else:
+                    preview_payload, preview_error = _protected_response_payload(response)
                 if preview_error is None and not isinstance(preview_payload, dict):
                     preview_payload, preview_error = None, "API response was malformed."
 

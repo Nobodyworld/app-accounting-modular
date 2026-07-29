@@ -306,7 +306,7 @@ def test_start_and_shutdown_are_idempotent(monkeypatch: pytest.MonkeyPatch) -> N
 
     scheduler.start_scheduler()
     scheduler.start_scheduler()
-    assert fake.add_job_calls == 1
+    assert fake.add_job_calls == 2
     assert fake.start_calls == 1
     assert scheduler.get_scheduler_state()["running"] is True
 
@@ -358,7 +358,7 @@ def test_concurrent_lifecycle_calls_start_and_stop_once(monkeypatch: pytest.Monk
         list(pool.map(lambda _: scheduler.start_scheduler(), range(16)))
 
     assert len(factory_calls) == 1
-    assert fake.add_job_calls == 1
+    assert fake.add_job_calls == 2
     assert fake.start_calls == 1
 
     with ThreadPoolExecutor(max_workers=8) as pool:

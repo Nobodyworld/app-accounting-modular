@@ -9,6 +9,7 @@ from typing import Any, Protocol
 import requests
 
 ACCESS_TOKEN_KEY = "api_access_token"
+REFRESH_TOKEN_KEY = "_api_refresh_token"
 SESSION_ID_KEY = "api_session_id"
 AUTH_EMAIL_KEY = "api_authenticated_email"
 ORGANIZATION_ID_KEY = "api_organization_id"
@@ -43,8 +44,9 @@ class ApiLoginResult:
     """Validated authentication response safe to place in Streamlit session state."""
 
     access_token: str
+    refresh_token: str
     token_type: str
-    session_id: str | None
+    session_id: str
 
 
 def auth_headers(access_token: str | None) -> dict[str, str]:
@@ -135,24 +137,93 @@ def request_access_token(
     if not isinstance(payload, Mapping):
         return None, "Authentication response was malformed."
 
+    return _parse_token_pair(payload, response_name="Authentication")
+
+
+def _parse_token_pair(
+    payload: Mapping[str, Any],
+    *,
+    response_name: str,
+) -> tuple[ApiLoginResult | None, str | None]:
+    """Validate a bounded token-pair payload without echoing credential values."""
+
     access_token = payload.get("access_token")
+    refresh_token = payload.get("refresh_token")
     token_type = payload.get("token_type")
     session_id = payload.get("session_id")
-    if not isinstance(access_token, str) or not access_token.strip():
-        return None, "Authentication response did not include an access token."
+    if not isinstance(access_token, str) or not access_token.strip() or len(access_token) > 4096:
+        return None, f"{response_name} response did not include a valid access token."
+    if not isinstance(refresh_token, str) or not refresh_token.strip() or len(refresh_token) > 4096:
+        return None, f"{response_name} response did not include a valid refresh token."
     if not isinstance(token_type, str) or token_type.lower() != "bearer":
-        return None, "Authentication response did not include a bearer token type."
-    if session_id is not None and not isinstance(session_id, str):
-        return None, "Authentication response included an invalid session identifier."
-
+        return None, f"{response_name} response did not include a bearer token type."
+    if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 64:
+        return None, f"{response_name} response included an invalid session identifier."
     return (
         ApiLoginResult(
             access_token=access_token.strip(),
+            refresh_token=refresh_token.strip(),
             token_type="bearer",
-            session_id=session_id,
+            session_id=session_id.strip(),
         ),
         None,
     )
+
+
+def request_rotated_token_pair(
+    api_base: str,
+    refresh_token: str | None,
+    *,
+    timeout: int = 10,
+    post: PostRequest = requests.post,
+) -> tuple[ApiLoginResult | None, str | None]:
+    """Request a one-time refresh rotation without surfacing credential-bearing errors."""
+
+    token = (refresh_token or "").strip()
+    if not token or len(token) > 4096:
+        return None, "Session refresh is unavailable. Sign in again."
+    try:
+        response = post(
+            f"{api_base.rstrip('/')}/auth/refresh",
+            json={"refresh_token": token},
+            timeout=timeout,
+        )
+    except Exception:
+        return None, "Session refresh service is unavailable. Sign in again."
+    if response.status_code >= 400:
+        return None, "Session refresh was rejected. Sign in again."
+    try:
+        payload = response.json()
+    except Exception:
+        return None, "Session refresh response was invalid. Sign in again."
+    if not isinstance(payload, Mapping):
+        return None, "Session refresh response was malformed. Sign in again."
+    return _parse_token_pair(payload, response_name="Session refresh")
+
+
+def request_server_logout(
+    api_base: str,
+    access_token: str | None,
+    *,
+    timeout: int = 10,
+    post: PostRequest = requests.post,
+) -> tuple[bool, str | None]:
+    """Attempt server-side revocation with a sanitized failure result."""
+
+    headers = auth_headers(access_token)
+    if not headers:
+        return False, "Server logout was unavailable; local session data was cleared."
+    try:
+        response = post(
+            f"{api_base.rstrip('/')}/auth/logout",
+            headers=headers,
+            timeout=timeout,
+        )
+    except Exception:
+        return False, "Server logout was unavailable; local session data was cleared."
+    if response.status_code >= 400:
+        return False, "Server logout could not be confirmed; local session data was cleared."
+    return True, None
 
 
 def clear_protected_utility_state(state: MutableMapping[str, Any]) -> None:
@@ -171,8 +242,10 @@ def store_api_session(
 ) -> None:
     """Persist validated session values without storing the submitted password."""
 
+    _validate_result(result)
     clear_protected_utility_state(state)
     state[ACCESS_TOKEN_KEY] = result.access_token
+    state[REFRESH_TOKEN_KEY] = result.refresh_token
     state[SESSION_ID_KEY] = result.session_id
     state[AUTH_EMAIL_KEY] = email.strip().lower()
     state[ORGANIZATION_ID_KEY] = int(organization_id)
@@ -182,5 +255,77 @@ def clear_api_session(state: MutableMapping[str, Any]) -> None:
     """Remove authentication, organization scope, and protected workspace state."""
 
     clear_protected_utility_state(state)
-    for key in (ACCESS_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
+    for key in (ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
         state.pop(key, None)
+
+
+def _validate_result(result: ApiLoginResult) -> None:
+    """Reject incomplete manually constructed results before mutating state."""
+
+    if (
+        not result.access_token.strip()
+        or len(result.access_token) > 4096
+        or not result.refresh_token.strip()
+        or len(result.refresh_token) > 4096
+        or result.token_type.lower() != "bearer"
+        or not result.session_id.strip()
+        or len(result.session_id) > 64
+    ):
+        raise ValueError("Invalid API session result")
+
+
+def replace_rotated_api_session(
+    state: MutableMapping[str, Any],
+    result: ApiLoginResult,
+) -> None:
+    """Atomically replace both credentials for the same server-side session."""
+
+    _validate_result(result)
+    current_session_id = state.get(SESSION_ID_KEY)
+    if not isinstance(current_session_id, str) or current_session_id != result.session_id:
+        raise ValueError("Rotated session identifier did not match")
+    clear_protected_utility_state(state)
+    state.update(
+        {
+            ACCESS_TOKEN_KEY: result.access_token,
+            REFRESH_TOKEN_KEY: result.refresh_token,
+            SESSION_ID_KEY: result.session_id,
+        }
+    )
+
+
+ProtectedRequest = Callable[[dict[str, str]], HttpResponse]
+
+
+def request_with_one_refresh(
+    state: MutableMapping[str, Any],
+    api_base: str,
+    request: ProtectedRequest,
+    *,
+    post: PostRequest = requests.post,
+) -> tuple[HttpResponse | None, str | None]:
+    """Run a protected request with at most one refresh and one retry."""
+
+    response = request(auth_headers(state.get(ACCESS_TOKEN_KEY)))
+    if response.status_code != 401:
+        return response, None
+
+    result, _ = request_rotated_token_pair(
+        api_base,
+        state.get(REFRESH_TOKEN_KEY),
+        post=post,
+    )
+    if result is None:
+        clear_api_session(state)
+        return None, "Your API session expired. Sign in again."
+    try:
+        replace_rotated_api_session(state, result)
+    except ValueError:
+        clear_api_session(state)
+        return None, "Your API session could not be restored. Sign in again."
+
+    retry_response = request(auth_headers(state.get(ACCESS_TOKEN_KEY)))
+    if retry_response.status_code == 401:
+        clear_api_session(state)
+        return None, "Your API session could not be restored. Sign in again."
+    return retry_response, None

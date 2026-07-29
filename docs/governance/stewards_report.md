@@ -31,6 +31,10 @@ audit verdict.
 - Central inbound resource policy bounds API bodies, expensive Pydantic
   collections, nested metadata, numeric controls, and retained Streamlit
   uploads while keeping rejected requests observable.
+- Authentication sessions are persisted and enforced server-side; refresh
+  credentials rotate once through a conditional digest swap, reuse revokes the
+  complete session, and tenant administrators can revoke only same-organization
+  member sessions.
 - Runtime path truth is now documented as `src/apps/`, `src/cli/`,
   `src/plugins/`, and `src/tools/`; top-level `apps/` is documented as frontend
   placeholder territory.

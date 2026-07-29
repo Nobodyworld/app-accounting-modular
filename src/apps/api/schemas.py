@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -66,6 +66,11 @@ __all__ = [
     "CausalImpactResponse",
     "ImpactPointSchema",
     "AuditLogSchema",
+    "AdminSessionRevocationResponse",
+    "LoginTokenResponse",
+    "LogoutResponse",
+    "RefreshTokenRequest",
+    "RefreshTokenResponse",
     "ReportMetadata",
     "Posting",
     "TransactionCreate",
@@ -108,6 +113,45 @@ CurrencyCode = Annotated[str, Field(min_length=1, max_length=MAX_CURRENCY_LENGTH
 ScenarioSymbol = Annotated[str, Field(min_length=1, max_length=MAX_SOURCE_LENGTH)]
 JurisdictionCode = Annotated[str, Field(min_length=1, max_length=MAX_SOURCE_LENGTH)]
 ScenarioTag = Annotated[str, Field(min_length=1, max_length=MAX_TAG_LENGTH)]
+JwtToken = Annotated[str, Field(min_length=1, max_length=4096)]
+SessionIdentifier = Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class LoginTokenResponse(BaseModel):
+    """Successful password exchange without persistence internals."""
+
+    access_token: JwtToken
+    refresh_token: JwtToken
+    session_id: SessionIdentifier
+    token_type: Literal["bearer"] = "bearer"
+
+
+class RefreshTokenRequest(BaseModel):
+    """Bounded one-time refresh credential."""
+
+    refresh_token: JwtToken
+
+
+class RefreshTokenResponse(BaseModel):
+    """Rotated access/refresh pair."""
+
+    access_token: JwtToken
+    refresh_token: JwtToken
+    session_id: SessionIdentifier
+    token_type: Literal["bearer"] = "bearer"
+
+
+class LogoutResponse(BaseModel):
+    """Current-session logout acknowledgement."""
+
+    revoked: bool
+
+
+class AdminSessionRevocationResponse(BaseModel):
+    """Organization administrator revocation acknowledgement."""
+
+    session_id: SessionIdentifier
+    revoked: bool
 
 
 class AuditLogSchema(BaseModel):
