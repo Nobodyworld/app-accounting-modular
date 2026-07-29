@@ -19,12 +19,15 @@ from sqlmodel import Session, select
 from .audit import AuditAction, AuditActor, AuditLogger, get_current_actor, use_actor
 from .config import MAX_ACCESS_TOKEN_MINUTES, settings
 from .db import get_session
-from .models.models import Membership, Organization, User
+from .models.models import AuthSession, Membership, Organization, User
 
 __all__ = [
+    "AuthenticationContext",
     "OrganizationContext",
     "authenticate_user",
     "create_access_token",
+    "create_refresh_token",
+    "get_authentication_context",
     "get_current_organization",
     "get_current_user",
     "get_password_hash",
@@ -88,6 +91,15 @@ class OrganizationContext:
     membership: Membership
 
 
+@dataclass(slots=True)
+class AuthenticationContext:
+    """Validated access-token identity and its active persisted session."""
+
+    user: User
+    auth_session: AuthSession
+    claims: dict[str, Any]
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Return ``True`` if ``plain_password`` matches ``hashed_password``."""
 
@@ -127,26 +139,53 @@ def authenticate_user(session: Session, email: str, password: str) -> User | Non
     return user
 
 
-def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
-    """Create a signed JWT access token embedding ``data``."""
+def create_access_token(
+    data: dict[str, Any],
+    expires_delta: timedelta | None = None,
+    *,
+    session_id: str | None = None,
+    token_id: str | None = None,
+    issued_at: datetime | None = None,
+) -> str:
+    """Create a signed access JWT containing only the required non-sensitive claims."""
 
-    to_encode = data.copy()
-    to_encode.setdefault("sid", str(uuid4()))
-    to_encode["type"] = "access"
-    expire = datetime.now(UTC) + (
-        expires_delta if expires_delta is not None else timedelta(minutes=settings.access_token_expire_minutes)
-    )
-    to_encode.update({"exp": expire})
-    token = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-    return token
+    now = issued_at or datetime.now(UTC)
+    subject = str(data.get("sub", "")).strip()
+    sid = str(session_id or data.get("sid") or uuid4()).strip()
+    payload = {
+        "sub": subject,
+        "sid": sid,
+        "jti": token_id or str(uuid4()),
+        "type": "access",
+        "iat": now,
+        "exp": now
+        + (expires_delta if expires_delta is not None else timedelta(minutes=settings.access_token_expire_minutes)),
+    }
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def create_refresh_token(sub: int, *, expiry_minutes: int | None = None, session_id: str | None = None) -> str:
-    """Create a long-lived refresh token with rotation-friendly claims."""
+def create_refresh_token(
+    sub: int,
+    *,
+    expiry_minutes: int | None = None,
+    session_id: str | None = None,
+    token_id: str | None = None,
+    issued_at: datetime | None = None,
+    expires_at: datetime | None = None,
+) -> str:
+    """Create a signed refresh JWT containing rotation-safe identifiers."""
 
+    now = issued_at or datetime.now(UTC)
     ttl = expiry_minutes or min(settings.access_token_expire_minutes * 24, MAX_ACCESS_TOKEN_MINUTES)
-    expire = datetime.now(UTC) + timedelta(minutes=ttl)
-    payload = {"sub": str(sub), "type": "refresh", "sid": session_id or str(uuid4()), "exp": expire}
+    expire = expires_at or now + timedelta(minutes=ttl)
+    payload = {
+        "sub": str(sub),
+        "sid": session_id or str(uuid4()),
+        "jti": token_id or str(uuid4()),
+        "type": "refresh",
+        "iat": now,
+        "exp": expire,
+    }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
@@ -175,37 +214,62 @@ def _decode_token(token: str, *, expected_type: str) -> dict[str, Any]:
         raise _credentials_exception() from exc
 
 
+def _utc(value: datetime) -> datetime:
+    """Normalize persisted timestamps, including SQLite's naive round trips."""
+
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _integer_subject(payload: dict[str, Any]) -> int:
+    """Return a positive integer JWT subject or reject the credential generically."""
+
+    subject = payload.get("sub")
+    if isinstance(subject, bool) or not isinstance(subject, (str, int)):
+        raise _credentials_exception()
+    try:
+        user_id = int(subject)
+    except (TypeError, ValueError) as exc:
+        raise _credentials_exception() from exc
+    if user_id <= 0:
+        raise _credentials_exception()
+    return user_id
+
+
+def get_authentication_context(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    session: Session = Depends(get_session),
+) -> AuthenticationContext:
+    """Validate an access token against its persisted active session and user."""
+
+    payload = _decode_token(token, expected_type="access")
+    user_id = _integer_subject(payload)
+    sid = payload.get("sid")
+    if not isinstance(sid, str) or not sid.strip():
+        raise _credentials_exception()
+
+    auth_session = session.get(AuthSession, sid.strip())
+    now = datetime.now(UTC)
+    if (
+        auth_session is None
+        or auth_session.user_id != user_id
+        or auth_session.revoked_at is not None
+        or _utc(auth_session.expires_at) <= now
+    ):
+        raise _credentials_exception()
+
+    user = session.get(User, user_id)
+    if user is None or not user.is_active:
+        raise _credentials_exception()
+    return AuthenticationContext(user=user, auth_session=auth_session, claims=payload)
+
+
 def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     session: Session = Depends(get_session),
 ) -> User:
-    """Resolve the current user from the Authorization bearer token."""
+    """Compatibility wrapper returning the user from a validated session context."""
 
-    payload = _decode_token(token, expected_type="access")
-    sub = payload.get("sub")
-    if sub is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    try:
-        user_id = int(sub)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
-
-    user = session.get(User, user_id)
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
+    return get_authentication_context(token=token, session=session).user
 
 
 def _bind_audit_actor(current_user: User, organization_id: int) -> None:
