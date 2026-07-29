@@ -8,15 +8,24 @@ and requests are made over HTTPS with conservative timeouts.
 from __future__ import annotations
 
 import logging
+import math
 import os
+import re
+from collections.abc import Mapping
 from datetime import date
-from typing import Any
 
-import requests
 from apps.api.config import settings
 from apps.api.models.models import Rate
 
+from plugins.provider_limits import (
+    MAX_FX_RATE_RECORDS,
+    ProviderPayloadError,
+    ProviderResponseLimitError,
+    get_bounded_json,
+)
+
 logger = logging.getLogger(__name__)
+_CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")
 
 
 class OpenExchangeRatesProvider:
@@ -30,7 +39,7 @@ class OpenExchangeRatesProvider:
             raise ValueError("OpenExchangeRates app id is required (set OPENEXCHANGERATES_APP_ID)")
         self.base_url = base_url.rstrip("/")
 
-    def _endpoint(self, base: str, date_: date | None) -> tuple[str, dict[str, Any]]:
+    def _endpoint(self, base: str, date_: date | None) -> tuple[str, dict[str, str]]:
         params = {"app_id": self.app_id}
         if base:
             params["base"] = base
@@ -43,34 +52,58 @@ class OpenExchangeRatesProvider:
 
     def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> list[Rate]:
         url, params = self._endpoint(base, date_)
-        response = requests.get(url, params=params, timeout=20)
-        response.raise_for_status()
-        payload = response.json()
+        payload = get_bounded_json(
+            url,
+            params=params,
+            provider_key=self.name,
+            operation="sync-daily-rates",
+        )
 
-        rates: list[Rate] = []
         body_base = payload.get("base", base)
         observed_raw = payload.get("date") or payload.get("timestamp")
-        if observed_raw is None:
-            observed_date = date_ or date.today()
-        elif isinstance(observed_raw, (int, float)):
-            observed_date = date.fromtimestamp(float(observed_raw))
-        else:
-            observed_date = date.fromisoformat(str(observed_raw))
+        try:
+            if observed_raw is None:
+                observed_date = date_ or date.today()
+            elif isinstance(observed_raw, (int, float)) and not isinstance(observed_raw, bool):
+                observed_date = date.fromtimestamp(float(observed_raw))
+            elif isinstance(observed_raw, str):
+                observed_date = date.fromisoformat(observed_raw)
+            else:
+                raise ValueError
+        except (OSError, OverflowError, ValueError) as exc:
+            raise ProviderPayloadError("Provider returned an invalid payload") from exc
 
-        for quote, value in payload.get("rates", {}).items():
+        if not isinstance(body_base, str) or not _CURRENCY_CODE.fullmatch(body_base):
+            raise ProviderPayloadError("Provider returned an invalid payload")
+        raw_rates = payload.get("rates")
+        if not isinstance(raw_rates, Mapping):
+            raise ProviderPayloadError("Provider returned an invalid payload")
+        if len(raw_rates) > MAX_FX_RATE_RECORDS:
+            raise ProviderResponseLimitError("Provider response exceeded the configured limit")
+
+        rates: list[Rate] = []
+        for quote, raw_value in raw_rates.items():
+            if not isinstance(quote, str) or not _CURRENCY_CODE.fullmatch(quote):
+                raise ProviderPayloadError("Provider returned an invalid payload")
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError) as exc:
+                raise ProviderPayloadError("Provider returned an invalid payload") from exc
+            if isinstance(raw_value, bool) or not math.isfinite(value) or value <= 0:
+                raise ProviderPayloadError("Provider returned an invalid payload")
             rates.append(
                 Rate(
-                    base=str(body_base),
-                    quote=str(quote),
+                    base=body_base,
+                    quote=quote,
                     date=observed_date,
-                    value=float(value),
+                    value=value,
                     provider=self.name,
                 )
             )
         logger.info(
-            "Fetched %s FX rates from OpenExchangeRates",
+            "Fetched %s FX rates from outbound provider",
             len(rates),
-            extra={"provider": self.name, "base": body_base},
+            extra={"provider": self.name, "operation": "sync-daily-rates"},
         )
         return rates
 
