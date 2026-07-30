@@ -67,7 +67,29 @@ Streamlit keeps access, refresh, and session identifiers only in in-memory sessi
 - Audit startup failure logs for sensitive payloads; `StartupManager` surfaces exception metadata for diagnostics, so ensure startup steps raise errors without embedding secrets or personal data.
 - Preserve the centralized inbound request, collection, metadata, and upload limits documented in [`resource-limits.md`](resource-limits.md).
 
-External provider response limits are a separate outbound trust boundary tracked
-in issue
-[#118](https://github.com/Nobodyworld/app-accounting-modular/issues/118);
-the inbound controls documented here do not resolve it.
+### Outbound provider trust boundary
+
+The network-backed provider inventory is limited to ECB, OpenExchangeRates, and
+YFinance. Direct FX HTTPS reads use a shared 1 MiB streaming byte cap, declared
+`Content-Length` validation, independent byte counting, a 512-rate record cap,
+5-second connect and 20-second read timeouts, and at most two attempts for
+connection/read failures or HTTP 429, 502, 503, and 504. Other 4xx responses,
+oversized bodies, and invalid payloads are not retried.
+
+Provider failures use stable domain exceptions and sanitized structured logs.
+Response bodies, credentials, authorization headers, request parameter
+dictionaries, credential-bearing URLs, and raw upstream exception messages are
+excluded. OpenExchangeRates credentials remain request parameters and are never
+interpolated into URL strings or diagnostics. Tests use deterministic stubs and
+no live provider credentials or network requests.
+
+YFinance is restricted to one application-level download call, `threads=False`,
+a 20-second timeout, a maximum 10,000-day requested range, and 10,000 returned
+rows. Because its high-level API returns an already materialized DataFrame, the
+application cannot independently stream or byte-count the library's internal
+HTTP response.
+
+These outbound controls are separate from the inbound request/upload limits and
+from issue
+[#111](https://github.com/Nobodyworld/app-accounting-modular/issues/111), which
+owns container dependency locking, reproducibility, and attestations.
