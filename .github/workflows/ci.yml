@@ -18,13 +18,13 @@ jobs:
         python-version: ["3.12", "3.13", "3.14"]
     steps:
       - name: Checkout repository
-        # actions/checkout v7.0.1
+        # actions/checkout v7.0.1 (released 2026-07-20; resolved 2026-07-31)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
       - name: Set up Python
-        # actions/setup-python v7.0.0
+        # actions/setup-python v7.0.0 (released 2026-07-20; resolved 2026-07-31)
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: ${{ matrix.python-version }}
@@ -34,6 +34,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
+
+      - name: Verify container supply-chain policy
+        run: |
+          python scripts/dependencies/verify_container_lock.py
+          pytest -q tests/test_container_supply_chain.py
 
       - name: Run quality gate and tests
         env:
@@ -52,7 +57,7 @@ jobs:
           pytest -q tests/test_ledger_service.py tests/test_data_snapshot_service.py tests/test_modular_accounting_snapshot.py tests/test_modular_accounting_controls.py
 
       - name: Upload quality evidence
-        # actions/upload-artifact v7.0.1 (2026-06-30)
+        # actions/upload-artifact v7.0.1 (released 2026-04-10; resolved 2026-07-31)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -65,14 +70,22 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  container-smoke:
+  container-supply-chain:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      API_IMAGE: modacct-api:supply-chain-${{ github.sha }}
+      WEB_IMAGE: modacct-web:supply-chain-${{ github.sha }}
     steps:
       - name: Checkout repository
-        # actions/checkout v7.0.1
+        # actions/checkout v7.0.1 (released 2026-07-20; resolved 2026-07-31)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+
+      - name: Verify container dependency lock
+        run: python3 scripts/dependencies/verify_container_lock.py
 
       - name: Verify Compose rejects missing JWT secret
         shell: bash
@@ -98,6 +111,21 @@ jobs:
 
       - name: Build containers
         run: docker compose -p modacct-ci -f config/docker-compose.yml build
+
+      - name: Prepare container evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="${RUNNER_TEMP}/container-supply-chain-evidence"
+          mkdir -p "$evidence_dir"
+
+          api_image_id="$(docker compose -p modacct-ci -f config/docker-compose.yml images -q api)"
+          web_image_id="$(docker compose -p modacct-ci -f config/docker-compose.yml images -q web)"
+          test -n "$api_image_id"
+          test -n "$web_image_id"
+
+          docker image tag "$api_image_id" "$API_IMAGE"
+          docker image tag "$web_image_id" "$WEB_IMAGE"
 
       - name: Start containers
         run: docker compose -p modacct-ci -f config/docker-compose.yml up -d
@@ -155,6 +183,235 @@ jobs:
       - name: Show container status
         run: docker compose -p modacct-ci -f config/docker-compose.yml ps
 
+      - name: Verify installed container dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for service in api web; do
+            docker compose -p modacct-ci -f config/docker-compose.yml exec -T "$service" python -m pip check
+            docker compose -p modacct-ci -f config/docker-compose.yml exec -T "$service" \
+              python scripts/dependencies/verify_installed_packages.py
+          done
+
+      - name: Collect container evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="${RUNNER_TEMP}/container-supply-chain-evidence"
+
+          docker compose -p modacct-ci -f config/docker-compose.yml exec -T api \
+            python -m pip freeze --all | LC_ALL=C sort -f > "$evidence_dir/modacct-api-pip-freeze.txt"
+          docker compose -p modacct-ci -f config/docker-compose.yml exec -T web \
+            python -m pip freeze --all | LC_ALL=C sort -f > "$evidence_dir/modacct-web-pip-freeze.txt"
+          cmp "$evidence_dir/modacct-api-pip-freeze.txt" "$evidence_dir/modacct-web-pip-freeze.txt"
+
+          docker image inspect "$API_IMAGE" --format '{{.Id}}' > "$evidence_dir/modacct-api-image-id.txt"
+          docker image inspect "$WEB_IMAGE" --format '{{.Id}}' > "$evidence_dir/modacct-web-image-id.txt"
+          docker image inspect "$API_IMAGE" | jq -S '.[0] | {
+            image_id: .Id,
+            created: .Created,
+            architecture: .Architecture,
+            os: .Os,
+            user: .Config.User,
+            entrypoint: .Config.Entrypoint,
+            cmd: .Config.Cmd,
+            healthcheck: .Config.Healthcheck,
+            working_dir: .Config.WorkingDir,
+            rootfs_layers: .RootFS.Layers
+          }' > "$evidence_dir/modacct-api-image-config.json"
+          docker image inspect "$WEB_IMAGE" | jq -S '.[0] | {
+            image_id: .Id,
+            created: .Created,
+            architecture: .Architecture,
+            os: .Os,
+            user: .Config.User,
+            entrypoint: .Config.Entrypoint,
+            cmd: .Config.Cmd,
+            healthcheck: .Config.Healthcheck,
+            working_dir: .Config.WorkingDir,
+            rootfs_layers: .RootFS.Layers
+          }' > "$evidence_dir/modacct-web-image-config.json"
+
+          printf 'api=%s\n' "$(sed -n '1p' config/Dockerfile.api)" > "$evidence_dir/pinned-base-references.txt"
+          printf 'web=%s\n' "$(sed -n '1p' config/Dockerfile.web)" >> "$evidence_dir/pinned-base-references.txt"
+          cp requirements-container.lock "$evidence_dir/requirements-container.lock"
+          lock_sha="$(sha256sum requirements-container.lock | awk '{print $1}')"
+          printf '%s  requirements-container.lock\n' "$lock_sha" > "$evidence_dir/runtime-lock.sha256"
+          git rev-parse HEAD > "$evidence_dir/source-commit.txt"
+
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg workflow_ref "$GITHUB_WORKFLOW_REF" \
+            --arg event_name "$GITHUB_EVENT_NAME" \
+            --arg ref "$GITHUB_REF" \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{repository: $repository, workflow: $workflow, workflow_ref: $workflow_ref,
+              event_name: $event_name, ref: $ref, source_sha: $source_sha,
+              run_id: $run_id, run_attempt: $run_attempt, run_url: $run_url}' \
+            > "$evidence_dir/workflow-run.json"
+          docker version --format '{{json .}}' | jq -S . > "$evidence_dir/docker-version.json"
+          docker compose version > "$evidence_dir/docker-compose-version.txt"
+
+          docker image save --output "$evidence_dir/modacct-api-${GITHUB_SHA}.tar" "$API_IMAGE"
+          docker image save --output "$evidence_dir/modacct-web-${GITHUB_SHA}.tar" "$WEB_IMAGE"
+          (
+            cd "$evidence_dir"
+            sha256sum "modacct-api-${GITHUB_SHA}.tar" "modacct-web-${GITHUB_SHA}.tar" \
+              > image-archives.sha256
+          )
+
+      - name: Generate API SPDX SBOM
+        # anchore/sbom-action v0.24.0 (released 2026-03-20; resolved 2026-07-31); Syft v1.50.0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: ${{ env.API_IMAGE }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/container-supply-chain-evidence/modacct-api.spdx.json
+          syft-version: v1.50.0
+          dependency-snapshot: false
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate web SPDX SBOM
+        # anchore/sbom-action v0.24.0 (released 2026-03-20; resolved 2026-07-31); Syft v1.50.0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: ${{ env.WEB_IMAGE }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/container-supply-chain-evidence/modacct-web.spdx.json
+          syft-version: v1.50.0
+          dependency-snapshot: false
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Validate SBOM evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="${RUNNER_TEMP}/container-supply-chain-evidence"
+
+          validate_spdx_subject() {
+            local sbom_path="$1"
+            local image_reference="$2"
+            local image_name="${image_reference%:*}"
+            local image_tag="${image_reference##*:}"
+            jq -e --arg name "$image_name" --arg version "$image_tag" '
+              [.packages[] | select(.primaryPackagePurpose == "CONTAINER")] as $roots
+              | $roots[0] as $root
+              | [$root.checksums[]? | select(.algorithm == "SHA256")] as $sha256
+              | ($roots | length) == 1
+                and $root.name == $name
+                and $root.versionInfo == $version
+                and ($sha256 | length) == 1
+                and ($sha256[0].checksumValue | test("^[0-9A-Fa-f]{64}$"))
+                and any($root.externalRefs[]?;
+                  .referenceType == "purl"
+                  and (.referenceLocator
+                    | startswith("pkg:oci/\($name)@sha256%3A\($sha256[0].checksumValue | ascii_downcase)"))
+                  and (.referenceLocator
+                    | split("?") | .[1] // "" | split("&")
+                    | index("tag=" + $version) != null))
+            ' "$sbom_path"
+          }
+
+          jq -e '.spdxVersion | startswith("SPDX-")' "$evidence_dir/modacct-api.spdx.json"
+          jq -e '.packages | type == "array" and length > 0' "$evidence_dir/modacct-api.spdx.json"
+          validate_spdx_subject "$evidence_dir/modacct-api.spdx.json" "$API_IMAGE"
+          jq -e '.spdxVersion | startswith("SPDX-")' "$evidence_dir/modacct-web.spdx.json"
+          jq -e '.packages | type == "array" and length > 0' "$evidence_dir/modacct-web.spdx.json"
+          validate_spdx_subject "$evidence_dir/modacct-web.spdx.json" "$WEB_IMAGE"
+
+          api_manifest_digest="$(jq -r '
+            [.packages[] | select(.primaryPackagePurpose == "CONTAINER")][0]
+            | .checksums[] | select(.algorithm == "SHA256")
+            | .checksumValue | ascii_downcase
+          ' "$evidence_dir/modacct-api.spdx.json")"
+          web_manifest_digest="$(jq -r '
+            [.packages[] | select(.primaryPackagePurpose == "CONTAINER")][0]
+            | .checksums[] | select(.algorithm == "SHA256")
+            | .checksumValue | ascii_downcase
+          ' "$evidence_dir/modacct-web.spdx.json")"
+          printf 'api=sha256:%s\nweb=sha256:%s\n' "$api_manifest_digest" "$web_manifest_digest" \
+            > "$evidence_dir/image-manifest-digests.txt"
+          (
+            cd "$evidence_dir"
+            sha256sum modacct-api.spdx.json modacct-web.spdx.json > sbom.sha256
+            sha256sum --check image-archives.sha256
+            sha256sum --check sbom.sha256
+            sha256sum --check runtime-lock.sha256
+          )
+
       - name: Tear down containers
         if: always()
         run: docker compose -p modacct-ci -f config/docker-compose.yml down -v --remove-orphans
+
+      - name: Upload container supply-chain evidence
+        if: always()
+        # actions/upload-artifact v7.0.1 (released 2026-04-10; resolved 2026-07-31)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: container-supply-chain-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/container-supply-chain-evidence
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  container-attestations:
+    if: >-
+      github.repository == 'Nobodyworld/app-accounting-modular' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    needs: container-supply-chain
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download container supply-chain evidence
+        # actions/download-artifact v8.0.1 (released 2026-03-11; resolved 2026-07-31)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: container-supply-chain-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/container-supply-chain-evidence
+
+      - name: Verify downloaded evidence checksums
+        working-directory: ${{ runner.temp }}/container-supply-chain-evidence
+        run: |
+          sha256sum --check image-archives.sha256
+          sha256sum --check sbom.sha256
+          sha256sum --check runtime-lock.sha256
+
+      - name: Attest API archive provenance
+        # actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-api-${{ github.sha }}.tar
+          push-to-registry: false
+
+      - name: Attest API archive SBOM
+        # actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-api-${{ github.sha }}.tar
+          sbom-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-api.spdx.json
+          push-to-registry: false
+
+      - name: Attest web archive provenance
+        # actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-web-${{ github.sha }}.tar
+          push-to-registry: false
+
+      - name: Attest web archive SBOM
+        # actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-web-${{ github.sha }}.tar
+          sbom-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-web.spdx.json
+          push-to-registry: false

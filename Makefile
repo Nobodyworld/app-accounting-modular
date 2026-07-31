@@ -24,7 +24,8 @@ test:
 coverage: test
 
 security:
-	$(PYTHON) -m pip_audit --timeout 60 -r requirements.txt -r requirements-dev.txt
+	$(PYTHON) -m pip_audit --timeout 60 --require-hashes --disable-pip -r requirements-container.lock
+	$(PYTHON) -m pip_audit --timeout 60 -r requirements-dev.txt
 
 quality: lint format-check typecheck test security
 
