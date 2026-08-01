@@ -1,4 +1,4 @@
-"""Expected-failure regression evidence for post-UX audit findings."""
+"""Regression evidence for resolved post-UX audit findings."""
 
 from __future__ import annotations
 
@@ -14,10 +14,6 @@ from pydantic import BaseModel
 
 
 @pytest.mark.parametrize("prefix", ["=", "+", "-", "@"])
-@pytest.mark.xfail(
-    strict=True,
-    reason="A87-003 / issue #108: CSV text cells do not neutralize spreadsheet formula prefixes",
-)
 def test_budget_csv_neutralizes_formula_prefixes(prefix: str) -> None:
     line = BudgetVarianceLine(
         account_id=1,
@@ -52,10 +48,6 @@ def _maximum_length(model: type[BaseModel], field_name: str) -> int | None:
         (ScenarioBatchRequest, "scenarios"),
         (WorkflowIngestRequest, "transactions"),
     ],
-)
-@pytest.mark.xfail(
-    strict=True,
-    reason="A87-004 / issue #109: expensive request collections have no maximum length",
 )
 def test_expensive_request_collections_have_maximums(model: type[BaseModel], field_name: str) -> None:
     maximum = _maximum_length(model, field_name)

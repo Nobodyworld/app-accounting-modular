@@ -117,9 +117,19 @@ def api_context():
         org1_id = org1.id
         org2_id = org2.id
     tokens = {"admin": admin_pair.access_token, "member": member_pair.access_token}
+    refresh_tokens = {"admin": admin_pair.refresh_token, "member": member_pair.refresh_token}
 
     try:
-        yield client, {"org1_id": org1_id, "org2_id": org2_id, "tokens": tokens}, engine
+        yield (
+            client,
+            {
+                "org1_id": org1_id,
+                "org2_id": org2_id,
+                "tokens": tokens,
+                "refresh_tokens": refresh_tokens,
+            },
+            engine,
+        )
     finally:
         client.close()
         engine.dispose()
@@ -154,16 +164,30 @@ def test_protected_route_rejects_malformed_or_untrusted_authorization(api_contex
 
 
 @pytest.mark.parametrize(
-    "token",
+    ("subject", "expired"),
     [
-        create_access_token({"sub": "1"}, expires_delta=timedelta(seconds=-1)),
-        create_access_token({}),
-        create_access_token({"sub": "not-an-integer"}),
-        create_access_token({"sub": "999999999"}),
+        ("persisted", True),
+        (None, False),
+        ("not-an-integer", False),
+        ("999999999", False),
     ],
 )
-def test_protected_route_rejects_expired_missing_malformed_or_deleted_subject(api_context, token) -> None:
+def test_protected_route_rejects_expired_missing_malformed_or_deleted_subject(
+    api_context, subject: str | None, expired: bool
+) -> None:
     client, ctx, _ = api_context
+    claims = jwt.decode(
+        ctx["tokens"]["admin"],
+        settings.jwt_secret_key,
+        algorithms=[settings.jwt_algorithm],
+    )
+    if subject is None:
+        claims.pop("sub")
+    elif subject != "persisted":
+        claims["sub"] = subject
+    if expired:
+        claims["exp"] = datetime.now(UTC) - timedelta(seconds=1)
+    token = jwt.encode(claims, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     response = client.get(
         "/ledger/trial-balance",
         params={"organization_id": ctx["org1_id"]},
@@ -201,10 +225,6 @@ def test_role_based_access_blocks_tax_sync(api_context):
         ("/tax/sync", {"provider_key": "not-allowed"}),
     ],
 )
-@pytest.mark.xfail(
-    strict=True,
-    reason="A87-002: market and tax provider lookup occurs before tenant authorization",
-)
 def test_provider_discovery_occurs_after_tenant_authorization(api_context, path, params) -> None:
     client, ctx, _ = api_context
     response = client.post(
@@ -224,26 +244,16 @@ def test_refresh_token_generation() -> None:
     assert "sid" in decoded
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="A87-001 / issue #106: refresh tokens are accepted by the protected access-token dependency",
-)
 def test_refresh_token_is_rejected_by_protected_route(api_context) -> None:
     client, ctx, _ = api_context
-    access_claims = jwt.decode(
-        ctx["tokens"]["admin"],
-        settings.jwt_secret_key,
-        algorithms=[settings.jwt_algorithm],
-    )
-    refresh_token = create_refresh_token(int(access_claims["sub"]))
-
     response = client.get(
         "/ledger/trial-balance",
         params={"organization_id": ctx["org1_id"]},
-        headers={"Authorization": f"Bearer {refresh_token}"},
+        headers={"Authorization": f"Bearer {ctx['refresh_tokens']['admin']}"},
     )
 
     assert response.status_code == 401
+    assert response.json()["detail"] == "Could not validate credentials"
 
 
 def test_login_returns_refresh_token(api_context) -> None:
