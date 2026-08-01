@@ -41,7 +41,7 @@ The default Docker Compose profile is for local demonstration only.
 - FastAPI rejects request bodies over the configured maximum before route execution; every proxy or ingress must enforce an equal or smaller cap.
 - Budget and scenario-plan files are constrained by both Streamlit configuration and the stricter application upload policy.
 
-Do not publish the API or Streamlit ports on `0.0.0.0`, a LAN address, or a public interface without a separate review covering HTTPS termination, trusted proxies and hosts, network access control, production secret management, host/container runtime hardening, and the open findings in the post-UX security audit.
+Do not publish the API or Streamlit ports on `0.0.0.0`, a LAN address, or a public interface without a separate review covering HTTPS termination, trusted proxies and hosts, network access control, production secret management, host/container runtime hardening, and the residual operator assumptions in the [post-UX security audit](security/POST_UX_PRE_RELEASE_AUDIT.md).
 
 The application may generate an ephemeral JWT secret for direct temporary local API demonstrations. That mode rotates sessions on restart and is not a substitute for an explicit persistent secret in containers or any production-like deployment.
 

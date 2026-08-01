@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+import secrets
+from datetime import UTC, date, datetime, timedelta
 
 import jwt
 import pytest
@@ -18,6 +19,8 @@ from apps.api.services.ledger_service import LedgerService
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
+
+_AUDIT_WRONG_SIGNING_KEY = secrets.token_urlsafe(48)
 
 
 @pytest.fixture()
@@ -114,9 +117,19 @@ def api_context():
         org1_id = org1.id
         org2_id = org2.id
     tokens = {"admin": admin_pair.access_token, "member": member_pair.access_token}
+    refresh_tokens = {"admin": admin_pair.refresh_token, "member": member_pair.refresh_token}
 
     try:
-        yield client, {"org1_id": org1_id, "org2_id": org2_id, "tokens": tokens}, engine
+        yield (
+            client,
+            {
+                "org1_id": org1_id,
+                "org2_id": org2_id,
+                "tokens": tokens,
+                "refresh_tokens": refresh_tokens,
+            },
+            engine,
+        )
     finally:
         client.close()
         engine.dispose()
@@ -126,6 +139,64 @@ def test_requires_authentication(api_context):
     client, ctx, _ = api_context
     response = client.get("/ledger/trial-balance", params={"organization_id": ctx["org1_id"]})
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "authorization",
+    [
+        "Basic not-a-bearer-token",
+        "Bearer not-a-jwt",
+        f"Bearer {jwt.encode({'sub': '1'}, _AUDIT_WRONG_SIGNING_KEY, algorithm='HS256')}",
+        f"Bearer {jwt.encode({'sub': '1'}, settings.jwt_secret_key, algorithm='HS384')}",
+    ],
+)
+def test_protected_route_rejects_malformed_or_untrusted_authorization(api_context, authorization) -> None:
+    client, ctx, _ = api_context
+    response = client.get(
+        "/ledger/trial-balance",
+        params={"organization_id": ctx["org1_id"]},
+        headers={"Authorization": authorization},
+    )
+
+    assert response.status_code == 401
+    assert "traceback" not in response.text.lower()
+    assert settings.jwt_secret_key not in response.text
+
+
+@pytest.mark.parametrize(
+    ("subject", "expired"),
+    [
+        ("persisted", True),
+        (None, False),
+        ("not-an-integer", False),
+        ("999999999", False),
+    ],
+)
+def test_protected_route_rejects_expired_missing_malformed_or_deleted_subject(
+    api_context, subject: str | None, expired: bool
+) -> None:
+    client, ctx, _ = api_context
+    claims = jwt.decode(
+        ctx["tokens"]["admin"],
+        settings.jwt_secret_key,
+        algorithms=[settings.jwt_algorithm],
+    )
+    if subject is None:
+        claims.pop("sub")
+    elif subject != "persisted":
+        claims["sub"] = subject
+    if expired:
+        claims["exp"] = datetime.now(UTC) - timedelta(seconds=1)
+    token = jwt.encode(claims, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    response = client.get(
+        "/ledger/trial-balance",
+        params={"organization_id": ctx["org1_id"]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Could not validate credentials"
+    assert settings.jwt_secret_key not in response.text
 
 
 def test_role_based_access_blocks_tax_sync(api_context):
@@ -139,12 +210,50 @@ def test_role_based_access_blocks_tax_sync(api_context):
     assert response.status_code == 403
 
 
+@pytest.mark.parametrize(
+    ("path", "params"),
+    [
+        (
+            "/market/sync",
+            {
+                "symbol": "AUDIT",
+                "start": "2026-01-01",
+                "end": "2026-01-02",
+                "provider_key": "not-allowed",
+            },
+        ),
+        ("/tax/sync", {"provider_key": "not-allowed"}),
+    ],
+)
+def test_provider_discovery_occurs_after_tenant_authorization(api_context, path, params) -> None:
+    client, ctx, _ = api_context
+    response = client.post(
+        path,
+        params={"organization_id": ctx["org2_id"], **params},
+        headers={"Authorization": f"Bearer {ctx['tokens']['admin']}"},
+    )
+
+    assert response.status_code == 403
+
+
 def test_refresh_token_generation() -> None:
     token = create_refresh_token(123)
     decoded = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     assert decoded["sub"] == "123"
     assert decoded["type"] == "refresh"
     assert "sid" in decoded
+
+
+def test_refresh_token_is_rejected_by_protected_route(api_context) -> None:
+    client, ctx, _ = api_context
+    response = client.get(
+        "/ledger/trial-balance",
+        params={"organization_id": ctx["org1_id"]},
+        headers={"Authorization": f"Bearer {ctx['refresh_tokens']['admin']}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Could not validate credentials"
 
 
 def test_login_returns_refresh_token(api_context) -> None:

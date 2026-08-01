@@ -98,7 +98,10 @@ Errors return standard HTTP status codes with JSON error details:
 
 ## Rate Limiting
 
-API endpoints implement rate limiting. Check response headers for limit information.
+Login applies a process-local failure counter and five-minute lockout after five
+failed attempts. It resets on restart and does not coordinate across workers or
+hosts. The API does not provide general distributed rate-limit headers; LAN,
+multi-worker, and public deployments require a shared edge or gateway control.
 
 ## WebSocket Support
 
