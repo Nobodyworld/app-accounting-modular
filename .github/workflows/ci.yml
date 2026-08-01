@@ -75,7 +75,6 @@ jobs:
     env:
       API_IMAGE: modacct-api:supply-chain-${{ github.sha }}
       WEB_IMAGE: modacct-web:supply-chain-${{ github.sha }}
-      EVIDENCE_DIR: ${{ runner.temp }}/container-supply-chain-evidence
     steps:
       - name: Checkout repository
         # actions/checkout v7.0.1 (released 2026-07-20; resolved 2026-07-31)
@@ -87,7 +86,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$EVIDENCE_DIR"
+          evidence_dir="${RUNNER_TEMP}/container-supply-chain-evidence"
+          mkdir -p "$evidence_dir"
           jq -n \
             --arg repository "$GITHUB_REPOSITORY" \
             --arg workflow "$GITHUB_WORKFLOW" \
@@ -101,7 +101,7 @@ jobs:
             '{repository: $repository, workflow: $workflow, workflow_ref: $workflow_ref,
               event_name: $event_name, ref: $ref, source_sha: $source_sha,
               run_id: $run_id, run_attempt: $run_attempt, run_url: $run_url}' \
-            > "$EVIDENCE_DIR/workflow-run.json"
+            > "$evidence_dir/workflow-run.json"
 
       - name: Verify container dependency lock
         run: python3 scripts/dependencies/verify_container_lock.py
@@ -218,14 +218,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose -p modacct-ci -f config/docker-compose.yml exec -T api \
-            python -m pip freeze --all | LC_ALL=C sort -f > "$EVIDENCE_DIR/modacct-api-pip-freeze.txt"
-          docker compose -p modacct-ci -f config/docker-compose.yml exec -T web \
-            python -m pip freeze --all | LC_ALL=C sort -f > "$EVIDENCE_DIR/modacct-web-pip-freeze.txt"
-          cmp "$EVIDENCE_DIR/modacct-api-pip-freeze.txt" "$EVIDENCE_DIR/modacct-web-pip-freeze.txt"
+          evidence_dir="${RUNNER_TEMP}/container-supply-chain-evidence"
 
-          docker image inspect "$API_IMAGE" --format '{{.Id}}' > "$EVIDENCE_DIR/modacct-api-image-id.txt"
-          docker image inspect "$WEB_IMAGE" --format '{{.Id}}' > "$EVIDENCE_DIR/modacct-web-image-id.txt"
+          docker compose -p modacct-ci -f config/docker-compose.yml exec -T api \
+            python -m pip freeze --all | LC_ALL=C sort -f > "$evidence_dir/modacct-api-pip-freeze.txt"
+          docker compose -p modacct-ci -f config/docker-compose.yml exec -T web \
+            python -m pip freeze --all | LC_ALL=C sort -f > "$evidence_dir/modacct-web-pip-freeze.txt"
+          cmp "$evidence_dir/modacct-api-pip-freeze.txt" "$evidence_dir/modacct-web-pip-freeze.txt"
+
+          docker image inspect "$API_IMAGE" --format '{{.Id}}' > "$evidence_dir/modacct-api-image-id.txt"
+          docker image inspect "$WEB_IMAGE" --format '{{.Id}}' > "$evidence_dir/modacct-web-image-id.txt"
           docker image inspect "$API_IMAGE" | jq -S '.[0] | {
             image_id: .Id,
             created: .Created,
@@ -237,7 +239,7 @@ jobs:
             healthcheck: .Config.Healthcheck,
             working_dir: .Config.WorkingDir,
             rootfs_layers: .RootFS.Layers
-          }' > "$EVIDENCE_DIR/modacct-api-image-config.json"
+          }' > "$evidence_dir/modacct-api-image-config.json"
           docker image inspect "$WEB_IMAGE" | jq -S '.[0] | {
             image_id: .Id,
             created: .Created,
@@ -249,21 +251,21 @@ jobs:
             healthcheck: .Config.Healthcheck,
             working_dir: .Config.WorkingDir,
             rootfs_layers: .RootFS.Layers
-          }' > "$EVIDENCE_DIR/modacct-web-image-config.json"
+          }' > "$evidence_dir/modacct-web-image-config.json"
 
-          printf 'api=%s\n' "$(sed -n '1p' config/Dockerfile.api)" > "$EVIDENCE_DIR/pinned-base-references.txt"
-          printf 'web=%s\n' "$(sed -n '1p' config/Dockerfile.web)" >> "$EVIDENCE_DIR/pinned-base-references.txt"
-          cp requirements-container.lock "$EVIDENCE_DIR/requirements-container.lock"
+          printf 'api=%s\n' "$(sed -n '1p' config/Dockerfile.api)" > "$evidence_dir/pinned-base-references.txt"
+          printf 'web=%s\n' "$(sed -n '1p' config/Dockerfile.web)" >> "$evidence_dir/pinned-base-references.txt"
+          cp requirements-container.lock "$evidence_dir/requirements-container.lock"
           lock_sha="$(sha256sum requirements-container.lock | awk '{print $1}')"
-          printf '%s  requirements-container.lock\n' "$lock_sha" > "$EVIDENCE_DIR/runtime-lock.sha256"
-          git rev-parse HEAD > "$EVIDENCE_DIR/source-commit.txt"
-          docker version --format '{{json .}}' | jq -S . > "$EVIDENCE_DIR/docker-version.json"
-          docker compose version > "$EVIDENCE_DIR/docker-compose-version.txt"
+          printf '%s  requirements-container.lock\n' "$lock_sha" > "$evidence_dir/runtime-lock.sha256"
+          git rev-parse HEAD > "$evidence_dir/source-commit.txt"
+          docker version --format '{{json .}}' | jq -S . > "$evidence_dir/docker-version.json"
+          docker compose version > "$evidence_dir/docker-compose-version.txt"
 
-          docker image save --output "$EVIDENCE_DIR/modacct-api-${GITHUB_SHA}.tar" "$API_IMAGE"
-          docker image save --output "$EVIDENCE_DIR/modacct-web-${GITHUB_SHA}.tar" "$WEB_IMAGE"
+          docker image save --output "$evidence_dir/modacct-api-${GITHUB_SHA}.tar" "$API_IMAGE"
+          docker image save --output "$evidence_dir/modacct-web-${GITHUB_SHA}.tar" "$WEB_IMAGE"
           (
-            cd "$EVIDENCE_DIR"
+            cd "$evidence_dir"
             sha256sum "modacct-api-${GITHUB_SHA}.tar" "modacct-web-${GITHUB_SHA}.tar" > image-archives.sha256
           )
 
@@ -273,7 +275,7 @@ jobs:
         with:
           image: ${{ env.API_IMAGE }}
           format: spdx-json
-          output-file: ${{ env.EVIDENCE_DIR }}/modacct-api.spdx.json
+          output-file: ${{ runner.temp }}/container-supply-chain-evidence/modacct-api.spdx.json
           syft-version: v1.50.0
           dependency-snapshot: false
           upload-artifact: false
@@ -285,7 +287,7 @@ jobs:
         with:
           image: ${{ env.WEB_IMAGE }}
           format: spdx-json
-          output-file: ${{ env.EVIDENCE_DIR }}/modacct-web.spdx.json
+          output-file: ${{ runner.temp }}/container-supply-chain-evidence/modacct-web.spdx.json
           syft-version: v1.50.0
           dependency-snapshot: false
           upload-artifact: false
@@ -295,6 +297,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          evidence_dir="${RUNNER_TEMP}/container-supply-chain-evidence"
+
           validate_spdx_subject() {
             local sbom_path="$1"
             local image_reference="$2"
@@ -319,27 +323,27 @@ jobs:
             ' "$sbom_path"
           }
 
-          jq -e '.spdxVersion | startswith("SPDX-")' "$EVIDENCE_DIR/modacct-api.spdx.json"
-          jq -e '.packages | type == "array" and length > 0' "$EVIDENCE_DIR/modacct-api.spdx.json"
-          validate_spdx_subject "$EVIDENCE_DIR/modacct-api.spdx.json" "$API_IMAGE"
-          jq -e '.spdxVersion | startswith("SPDX-")' "$EVIDENCE_DIR/modacct-web.spdx.json"
-          jq -e '.packages | type == "array" and length > 0' "$EVIDENCE_DIR/modacct-web.spdx.json"
-          validate_spdx_subject "$EVIDENCE_DIR/modacct-web.spdx.json" "$WEB_IMAGE"
+          jq -e '.spdxVersion | startswith("SPDX-")' "$evidence_dir/modacct-api.spdx.json"
+          jq -e '.packages | type == "array" and length > 0' "$evidence_dir/modacct-api.spdx.json"
+          validate_spdx_subject "$evidence_dir/modacct-api.spdx.json" "$API_IMAGE"
+          jq -e '.spdxVersion | startswith("SPDX-")' "$evidence_dir/modacct-web.spdx.json"
+          jq -e '.packages | type == "array" and length > 0' "$evidence_dir/modacct-web.spdx.json"
+          validate_spdx_subject "$evidence_dir/modacct-web.spdx.json" "$WEB_IMAGE"
 
           api_manifest_digest="$(jq -r '
             [.packages[] | select(.primaryPackagePurpose == "CONTAINER")][0]
             | .checksums[] | select(.algorithm == "SHA256")
             | .checksumValue | ascii_downcase
-          ' "$EVIDENCE_DIR/modacct-api.spdx.json")"
+          ' "$evidence_dir/modacct-api.spdx.json")"
           web_manifest_digest="$(jq -r '
             [.packages[] | select(.primaryPackagePurpose == "CONTAINER")][0]
             | .checksums[] | select(.algorithm == "SHA256")
             | .checksumValue | ascii_downcase
-          ' "$EVIDENCE_DIR/modacct-web.spdx.json")"
+          ' "$evidence_dir/modacct-web.spdx.json")"
           printf 'api=sha256:%s\nweb=sha256:%s\n' "$api_manifest_digest" "$web_manifest_digest" \
-            > "$EVIDENCE_DIR/image-manifest-digests.txt"
+            > "$evidence_dir/image-manifest-digests.txt"
           (
-            cd "$EVIDENCE_DIR"
+            cd "$evidence_dir"
             sha256sum modacct-api.spdx.json modacct-web.spdx.json > sbom.sha256
             sha256sum --check image-archives.sha256
             sha256sum --check sbom.sha256
@@ -356,7 +360,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: container-supply-chain-evidence-${{ github.sha }}
-          path: ${{ env.EVIDENCE_DIR }}
+          path: ${{ runner.temp }}/container-supply-chain-evidence
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
