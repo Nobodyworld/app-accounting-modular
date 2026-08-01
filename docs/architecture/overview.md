@@ -135,6 +135,15 @@ touching the core. The diagram below illustrates the major runtime surfaces.
   signature validity alone. Hourly APScheduler cleanup and opportunistic bounded
   cleanup remove only refresh-expired session rows; refresh reuse revokes the
   session family conservatively.
+* Container dependency resolution is a separate build-time control plane:
+  human-reviewed bounded requirements feed a Docker-isolated, hash-locked `uv`
+  compiler; its committed Python 3.14/Linux lock feeds both digest-pinned
+  Dockerfiles; and CI emits image archives, inventories, SPDX SBOMs, and
+  checksums. The ordinary freshness check is offline and never re-resolves
+  PyPI. Pull requests retain evidence without write credentials, while a
+  separate trusted-event job may bind provenance and SBOM attestations to the
+  exported archives. The complete flow and its limits are documented in
+  [`../container-supply-chain.md`](../container-supply-chain.md).
 
 ## Extension lifecycle
 

@@ -111,6 +111,8 @@ For Docker Compose, configuration, validation, and troubleshooting, use the [set
 
 - Local and clean-clone quality-gate evidence is tracked in [PUBLIC_RELEASE_AUDIT.md](PUBLIC_RELEASE_AUDIT.md).
 - Hosted CI run evidence and artifact disposition are tracked in the same audit file.
+- The digest-pinned container lock, SBOM, checksum, and trusted-event attestation
+  design is documented in the [container supply-chain guide](docs/container-supply-chain.md).
 - Changelog and release notes live in [docs/CHANGELOG.md](docs/CHANGELOG.md) and [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
 
 ## Repository Structure
@@ -129,6 +131,7 @@ For Docker Compose, configuration, validation, and troubleshooting, use the [set
 ## Additional Documentation
 
 - [Setup guide](docs/setup.md)
+- [Reproducible container supply chain](docs/container-supply-chain.md)
 - [Architecture overview](docs/architecture/overview.md)
 - [Adapter contracts](docs/adapters.md)
 - [Extension guide](docs/guides/extension_guide.md)

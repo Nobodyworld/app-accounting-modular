@@ -32,6 +32,11 @@ The default Docker Compose profile is for local demonstration only.
 - API and web processes run as numeric UID/GID `10001:10001` rather than root.
 - Both root filesystems are read-only, all Linux capabilities are dropped, and `no-new-privileges` is enabled.
 - The API may write only to its `/data` volume and the bounded `/tmp` tmpfs; the web service may write only to its bounded `/tmp` tmpfs.
+- Both images use the same official Python 3.14 manifest-list digest and install
+  the complete runtime graph from `requirements-container.lock` with required
+  hashes, binary wheels only, dependency resolution disabled, and `pip check`.
+- Container builds retain the pip version supplied by the pinned base; they do
+  not upgrade pip, setuptools, or wheel.
 - Container-internal listeners remain available for API/web service-to-service communication, but that does not authorize LAN or public exposure.
 - FastAPI rejects request bodies over the configured maximum before route execution; every proxy or ingress must enforce an equal or smaller cap.
 - Budget and scenario-plan files are constrained by both Streamlit configuration and the stricter application upload policy.
@@ -64,6 +69,12 @@ Streamlit keeps access, refresh, and session identifiers only in in-memory sessi
 - Before public release, run Gitleaks or an equivalent full-history scanner and record the tool version, command, commits scanned, findings, false-positive disposition, and final result in [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md).
 - Use environment variables (see `config/.env.example`) to configure sensitive settings.
 - Review [`DEPENDENCIES.md`](DEPENDENCIES.md) quarterly for updated security posture notes and dependency audit status.
+- Run `python scripts/dependencies/verify_container_lock.py` for offline lock
+  freshness and policy validation. Regenerate only as an intentional,
+  networked dependency update and review every direct and transitive change.
+- Verify downloaded image evidence checksums before using
+  `gh attestation verify`; pull-request evidence is intentionally unattested,
+  while publication is restricted to trusted `main` pushes and manual runs.
 - Audit startup failure logs for sensitive payloads; `StartupManager` surfaces exception metadata for diagnostics, so ensure startup steps raise errors without embedding secrets or personal data.
 - Preserve the centralized inbound request, collection, metadata, and upload limits documented in [`resource-limits.md`](resource-limits.md).
 
@@ -90,6 +101,5 @@ application cannot independently stream or byte-count the library's internal
 HTTP response.
 
 These outbound controls are separate from the inbound request/upload limits and
-from issue
-[#111](https://github.com/Nobodyworld/app-accounting-modular/issues/111), which
-owns container dependency locking, reproducibility, and attestations.
+from the container dependency, evidence, and trusted-attestation controls in
+the [container supply-chain guide](container-supply-chain.md).

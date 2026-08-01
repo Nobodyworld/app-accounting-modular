@@ -721,3 +721,13 @@ runs/
 .venv314/
 modacct.db
 
+# Committed supply-chain policy artifacts (the general *.lock rule remains for other tools).
+!/requirements-container.lock
+!/requirements-lock-tools.lock
+
+# Run-specific container evidence belongs in CI artifacts, never the repository.
+/container-evidence/
+/*.tar
+/*.spdx.json
+/*.sha256
+

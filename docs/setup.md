@@ -8,7 +8,8 @@ This guide covers the validated local-development and container workflows for Mo
 - `pip`
 - Git
 - Optional: GNU Make
-- Optional: Docker with the `docker compose` plugin
+- Optional: Docker with the `docker compose` and Buildx plugins
+- Optional: GitHub CLI for verifying trusted-run attestations
 
 The hosted CI matrix validates Python 3.12, 3.13, and 3.14. Python 3.14 is the primary development target.
 
@@ -205,6 +206,60 @@ Individual image builds from the repository root:
 docker build -f config/Dockerfile.api -t modacct-api .
 docker build -f config/Dockerfile.web -t modacct-web .
 ```
+
+### Container dependency workflow
+
+The API and web Dockerfiles share the official digest-pinned
+`python:3.14-slim` base and install only the exact, hashed graph in
+`requirements-container.lock`. The `requirements.txt` and
+`requirements-dev.txt` files remain human-reviewed compatibility manifests.
+The local-development commands above may update pip in a developer virtual
+environment; application container builds do not update the pip supplied by
+their pinned base.
+
+Regenerate the runtime lock only for an intentional dependency or base-image
+update. Docker Desktop users can run:
+
+```powershell
+pwsh scripts/dependencies/Generate-ContainerLock.ps1
+```
+
+On Linux:
+
+```bash
+sh scripts/dependencies/generate-container-lock.sh
+```
+
+Freshness and structural policy checks are offline and never rewrite the lock:
+
+```bash
+python scripts/dependencies/verify_container_lock.py
+pytest -q tests/test_container_supply_chain.py
+```
+
+For clean dependency-resolution evidence, build without the Docker cache:
+
+```bash
+docker build --no-cache -f config/Dockerfile.api -t modacct-api:repro .
+docker build --no-cache -f config/Dockerfile.web -t modacct-web:repro .
+```
+
+Trusted workflow runs attach provenance and SPDX SBOM attestations to exported
+image archives. After downloading an archive and its checksum, verify both:
+
+```powershell
+$SourceSha = "<source-commit-sha>"
+$Archive = ".\container-evidence\modacct-api-$SourceSha.tar"
+$Expected = (Select-String -Path ".\container-evidence\image-archives.sha256" -Pattern "modacct-api-$SourceSha\.tar$").Line.Split()[0]
+$Actual = (Get-FileHash -Algorithm SHA256 $Archive).Hash.ToLowerInvariant()
+if ($Actual -ne $Expected) { throw "API archive checksum mismatch" }
+gh attestation verify $Archive --repo Nobodyworld/app-accounting-modular
+```
+
+Pull-request runs create ordinary checksum and SBOM evidence but intentionally
+do not publish attestations. See the
+[container supply-chain guide](container-supply-chain.md) for the exact base
+digest, generator bootstrap, evidence inventory, update flow, and limitations.
 
 The final images declare user `10001:10001`. Running them directly as root bypasses part of the validated Compose security boundary and is not the supported default.
 
