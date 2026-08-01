@@ -1,6 +1,6 @@
 # FastAPI route and authorization inventory
 
-- Tested commit: `acc2dab5e3a5083da46ec57849b619fc3ea982ed`
+- Tested commit: `e0d62a730089043563dc554d4afe842817975dfd`
 - Operating system: `Windows-11-10.0.26200-SP0`
 - Python: `3.14.0`
 - Generator: `scripts/security/inventory_routes.py`
@@ -17,7 +17,7 @@
 | tenant manager | 11 |
 | tenant administrator | 2 |
 
-The totals include FastAPI's four public documentation/schema paths with both GET and HEAD methods. The application itself exposes 32 method/path entries. “Tenant manager” means an active member with the route-specific management flag or `is_admin`; the API has no single generic manager role. UI gating is not counted as authorization evidence.
+The totals include 8 method/path entries across 4 FastAPI documentation/schema paths. The application itself exposes 32 method/path entries. “Tenant manager” means an active member with the route-specific management flag or `is_admin`; the API has no single generic manager role. UI gating is not counted as authorization evidence.
 
 ## Complete inventory
 

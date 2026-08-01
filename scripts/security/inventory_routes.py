@@ -406,6 +406,7 @@ def render_markdown(routes: Sequence[InventoryRoute]) -> str:
     counts: dict[str, int] = {}
     for route in routes:
         counts[route.policy.classification] = counts.get(route.policy.classification, 0) + 1
+    framework_paths = {key.split(" ", 1)[1] for key in FRAMEWORK_POLICIES}
 
     lines = [
         "# FastAPI route and authorization inventory",
@@ -428,7 +429,8 @@ def render_markdown(routes: Sequence[InventoryRoute]) -> str:
     lines.extend(
         [
             "",
-            "The totals include FastAPI's four public documentation/schema paths with both GET and HEAD methods. "
+            f"The totals include {len(FRAMEWORK_POLICIES)} method/path entries across {len(framework_paths)} "
+            "FastAPI documentation/schema paths. "
             f"The application itself exposes {len(POLICIES)} method/path entries. “Tenant manager” means an active "
             "member with "
             "the route-specific management flag or `is_admin`; the API has no single generic manager role. "
