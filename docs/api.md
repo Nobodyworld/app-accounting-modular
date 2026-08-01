@@ -8,7 +8,15 @@ http://localhost:8000
 ```
 
 ## Authentication
-Most endpoints require authentication. See the security documentation for details.
+
+Most endpoints require a bearer access token backed by an active persisted server session.
+
+- `POST /auth/token` accepts the OAuth2 password form and returns `access_token`, `refresh_token`, `session_id`, and `token_type`.
+- `POST /auth/refresh` accepts `{"refresh_token": "..."}` and rotates the access/refresh pair once while preserving `session_id`.
+- `POST /auth/logout` requires the access bearer token and revokes its current session.
+- `POST /auth/sessions/{session_id}/revoke?organization_id={id}` requires an authenticated administrator for the named organization and revokes only a session belonging to a member of that organization.
+
+Access and refresh credentials are not interchangeable. Refresh reuse revokes the complete session. Authentication failures use a generic `401` response and do not disclose whether a claim, user, or persisted session caused rejection. See [`SECURITY.md`](SECURITY.md#authentication-session-lifecycle) for storage, cleanup, and client-handling details.
 
 ## Core Endpoints
 

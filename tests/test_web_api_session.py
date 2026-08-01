@@ -9,6 +9,7 @@ from apps.web.api_session import (
     AUTH_EMAIL_KEY,
     ORGANIZATION_ID_KEY,
     PROTECTED_UTILITY_STATE_KEYS,
+    REFRESH_TOKEN_KEY,
     SESSION_ID_KEY,
     ApiLoginResult,
     api_error_detail,
@@ -59,6 +60,7 @@ def test_request_access_token_normalizes_credentials_and_validates_payload() -> 
             200,
             {
                 "access_token": token_value,
+                "refresh_token": "refresh-token",
                 "token_type": "bearer",
                 "session_id": "session-123",
             },
@@ -72,8 +74,10 @@ def test_request_access_token_normalizes_credentials_and_validates_payload() -> 
     )
 
     assert error is None
+    refresh_value = "-".join(("refresh", "token"))
     assert result == ApiLoginResult(
         access_token=token_value,
+        refresh_token=refresh_value,
         token_type="bearer",
         session_id="session-123",
     )
@@ -103,7 +107,7 @@ def test_request_access_token_rejects_malformed_success_payload() -> None:
     )
 
     assert result is None
-    assert error == "Authentication response did not include an access token."
+    assert error == "Authentication response did not include a valid access token."
 
 
 def test_api_error_detail_flattens_validation_messages() -> None:
@@ -161,11 +165,18 @@ def test_store_api_session_purges_prior_tenant_state_before_organization_change(
         "snapshot_base_input": "EUR",
     }
     token_value = "-".join(("new", "session", "token"))
-    result = ApiLoginResult(access_token=token_value, token_type="bearer", session_id="new-session")
+    refresh_value = "-".join(("new", "refresh", "token"))
+    result = ApiLoginResult(
+        access_token=token_value,
+        refresh_token=refresh_value,
+        token_type="bearer",
+        session_id="new-session",
+    )
 
     store_api_session(state, result, email=" New@Example.com ", organization_id=12)
 
     assert state[ACCESS_TOKEN_KEY] == token_value
+    assert state[REFRESH_TOKEN_KEY] == refresh_value
     assert state[SESSION_ID_KEY] == "new-session"
     assert state[AUTH_EMAIL_KEY] == "new@example.com"
     assert state[ORGANIZATION_ID_KEY] == 12
@@ -189,11 +200,18 @@ def test_store_and_clear_api_session_do_not_store_passwords_or_tenant_results() 
         "snapshot_controls_payload": {"public": True},
     }
     token_value = "-".join(("session", "token"))
-    result = ApiLoginResult(access_token=token_value, token_type="bearer", session_id="session")
+    refresh_value = "-".join(("refresh", "token"))
+    result = ApiLoginResult(
+        access_token=token_value,
+        refresh_token=refresh_value,
+        token_type="bearer",
+        session_id="session",
+    )
 
     store_api_session(state, result, email=" User@Example.com ", organization_id=7)
 
     assert state[ACCESS_TOKEN_KEY] == token_value
+    assert state[REFRESH_TOKEN_KEY] == refresh_value
     assert state[SESSION_ID_KEY] == "session"
     assert state[AUTH_EMAIL_KEY] == "user@example.com"
     assert state[ORGANIZATION_ID_KEY] == 7

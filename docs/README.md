@@ -15,6 +15,7 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 ## Getting Started
 
 - **[Setup](setup.md)**: Installation, prerequisites, and running tests
+- **[Application Resource Limits](resource-limits.md)**: API body, schema, metadata, and upload boundaries
 - **[Architecture Overview](architecture/overview.md)**: System design and runtime flow
 - **[Adapter Contracts](adapters.md)**: Implementing custom data providers
 - **[Examples](examples.md)**: Code samples and usage patterns
@@ -41,6 +42,7 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 - **[Extension Guide](guides/extension_guide.md)**: Building automation extensions
 - **[Roadmap](roadmap.md)**: Future development milestones
 - **[Dependencies](DEPENDENCIES.md)**: Package information and security notes
+- **[Security](SECURITY.md)**: Reporting, deployment boundary, and hardening checklist
 
 ## Governance
 

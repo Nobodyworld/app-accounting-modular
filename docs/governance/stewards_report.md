@@ -26,8 +26,24 @@ audit verdict.
   invoice recognition, month-end remeasurement, settlement, and realized versus
   unrealized FX loss handling.
 - Quality automation covers Ruff, Ruff format, mypy, pytest with coverage,
-  focused accounting-control tests, `pip check`, project-scoped `pip-audit`, and
-  the lightweight current-tree secret scanner.
+  focused accounting-control tests, `pip check`, `pip-audit` against the hashed
+  runtime lock, and the lightweight current-tree secret scanner.
+- Central inbound resource policy bounds API bodies, expensive Pydantic
+  collections, nested metadata, numeric controls, and retained Streamlit
+  uploads while keeping rejected requests observable.
+- Authentication sessions are persisted and enforced server-side; refresh
+  credentials rotate once through a conditional digest swap, reuse revokes the
+  complete session, and tenant administrators can revoke only same-organization
+  member sessions.
+- Network-backed providers enforce a centralized outbound trust boundary: 1 MiB
+  streamed HTTP reads, 512 FX records, explicit connect/read timeouts, bounded
+  selected-transient retries, sanitized provider errors, and a single bounded
+  YFinance call with 10,000-day/row limits. Tests use stubs without live
+  credentials. Independently, both application images use one verified official
+  Python manifest digest and the same exact, hashed Python 3.14/Linux runtime
+  graph. CI is designed to retain image archives, inventories, checksums, and
+  SPDX SBOMs for pull requests and to publish archive-bound attestations only on
+  trusted events.
 - Runtime path truth is now documented as `src/apps/`, `src/cli/`,
   `src/plugins/`, and `src/tools/`; top-level `apps/` is documented as frontend
   placeholder territory.
@@ -55,13 +71,22 @@ audit verdict.
   `python -m cli.macli inspect-contracts`, and `python -m cli.macli observe` to
   capture extension and telemetry readiness after setting `PYTHONPATH` to
   include `src`.
+- Use `python scripts/dependencies/verify_container_lock.py` for the normal
+  offline freshness check. For an intentional refresh, use
+  `pwsh scripts/dependencies/Generate-ContainerLock.ps1` on Windows or
+  `sh scripts/dependencies/generate-container-lock.sh` on Linux, review all
+  direct and transitive changes, run the focused supply-chain tests and
+  `pip-audit`, and rebuild both images.
+- Treat pull-request SBOMs, checksums, and archives as ordinary 14-day
+  evidence. Verify provenance and SBOM attestations only for an eligible trusted
+  `main` push or manual run; no registry artifact is published.
 - Keep `PUBLIC_RELEASE_AUDIT.md`, `docs/DEPENDENCIES.md`, and this report in
   sync whenever release evidence changes.
 
 ## Short-Term Roadmap
 
-- Replace the dynamic `pip-audit` install in the quality gate with the pinned
-  development dependency.
+- Review the first eligible trusted-event archive attestations after the
+  workflow reaches `main`; pull-request runs cannot publish them by design.
 - Add visual release collateral to the README and case-study entry points.
 - Create a versioned public release only after the audit verifies hosted CI,
   clean-clone, and secret-scan evidence for the tagged candidate.

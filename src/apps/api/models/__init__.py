@@ -10,6 +10,7 @@ __all__ = [
     "AccountType",
     "AuditAction",
     "AuditLog",
+    "AuthSession",
     "Budget",
     "BudgetLine",
     "Country",

@@ -54,6 +54,15 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    and surfaced in logs for incident response, while fatal failures emit an
    aggregated "startup sequence aborted" summary before bubbling the error so
    operators can see which steps executed or failed.
+   `RequestBodyLimitMiddleware` performs a bounded ASGI receive before route
+   execution. It is wrapped by tracing, request context, and metrics so
+   sanitized `413` rejections remain observable without retaining or logging
+   rejected content.
+   Authentication routes delegate persisted session creation, access
+   enforcement, refresh compare-and-swap rotation, revocation, and expiration
+   cleanup to `src/apps/api/services/auth_session_service.py`. Streamlit retains
+   the returned token pair only in memory and performs at most one refresh and
+   one retry for a protected request.
 2. **Extension loader** imports every enabled module declared in
    `Settings.allowed_extensions`. Extensions register an `ExtensionManifest`
    with `src.apps.extensions.registry.extension_registry` and can contribute health
@@ -81,6 +90,14 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 4. **Domain ports and providers** continue to act as the integration boundary
    for external data. Providers are loaded via the existing plugin loader and
    the new extension registry complements rather than replaces this system.
+   The ECB and OpenExchangeRates adapters share a bounded HTTPS JSON transport:
+   streamed reads, declared and measured 1 MiB byte enforcement, 5/20-second
+   connect/read timeouts, two selected-transient attempts, sanitized domain
+   errors, and a 512-rate cap. YFinance makes one non-threaded high-level call
+   with a 20-second timeout and 10,000-day/row limits. Because that dependency
+   materializes its DataFrame internally, its HTTP response cannot be
+   independently streamed or byte-counted at this adapter layer. Demo/reference
+   providers perform no external I/O.
 5. **Observability** collects metrics, traces, and health reports. Metrics are
    exposed through `/health/metrics` while `/health/telemetry` and
    `apps.observability.diagnostics.collect_observability_snapshot` aggregate the
@@ -110,6 +127,23 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 * Cache observers feed Prometheus-compatible counters and gauges so cache hit
   rates and entry counts can be monitored over time, while
   `ExtensionTelemetryAdapter` tracks load latency and success counts.
+* `src/apps/api/limits.py` is the single policy source for inbound body,
+  collection, metadata, numeric-control, and Streamlit upload bounds. Deployment
+  requirements and exact response contracts are documented in
+  `docs/resource-limits.md`.
+* Access JWTs are authorized against `AuthSession` persistence rather than
+  signature validity alone. Hourly APScheduler cleanup and opportunistic bounded
+  cleanup remove only refresh-expired session rows; refresh reuse revokes the
+  session family conservatively.
+* Container dependency resolution is a separate build-time control plane:
+  human-reviewed bounded requirements feed a Docker-isolated, hash-locked `uv`
+  compiler; its committed Python 3.14/Linux lock feeds both digest-pinned
+  Dockerfiles; and CI emits image archives, inventories, SPDX SBOMs, and
+  checksums. The ordinary freshness check is offline and never re-resolves
+  PyPI. Pull requests retain evidence without write credentials, while a
+  separate trusted-event job may bind provenance and SBOM attestations to the
+  exported archives. The complete flow and its limits are documented in
+  [`../container-supply-chain.md`](../container-supply-chain.md).
 
 ## Extension lifecycle
 

@@ -3,3 +3,9 @@
 
 # Keep Python source stable across platforms so Ruff format --check is deterministic.
 *.py text eol=lf
+
+# Dependency policy artifacts are fingerprinted from canonical LF text.
+requirements*.txt text eol=lf
+*.lock text eol=lf
+*.ps1 text eol=lf
+*.sh text eol=lf

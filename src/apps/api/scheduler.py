@@ -18,6 +18,7 @@ from apps.observability.logging import logging_context
 
 from .db import engine
 from .models.models import ForecastPlan
+from .services.auth_session_service import AuthSessionService
 from .services.budget_service import BudgetService
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
 _scheduler: BackgroundScheduler | None = None
 _scheduler_lock = Lock()
 _SCHEDULE_INTERVAL = timedelta(minutes=15)
+_AUTH_SESSION_CLEANUP_INTERVAL = timedelta(hours=1)
 _RETRY_DELAY_SECONDS = (1, 2, 4)
 _last_run_at: datetime | None = None
 logger = logging.getLogger(__name__)
@@ -136,6 +138,24 @@ def _run_scheduled_refresh() -> None:
                         )
 
 
+def _run_auth_session_cleanup() -> None:
+    """Remove only authentication sessions whose refresh lifetime has expired."""
+
+    correlation = f"auth-session-cleanup-{uuid4()}"
+    with logging_context(
+        correlation_id=correlation,
+        request_id=correlation,
+        job="auth-session-cleanup",
+    ):
+        try:
+            with _session_scope() as session:
+                deleted = AuthSessionService(session).cleanup_expired()
+        except Exception:
+            logger.exception("Scheduled authentication-session cleanup failed")
+            return
+        logger.info("Scheduled authentication-session cleanup completed", extra={"deleted": deleted})
+
+
 def start_scheduler() -> None:
     """Start the APScheduler if it is not already running."""
 
@@ -161,6 +181,13 @@ def start_scheduler() -> None:
             "interval",
             seconds=int(_SCHEDULE_INTERVAL.total_seconds()),
             id="report-refresh",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            _run_auth_session_cleanup,
+            "interval",
+            seconds=int(_AUTH_SESSION_CLEANUP_INTERVAL.total_seconds()),
+            id="auth-session-cleanup",
             replace_existing=True,
         )
         # TODO[P3][5d]: Externalize refresh cadence into configuration per organization.

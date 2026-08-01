@@ -8,7 +8,8 @@ This guide covers the validated local-development and container workflows for Mo
 - `pip`
 - Git
 - Optional: GNU Make
-- Optional: Docker with the `docker compose` plugin
+- Optional: Docker with the `docker compose` and Buildx plugins
+- Optional: GitHub CLI for verifying trusted-run attestations
 
 The hosted CI matrix validates Python 3.12, 3.13, and 3.14. Python 3.14 is the primary development target.
 
@@ -73,6 +74,7 @@ MODACCT_DATABASE_URL=sqlite:///./modacct.db
 MODACCT_JWT_SECRET_KEY=
 MODACCT_JWT_ALGORITHM=HS256
 MODACCT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+MODACCT_MAX_REQUEST_BODY_BYTES=2097152
 MODACCT_LOG_LEVEL=INFO
 MODACCT_LOG_FORMAT=JSON
 MODACCT_OPENEX_APP_ID=
@@ -82,6 +84,10 @@ MODACCT_GDELT_USER_AGENT=
 ```
 
 Provider and extension catalogs are currently defined in `src/apps/api/config.py`; nested `MODACCT_ALLOWED_PROVIDERS__...` environment keys are not a supported configuration interface.
+
+`MODACCT_MAX_REQUEST_BODY_BYTES` defaults to 2 MiB and may only be lowered.
+See the [application resource-limits guide](resource-limits.md) for schema,
+metadata, upload, response-contract, and reverse-proxy requirements.
 
 ## Run the Application
 
@@ -106,6 +112,10 @@ streamlit run src/apps/web/app.py
 ```
 
 The interface is available at `http://127.0.0.1:8501` and expects the API at `http://localhost:8000` unless `API_BASE` is overridden.
+
+Budget CSV and scenario-plan uploads have a 1 MiB application limit.
+`.streamlit/config.toml` also configures Streamlit's framework cap at 2 decimal
+megabytes as defense in depth; the application check remains authoritative.
 
 Snapshot Review is a public/local evidence workflow. Scenario Plan Review and
 Review Utilities require an authenticated API session and a positive
@@ -175,6 +185,9 @@ Endpoints:
 
 This Compose profile is validated only for local demonstration. Do not change the host bindings to `0.0.0.0`, a LAN address, or a public interface without a separate deployment review covering HTTPS termination, trusted proxies/hosts, network access controls, secret management, and host/container security controls.
 
+Any reverse proxy or ingress placed in front of the API must enforce a request
+body limit equal to or smaller than the configured application limit.
+
 Stop and remove the services:
 
 ```bash
@@ -193,6 +206,60 @@ Individual image builds from the repository root:
 docker build -f config/Dockerfile.api -t modacct-api .
 docker build -f config/Dockerfile.web -t modacct-web .
 ```
+
+### Container dependency workflow
+
+The API and web Dockerfiles share the official digest-pinned
+`python:3.14-slim` base and install only the exact, hashed graph in
+`requirements-container.lock`. The `requirements.txt` and
+`requirements-dev.txt` files remain human-reviewed compatibility manifests.
+The local-development commands above may update pip in a developer virtual
+environment; application container builds do not update the pip supplied by
+their pinned base.
+
+Regenerate the runtime lock only for an intentional dependency or base-image
+update. Docker Desktop users can run:
+
+```powershell
+pwsh scripts/dependencies/Generate-ContainerLock.ps1
+```
+
+On Linux:
+
+```bash
+sh scripts/dependencies/generate-container-lock.sh
+```
+
+Freshness and structural policy checks are offline and never rewrite the lock:
+
+```bash
+python scripts/dependencies/verify_container_lock.py
+pytest -q tests/test_container_supply_chain.py
+```
+
+For clean dependency-resolution evidence, build without the Docker cache:
+
+```bash
+docker build --no-cache -f config/Dockerfile.api -t modacct-api:repro .
+docker build --no-cache -f config/Dockerfile.web -t modacct-web:repro .
+```
+
+Trusted workflow runs attach provenance and SPDX SBOM attestations to exported
+image archives. After downloading an archive and its checksum, verify both:
+
+```powershell
+$SourceSha = "<source-commit-sha>"
+$Archive = ".\container-evidence\modacct-api-$SourceSha.tar"
+$Expected = (Select-String -Path ".\container-evidence\image-archives.sha256" -Pattern "modacct-api-$SourceSha\.tar$").Line.Split()[0]
+$Actual = (Get-FileHash -Algorithm SHA256 $Archive).Hash.ToLowerInvariant()
+if ($Actual -ne $Expected) { throw "API archive checksum mismatch" }
+gh attestation verify $Archive --repo Nobodyworld/app-accounting-modular
+```
+
+Pull-request runs create ordinary checksum and SBOM evidence but intentionally
+do not publish attestations. See the
+[container supply-chain guide](container-supply-chain.md) for the exact base
+digest, generator bootstrap, evidence inventory, update flow, and limitations.
 
 The final images declare user `10001:10001`. Running them directly as root bypasses part of the validated Compose security boundary and is not the supported default.
 

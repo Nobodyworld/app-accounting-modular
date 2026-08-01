@@ -58,6 +58,22 @@ class User(SQLModel, table=True):
     __table_args__ = TABLE_KWARGS
 
 
+class AuthSession(SQLModel, table=True):
+    """Server-side authentication session and refresh-rotation state."""
+
+    session_id: str = Field(primary_key=True, max_length=64)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    current_refresh_jti_digest: str = Field(max_length=128)
+    expires_at: datetime = Field(index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_rotated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    rotation_counter: int = Field(default=0, ge=0)
+    revoked_at: datetime | None = Field(default=None, index=True)
+    revocation_reason: str | None = Field(default=None, max_length=64)
+
+    __table_args__ = TABLE_KWARGS
+
+
 class Membership(SQLModel, table=True):
     """Associates a user with an organization and permissions."""
 

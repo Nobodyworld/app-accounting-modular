@@ -1,0 +1,10 @@
+# Locked container dependency compiler. Do not edit by hand.
+# tool-package: uv
+# tool-version: 0.12.0
+# python-version: 3.14
+# platform: linux/amd64 (x86_64-manylinux_2_28)
+# base-image: python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6
+# wheel: uv-0.12.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+
+uv==0.12.0 \
+    --hash=sha256:cbff74f884846d794713670faf8abe10db3bd70c43b01e63223f74eb7d958689

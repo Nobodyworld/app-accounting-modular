@@ -31,11 +31,6 @@ def sync_prices(
     if start > end:
         raise HTTPException(status_code=400, detail="Start date must be before end date")
 
-    try:
-        handle = load_provider(provider_key)
-    except ValueError as exc:  # pragma: no cover - FastAPI integration
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
     org_ctx = get_current_organization(
         organization_id=organization_id,
         session=session,
@@ -44,6 +39,11 @@ def sync_prices(
     membership = org_ctx.membership
     if not (membership.is_admin or membership.can_manage_market):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    try:
+        handle = load_provider(provider_key)
+    except ValueError as exc:  # pragma: no cover - FastAPI integration
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     service = MarketService(
         session,

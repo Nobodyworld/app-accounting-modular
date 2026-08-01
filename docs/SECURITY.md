@@ -32,11 +32,30 @@ The default Docker Compose profile is for local demonstration only.
 - API and web processes run as numeric UID/GID `10001:10001` rather than root.
 - Both root filesystems are read-only, all Linux capabilities are dropped, and `no-new-privileges` is enabled.
 - The API may write only to its `/data` volume and the bounded `/tmp` tmpfs; the web service may write only to its bounded `/tmp` tmpfs.
+- Both images use the same official Python 3.14 manifest-list digest and install
+  the complete runtime graph from `requirements-container.lock` with required
+  hashes, binary wheels only, dependency resolution disabled, and `pip check`.
+- Container builds retain the pip version supplied by the pinned base; they do
+  not upgrade pip, setuptools, or wheel.
 - Container-internal listeners remain available for API/web service-to-service communication, but that does not authorize LAN or public exposure.
+- FastAPI rejects request bodies over the configured maximum before route execution; every proxy or ingress must enforce an equal or smaller cap.
+- Budget and scenario-plan files are constrained by both Streamlit configuration and the stricter application upload policy.
 
 Do not publish the API or Streamlit ports on `0.0.0.0`, a LAN address, or a public interface without a separate review covering HTTPS termination, trusted proxies and hosts, network access control, production secret management, host/container runtime hardening, and the open findings in the post-UX security audit.
 
 The application may generate an ephemeral JWT secret for direct temporary local API demonstrations. That mode rotates sessions on restart and is not a substitute for an explicit persistent secret in containers or any production-like deployment.
+
+## Authentication Session Lifecycle
+
+Successful password authentication creates an `AuthSession` row through the existing SQLModel `create_all` lifecycle. The row contains a random session identifier, user reference, SHA-256 digest of the currently valid refresh-token `jti`, refresh/session expiration, creation and last-rotation timestamps, a rotation counter, and optional bounded revocation metadata. Access tokens, refresh tokens, passwords, authorization headers, token payloads, raw IP addresses, and user-agent fingerprints are never stored in this table.
+
+Every newly issued access and refresh JWT contains only `sub`, `sid`, `jti`, `type`, `iat`, and `exp`. An access token is accepted only while its referenced persisted session exists, belongs to the subject user, is unexpired and unrevoked, and the user remains active. The API returns the same generic credential error for invalid claims, missing sessions, revoked or expired sessions, and inactive users.
+
+`POST /auth/refresh` consumes a refresh token once. Rotation conditionally replaces the stored digest only when the session identifier, current digest, unrevoked state, and expiration still match. A stale but otherwise valid refresh token is treated as reuse and revokes the complete session, including any access and refresh tokens issued by the preceding successful rotation. Session revocation is available through current-session logout and an organization-scoped administrator route; the administrator must belong to and administer the organization, and target users outside that tenant are reported as not found.
+
+Expired session rows are removed in bounded batches opportunistically during login and refresh and by the hourly `auth-session-cleanup` APScheduler job. Active unexpired rows, including revoked rows retained for deterministic revocation evidence, are not removed.
+
+Streamlit keeps access, refresh, and session identifiers only in in-memory session state. Refresh credentials are private state: they are not rendered, logged, placed in URLs, written to disk, or included in downloads. Protected requests may perform one refresh and one retry after a `401`; refresh failure clears local authentication state. Logout attempts server revocation first and always clears local authentication and protected-result state, even when the API is unavailable.
 
 ## Hardening Checklist
 
@@ -50,4 +69,37 @@ The application may generate an ephemeral JWT secret for direct temporary local 
 - Before public release, run Gitleaks or an equivalent full-history scanner and record the tool version, command, commits scanned, findings, false-positive disposition, and final result in [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md).
 - Use environment variables (see `config/.env.example`) to configure sensitive settings.
 - Review [`DEPENDENCIES.md`](DEPENDENCIES.md) quarterly for updated security posture notes and dependency audit status.
+- Run `python scripts/dependencies/verify_container_lock.py` for offline lock
+  freshness and policy validation. Regenerate only as an intentional,
+  networked dependency update and review every direct and transitive change.
+- Verify downloaded image evidence checksums before using
+  `gh attestation verify`; pull-request evidence is intentionally unattested,
+  while publication is restricted to trusted `main` pushes and manual runs.
 - Audit startup failure logs for sensitive payloads; `StartupManager` surfaces exception metadata for diagnostics, so ensure startup steps raise errors without embedding secrets or personal data.
+- Preserve the centralized inbound request, collection, metadata, and upload limits documented in [`resource-limits.md`](resource-limits.md).
+
+### Outbound provider trust boundary
+
+The network-backed provider inventory is limited to ECB, OpenExchangeRates, and
+YFinance. Direct FX HTTPS reads use a shared 1 MiB streaming byte cap, declared
+`Content-Length` validation, independent byte counting, a 512-rate record cap,
+5-second connect and 20-second read timeouts, and at most two attempts for
+connection/read failures or HTTP 429, 502, 503, and 504. Other 4xx responses,
+oversized bodies, and invalid payloads are not retried.
+
+Provider failures use stable domain exceptions and sanitized structured logs.
+Response bodies, credentials, authorization headers, request parameter
+dictionaries, credential-bearing URLs, and raw upstream exception messages are
+excluded. OpenExchangeRates credentials remain request parameters and are never
+interpolated into URL strings or diagnostics. Tests use deterministic stubs and
+no live provider credentials or network requests.
+
+YFinance is restricted to one application-level download call, `threads=False`,
+a 20-second timeout, a maximum 10,000-day requested range, and 10,000 returned
+rows. Because its high-level API returns an already materialized DataFrame, the
+application cannot independently stream or byte-count the library's internal
+HTTP response.
+
+These outbound controls are separate from the inbound request/upload limits and
+from the container dependency, evidence, and trusted-attestation controls in
+the [container supply-chain guide](container-supply-chain.md).

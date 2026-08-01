@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -21,6 +21,29 @@ from apps.modular_accounting.application import (
 )
 from apps.modular_accounting.application.cache import CacheStats
 
+from .limits import (
+    MAX_ACCOUNT_CODE_LENGTH,
+    MAX_CURRENCY_LENGTH,
+    MAX_DESCRIPTION_LENGTH,
+    MAX_FORECAST_HORIZON,
+    MAX_JURISDICTIONS_PER_SCENARIO,
+    MAX_MODEL_KEY_LENGTH,
+    MAX_MODELS_PER_BACKTEST,
+    MAX_NAME_LENGTH,
+    MAX_POSTINGS_PER_TRANSACTION,
+    MAX_REGRESSOR_FIELDS,
+    MAX_SCENARIOS_PER_BATCH,
+    MAX_SCHEDULE_LENGTH,
+    MAX_SERIES_POINTS,
+    MAX_SOURCE_LENGTH,
+    MAX_SOURCE_REFERENCE_LENGTH,
+    MAX_STAGED_IDS_PER_REQUEST,
+    MAX_SYMBOLS_PER_SCENARIO,
+    MAX_TAG_LENGTH,
+    MAX_TAGS_PER_OBJECT,
+    MAX_WORKFLOW_TRANSACTIONS,
+)
+from .metadata_limits import validate_metadata
 from .models.models import AccountType, AuditAction, WorkflowStatus
 from .services.extension_loader import ExtensionStatus
 from .services.ledger_service import TrialBalanceRow
@@ -43,6 +66,11 @@ __all__ = [
     "CausalImpactResponse",
     "ImpactPointSchema",
     "AuditLogSchema",
+    "AdminSessionRevocationResponse",
+    "LoginTokenResponse",
+    "LogoutResponse",
+    "RefreshTokenRequest",
+    "RefreshTokenResponse",
     "ReportMetadata",
     "Posting",
     "TransactionCreate",
@@ -76,6 +104,54 @@ __all__ = [
     "ScenarioPlanPreviewResponse",
     "ExtensionContractSchema",
 ]
+
+SeriesPoint = tuple[str | date, float]
+BoundedSeries = Annotated[list[SeriesPoint], Field(max_length=MAX_SERIES_POINTS)]
+ModelKey = Annotated[str, Field(min_length=1, max_length=MAX_MODEL_KEY_LENGTH)]
+ScenarioName = Annotated[str, Field(min_length=1, max_length=MAX_NAME_LENGTH)]
+CurrencyCode = Annotated[str, Field(min_length=1, max_length=MAX_CURRENCY_LENGTH)]
+ScenarioSymbol = Annotated[str, Field(min_length=1, max_length=MAX_SOURCE_LENGTH)]
+JurisdictionCode = Annotated[str, Field(min_length=1, max_length=MAX_SOURCE_LENGTH)]
+ScenarioTag = Annotated[str, Field(min_length=1, max_length=MAX_TAG_LENGTH)]
+JwtToken = Annotated[str, Field(min_length=1, max_length=4096)]
+SessionIdentifier = Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class LoginTokenResponse(BaseModel):
+    """Successful password exchange without persistence internals."""
+
+    access_token: JwtToken
+    refresh_token: JwtToken
+    session_id: SessionIdentifier
+    token_type: Literal["bearer"] = "bearer"
+
+
+class RefreshTokenRequest(BaseModel):
+    """Bounded one-time refresh credential."""
+
+    refresh_token: JwtToken
+
+
+class RefreshTokenResponse(BaseModel):
+    """Rotated access/refresh pair."""
+
+    access_token: JwtToken
+    refresh_token: JwtToken
+    session_id: SessionIdentifier
+    token_type: Literal["bearer"] = "bearer"
+
+
+class LogoutResponse(BaseModel):
+    """Current-session logout acknowledgement."""
+
+    revoked: bool
+
+
+class AdminSessionRevocationResponse(BaseModel):
+    """Organization administrator revocation acknowledgement."""
+
+    session_id: SessionIdentifier
+    revoked: bool
 
 
 class AuditLogSchema(BaseModel):
@@ -210,12 +286,17 @@ class StagedPostingIngest(BaseModel):
     """Posting payload accepted by the staging workflow."""
 
     account_id: int | None = None
-    account_code: str | None = None
-    account_name: str | None = None
+    account_code: str | None = Field(default=None, max_length=MAX_ACCOUNT_CODE_LENGTH)
+    account_name: str | None = Field(default=None, max_length=MAX_NAME_LENGTH)
     debit: Decimal = Decimal("0")
     credit: Decimal = Decimal("0")
-    currency: str | None = Field(default=None, max_length=12)
+    currency: str | None = Field(default=None, max_length=MAX_CURRENCY_LENGTH)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def validate_metadata_field(cls, value: object) -> object:
+        return validate_metadata(value)
 
     @model_validator(mode="after")
     def validate_account_reference(self) -> StagedPostingIngest:
@@ -228,34 +309,30 @@ class StagedTransactionIngest(BaseModel):
     """Transaction ingestion payload."""
 
     date: date
-    description: str = Field(min_length=1, max_length=255)
-    postings: list[StagedPostingIngest]
-    source_reference: str | None = None
+    description: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
+    postings: list[StagedPostingIngest] = Field(min_length=1, max_length=MAX_POSTINGS_PER_TRANSACTION)
+    source_reference: str | None = Field(default=None, max_length=MAX_SOURCE_REFERENCE_LENGTH)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("postings")
+    @field_validator("metadata", mode="before")
     @classmethod
-    def ensure_postings(cls, postings: list[StagedPostingIngest]) -> list[StagedPostingIngest]:
-        if not postings:
-            raise ValueError("at least one posting is required")
-        return postings
+    def validate_metadata_field(cls, value: object) -> object:
+        return validate_metadata(value)
 
 
 class WorkflowIngestRequest(BaseModel):
     """Request body for staging transactions."""
 
-    source: str = Field(default="api", min_length=1)
-    source_reference: str | None = None
+    source: str = Field(default="api", min_length=1, max_length=MAX_SOURCE_LENGTH)
+    source_reference: str | None = Field(default=None, max_length=MAX_SOURCE_REFERENCE_LENGTH)
     metadata: dict[str, Any] = Field(default_factory=dict)
-    transactions: list[StagedTransactionIngest]
+    transactions: list[StagedTransactionIngest] = Field(min_length=1, max_length=MAX_WORKFLOW_TRANSACTIONS)
     auto_process: bool = True
 
-    @field_validator("transactions")
+    @field_validator("metadata", mode="before")
     @classmethod
-    def ensure_transactions(cls, transactions: list[StagedTransactionIngest]) -> list[StagedTransactionIngest]:
-        if not transactions:
-            raise ValueError("no transactions supplied")
-        return transactions
+    def validate_metadata_field(cls, value: object) -> object:
+        return validate_metadata(value)
 
 
 class WorkflowResultSchema(BaseModel):
@@ -286,7 +363,7 @@ class WorkflowIngestResponse(BaseModel):
 class WorkflowProcessRequest(BaseModel):
     """Request body to trigger processing of staged transactions."""
 
-    staged_ids: list[int] | None = None
+    staged_ids: list[int] | None = Field(default=None, max_length=MAX_STAGED_IDS_PER_REQUEST)
     auto_post: bool = True
 
 
@@ -327,10 +404,10 @@ class StagedTransactionRead(BaseModel):
 class ForecastRequest(BaseModel):
     """Request body for forecast operations."""
 
-    series: list[tuple[str | date, float]] = Field(default_factory=list)
-    horizon: int = Field(default=30, ge=1)
-    model: str = Field(default="arima")
-    regressors: dict[str, list[tuple[str | date, float]]] | None = None
+    series: list[SeriesPoint] = Field(default_factory=list, max_length=MAX_SERIES_POINTS)
+    horizon: int = Field(default=30, ge=1, le=MAX_FORECAST_HORIZON)
+    model: ModelKey = "arima"
+    regressors: dict[ModelKey, BoundedSeries] | None = Field(default=None, max_length=MAX_REGRESSOR_FIELDS)
     organization_id: int
 
 
@@ -386,12 +463,12 @@ class BacktestResponse(BaseModel):
 class BacktestRequest(BaseModel):
     """Rolling-origin backtest parameters."""
 
-    series: list[tuple[str | date, float]] = Field(default_factory=list)
-    horizon: int = Field(default=7, ge=1)
-    models: list[str] | None = None
-    regressors: dict[str, list[tuple[str | date, float]]] | None = None
-    initial_window: int | None = Field(default=None, ge=1)
-    step: int | None = Field(default=None, ge=1)
+    series: list[SeriesPoint] = Field(default_factory=list, max_length=MAX_SERIES_POINTS)
+    horizon: int = Field(default=7, ge=1, le=MAX_FORECAST_HORIZON)
+    models: list[ModelKey] | None = Field(default=None, max_length=MAX_MODELS_PER_BACKTEST)
+    regressors: dict[ModelKey, BoundedSeries] | None = Field(default=None, max_length=MAX_REGRESSOR_FIELDS)
+    initial_window: int | None = Field(default=None, ge=1, le=MAX_SERIES_POINTS)
+    step: int | None = Field(default=None, ge=1, le=MAX_SERIES_POINTS)
     organization_id: int
 
 
@@ -407,11 +484,11 @@ class ImpactPointSchema(BaseModel):
 class CausalImpactRequest(BaseModel):
     """Payload describing an intervention window to analyse."""
 
-    series: list[tuple[str | date, float]] = Field(default_factory=list)
+    series: list[SeriesPoint] = Field(default_factory=list, max_length=MAX_SERIES_POINTS)
     event_start: date | datetime | str
     event_end: date | datetime | str | None = None
-    interventions: dict[str, list[tuple[str | date, float]]] | None = None
-    model: str = "arima"
+    interventions: dict[ModelKey, BoundedSeries] | None = Field(default=None, max_length=MAX_REGRESSOR_FIELDS)
+    model: ModelKey = "arima"
     organization_id: int
 
 
@@ -581,11 +658,11 @@ class SnapshotDiagnosticsSchema(BaseModel):
 class ScenarioDefinition(BaseModel):
     """Single scenario definition accepted by the batch snapshot endpoint."""
 
-    name: str = Field(min_length=1)
-    base_currency: str = Field(min_length=1)
-    commodity_symbols: list[str] = Field(default_factory=list)
-    jurisdictions: list[str] | None = None
-    tags: list[str] = Field(default_factory=list)
+    name: ScenarioName
+    base_currency: CurrencyCode
+    commodity_symbols: list[ScenarioSymbol] = Field(default_factory=list, max_length=MAX_SYMBOLS_PER_SCENARIO)
+    jurisdictions: list[JurisdictionCode] | None = Field(default=None, max_length=MAX_JURISDICTIONS_PER_SCENARIO)
+    tags: list[ScenarioTag] = Field(default_factory=list, max_length=MAX_TAGS_PER_OBJECT)
 
     def to_mapping(self) -> dict[str, object]:
         return {
@@ -600,11 +677,11 @@ class ScenarioDefinition(BaseModel):
 class ScenarioPlanDefinition(BaseModel):
     """Scenario input whose defaultable fields may be supplied by a plan."""
 
-    name: str = Field(min_length=1)
-    base_currency: str | None = None
-    commodity_symbols: list[str] | None = None
-    jurisdictions: list[str] | None = None
-    tags: list[str] | None = None
+    name: ScenarioName
+    base_currency: CurrencyCode | None = None
+    commodity_symbols: list[ScenarioSymbol] | None = Field(default=None, max_length=MAX_SYMBOLS_PER_SCENARIO)
+    jurisdictions: list[JurisdictionCode] | None = Field(default=None, max_length=MAX_JURISDICTIONS_PER_SCENARIO)
+    tags: list[ScenarioTag] | None = Field(default=None, max_length=MAX_TAGS_PER_OBJECT)
 
     def to_mapping(self) -> dict[str, object]:
         payload: dict[str, object] = {"name": self.name}
@@ -617,7 +694,7 @@ class ScenarioPlanDefinition(BaseModel):
 class ScenarioBatchRequest(BaseModel):
     """Request payload for executing snapshot scenarios in bulk."""
 
-    scenarios: list[ScenarioDefinition] = Field(min_length=1)
+    scenarios: list[ScenarioDefinition] = Field(min_length=1, max_length=MAX_SCENARIOS_PER_BATCH)
     reset_cache_between_runs: bool = False
 
     def to_scenarios(self) -> list[SnapshotScenario]:
@@ -735,10 +812,10 @@ class ScenarioBatchResponse(BaseModel):
 class ScenarioPlanMetadataSchema(BaseModel):
     """Metadata describing a scenario plan submitted via the API."""
 
-    name: str = Field(min_length=1)
-    description: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    schedule: str | None = None
+    name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    tags: list[ScenarioTag] = Field(default_factory=list, max_length=MAX_TAGS_PER_OBJECT)
+    schedule: str | None = Field(default=None, max_length=MAX_SCHEDULE_LENGTH)
     parameters: dict[str, object] = Field(default_factory=dict)
 
     @field_validator("tags", mode="before")
@@ -746,13 +823,15 @@ class ScenarioPlanMetadataSchema(BaseModel):
     def _normalise_tags(cls, value: object) -> list[str]:
         if value is None:
             return []
-        tags: list[str] = []
-        seen: set[str] = set()
         if isinstance(value, Iterable) and not isinstance(value, str | bytes):
-            iterable = value
+            iterable: Iterable[object] = value
         else:
             iterable = [value]
-        for item in iterable:
+        tags: list[str] = []
+        seen: set[str] = set()
+        for index, item in enumerate(iterable):
+            if index >= MAX_TAGS_PER_OBJECT:
+                raise ValueError(f"tags must contain at most {MAX_TAGS_PER_OBJECT} items")
             if isinstance(item, bytes):
                 candidate = item.decode("utf-8", errors="ignore").strip()
             elif isinstance(item, str):
@@ -764,20 +843,23 @@ class ScenarioPlanMetadataSchema(BaseModel):
                 tags.append(candidate)
         return tags
 
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def validate_parameters(cls, value: object) -> object:
+        return validate_metadata(value)
+
 
 class ScenarioPlanPayload(BaseModel):
     """Request payload describing a scenario plan for preview."""
 
     metadata: ScenarioPlanMetadataSchema
-    scenarios: list[ScenarioPlanDefinition] = Field(min_length=1)
+    scenarios: list[ScenarioPlanDefinition] = Field(min_length=1, max_length=MAX_SCENARIOS_PER_BATCH)
     defaults: dict[str, object] = Field(default_factory=dict)
 
-    @model_validator(mode="after")
-    def _ensure_defaults_keys(self) -> ScenarioPlanPayload:
-        for key in self.defaults.keys():
-            if not isinstance(key, str):
-                raise ValueError("Plan default keys must be strings")
-        return self
+    @field_validator("defaults", mode="before")
+    @classmethod
+    def validate_defaults(cls, value: object) -> object:
+        return validate_metadata(value)
 
     def to_plan(self) -> ScenarioPlan:
         return ScenarioPlan.from_components(
