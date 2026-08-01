@@ -58,6 +58,35 @@ POLICIES: dict[str, Policy] = {
         "tests/test_security_integration.py",
         "malformed Authorization is not applicable; distributed rate-limit behavior",
     ),
+    "POST /auth/refresh": Policy(
+        "public",
+        "refresh token; session_id and jti token claims",
+        "refresh token in; rotated access token, refresh token, and session id out; persisted session lookup, "
+        "atomic one-time rotation, refresh-reuse detection, family revocation, and generic credential failures",
+        "tests/test_auth_session_lifecycle.py::test_valid_refresh_rotates_and_reuse_revokes_complete_session; "
+        "tests/test_auth_session_lifecycle.py::"
+        "test_refresh_rejects_access_malformed_wrong_signature_and_missing_session; "
+        "tests/test_token_type_boundary.py",
+        "distributed concurrent rotation across non-coordinating database deployments",
+    ),
+    "POST /auth/logout": Policy(
+        "authenticated only",
+        "current access-token session",
+        "server-side revocation of the current session; logout audit event; generic invalid-session response",
+        "tests/test_auth_session_lifecycle.py::test_logout_revokes_current_session_and_invalidates_both_tokens; "
+        "tests/test_streamlit_api_session.py::"
+        "test_logout_failure_is_sanitized_and_local_clear_removes_all_session_state; "
+        "tests/test_streamlit_app.py::test_logout_clears_only_api_session_and_relocks_protected_actions",
+        "none identified",
+    ),
+    "POST /auth/sessions/{session_id}/revoke": Policy(
+        "tenant administrator",
+        "organization_id, session_id",
+        "same-organization membership and administrator checks; nondisclosing 404 for missing or cross-tenant "
+        "targets; idempotent server-side session revocation; audit event",
+        "tests/test_auth_session_lifecycle.py::test_organization_admin_revocation_is_scoped_and_idempotent",
+        "none identified",
+    ),
     "GET /audit/": Policy(
         "tenant administrator",
         "organization_id, user_id, request_id, after_id",
@@ -125,50 +154,54 @@ POLICIES: dict[str, Policy] = {
         "tenant manager",
         "organization_id, provider_key",
         "provider FX data (read external, write tenant rates, schedule backfill)",
-        "tests/test_fx_api.py; tests/test_security_integration.py",
-        "upstream response-size and timeout-failure API cases",
+        "tests/test_fx_api.py; tests/test_security_integration.py; tests/test_provider_network_boundaries.py",
+        "none identified",
     ),
     "POST /market/sync": Policy(
         "tenant manager",
         "organization_id, provider_key, symbol",
         "provider market data (read external, write tenant prices)",
-        "tests/test_security_integration.py",
-        "authorization-before-provider-discovery; malformed upstream payload",
+        "tests/test_security_integration.py; tests/test_provider_authorization_order.py; "
+        "tests/test_market_yfinance_provider.py",
+        "YFinance high-level client does not expose raw response-byte enforcement",
     ),
     "GET /snapshot": Policy(
         "authenticated only",
         "provider selection is implicit; no organization identifier",
         "shared provider snapshot and cache (read)",
-        "tests/test_snapshot_api.py",
-        "wrong token type; resource bounds on repeated query values",
+        "tests/test_snapshot_api.py; tests/test_token_type_boundary.py",
+        "none identified",
     ),
     "POST /snapshot/scenarios": Policy(
         "authenticated only",
         "scenario names and provider inputs; no organization identifier",
         "shared scenario snapshot/cache (read and mutate cache)",
-        "tests/test_snapshot_api.py; tests/test_data_snapshot_service.py",
-        "scenario-count and nested-metadata bounds",
+        "tests/test_snapshot_api.py; tests/test_data_snapshot_service.py; tests/test_input_limits.py; "
+        "tests/test_request_body_limits.py",
+        "none identified",
     ),
     "POST /snapshot/plans/preview": Policy(
         "authenticated only",
         "scenario plan names/defaults; no organization identifier",
         "validated plan summary (read/compute)",
-        "tests/test_snapshot_api.py; tests/test_scenario_plan_api_defaults.py",
-        "payload-size/depth and duplicate-key policy",
+        "tests/test_snapshot_api.py; tests/test_scenario_plan_api_defaults.py; tests/test_input_limits.py; "
+        "tests/test_request_body_limits.py",
+        "duplicate JSON-key rejection is not implemented by the framework parser",
     ),
     "POST /tax/sync": Policy(
         "tenant manager",
         "organization_id, provider_key",
         "provider tax data (read external, write/delete tenant tax rules)",
-        "tests/test_security_integration.py; tests/test_tax_service.py",
-        "authorization-before-provider-discovery",
+        "tests/test_security_integration.py; tests/test_tax_service.py; tests/test_provider_authorization_order.py; "
+        "tests/test_provider_network_boundaries.py",
+        "none identified",
     ),
     "POST /forecast/series": Policy(
         "tenant member",
         "organization_id",
         "caller-supplied series (compute forecast)",
-        "tests/test_forecast_service.py",
-        "route-level no-membership and collection/CPU bounds",
+        "tests/test_forecast_service.py; tests/test_input_limits.py; tests/test_request_body_limits.py",
+        "route-level no-membership",
     ),
     "GET /forecast/models": Policy(
         "tenant member",
@@ -181,36 +214,37 @@ POLICIES: dict[str, Policy] = {
         "tenant member",
         "organization_id",
         "caller-supplied series (compute backtests)",
-        "tests/test_forecast_service.py",
-        "route-level no-membership and collection/CPU bounds",
+        "tests/test_forecast_service.py; tests/test_input_limits.py; tests/test_request_body_limits.py",
+        "route-level no-membership",
     ),
     "POST /forecast/impact": Policy(
         "tenant member",
         "organization_id",
         "caller-supplied series (compute causal impact)",
-        "tests/test_forecast_service.py",
-        "route-level no-membership, date-range, and collection/CPU bounds",
+        "tests/test_forecast_service.py; tests/test_input_limits.py; tests/test_request_body_limits.py",
+        "route-level no-membership",
     ),
     "GET /reports/budget-vs-actual": Policy(
         "tenant member",
         "organization_id, budget_id",
         "tenant budget, ledger, forecast, cached report, CSV export (read/write cache)",
-        "tests/test_reports_api.py; tests/test_reports_pagination.py",
-        "CSV formula injection and inactive organization",
+        "tests/test_reports_api.py; tests/test_reports_pagination.py; tests/test_csv_export_safety.py",
+        "inactive organization",
     ),
     "GET /reports/cashflow-forecast": Policy(
         "tenant member",
         "organization_id",
         "tenant cashflow, forecast, cached report, CSV export (read/write cache)",
-        "tests/test_reports_api.py; tests/test_reports_cache.py; tests/test_reports_streaming.py",
-        "CSV formula injection and stale membership state",
+        "tests/test_reports_api.py; tests/test_reports_cache.py; tests/test_reports_streaming.py; "
+        "tests/test_csv_export_safety.py",
+        "stale membership state",
     ),
     "POST /workflow/ingest": Policy(
         "tenant manager",
         "organization_id, account_id, source_reference",
         "staged transactions/postings and optional ledger posting (create)",
-        "tests/test_workflow_api.py",
-        "transaction/posting count and metadata-depth bounds",
+        "tests/test_workflow_api.py; tests/test_input_limits.py; tests/test_request_body_limits.py",
+        "none identified",
     ),
     "POST /workflow/process": Policy(
         "tenant manager",
@@ -395,7 +429,8 @@ def render_markdown(routes: Sequence[InventoryRoute]) -> str:
         [
             "",
             "The totals include FastAPI's four public documentation/schema paths with both GET and HEAD methods. "
-            "The application itself exposes 29 method/path entries. “Tenant manager” means an active member with "
+            f"The application itself exposes {len(POLICIES)} method/path entries. “Tenant manager” means an active "
+            "member with "
             "the route-specific management flag or `is_admin`; the API has no single generic manager role. "
             "UI gating is not counted as authorization evidence.",
             "",
@@ -436,8 +471,8 @@ def render_markdown(routes: Sequence[InventoryRoute]) -> str:
             "forecast, reports, and workflow routers.",
             "- Role checks are route-local calls to `get_current_organization`; they are therefore documented by the "
             "explicit policy map in the generator and are not inferred from UI state.",
-            "- `/market/sync` and `/tax/sync` currently perform provider lookup before tenant authorization. This is "
-            "tracked as an audit finding.",
+            "- `/market/sync` and `/tax/sync` authorize organization membership and route-specific management "
+            "permission before provider discovery; cross-tenant requests cannot use provider state as an oracle.",
             "- Snapshot routes require authentication but accept no organization identifier and operate on shared "
             "provider/cache state; they are not evidence of tenant-scoped data authorization.",
             "- Framework documentation, schema, health, metrics, provider, telemetry, and extension surfaces are "
