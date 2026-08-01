@@ -5,44 +5,75 @@ on:
 
 permissions:
   contents: read
-  checks: read
 
 jobs:
   container-smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Require expanded container supply-chain check
+      - name: Checkout repository
+        # actions/checkout v7.0.1 (released 2026-07-20; resolved 2026-07-31)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Verify container dependency lock
+        run: python3 scripts/dependencies/verify_container_lock.py
+
+      - name: Generate ephemeral Compose JWT secret
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          COMMIT_SHA: ${{ github.sha }}
+        run: echo "MODACCT_JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+
+      - name: Build and start containers
+        run: docker compose -p modacct-legacy-smoke -f config/docker-compose.yml up -d --build
+
+      - name: Wait for API health
+        shell: bash
         run: |
           set -euo pipefail
-
-          for attempt in $(seq 1 120); do
-            response="$(curl --fail --silent --show-error \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${REPOSITORY}/commits/${COMMIT_SHA}/check-runs?per_page=100")"
-
-            status="$(jq -r '[.check_runs[] | select(.name == "container-supply-chain")] | sort_by(.started_at) | last | .status // empty' <<<"$response")"
-            conclusion="$(jq -r '[.check_runs[] | select(.name == "container-supply-chain")] | sort_by(.started_at) | last | .conclusion // empty' <<<"$response")"
-
-            if [ "$status" = "completed" ]; then
-              if [ "$conclusion" = "success" ]; then
-                echo "Expanded container-supply-chain check completed successfully."
-                exit 0
-              fi
-
-              echo "Expanded container-supply-chain check concluded: ${conclusion:-unknown}" >&2
-              exit 1
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/health >/dev/null; then
+              exit 0
             fi
+            sleep 2
+          done
+          docker compose -p modacct-legacy-smoke -f config/docker-compose.yml ps
+          docker compose -p modacct-legacy-smoke -f config/docker-compose.yml logs api
+          exit 1
 
-            echo "Waiting for container-supply-chain check (${attempt}/120)..."
-            sleep 5
+      - name: Wait for Streamlit health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:8501/_stcore/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -p modacct-legacy-smoke -f config/docker-compose.yml ps
+          docker compose -p modacct-legacy-smoke -f config/docker-compose.yml logs web
+          exit 1
+
+      - name: Verify least-privilege runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for service in api web; do
+            container_id="$(docker compose -p modacct-legacy-smoke -f config/docker-compose.yml ps -q "$service")"
+            test -n "$container_id"
+            image_id="$(docker inspect "$container_id" --format '{{.Image}}')"
+            image_user="$(docker image inspect "$image_id" --format '{{.Config.User}}')"
+            case "$image_user" in
+              10001|10001:10001) ;;
+              *) echo "$service image does not declare the expected non-root user" >&2; exit 1 ;;
+            esac
+            test "$(docker compose -p modacct-legacy-smoke -f config/docker-compose.yml exec -T "$service" id -u)" = "10001"
+            test "$(docker compose -p modacct-legacy-smoke -f config/docker-compose.yml exec -T "$service" id -g)" = "10001"
+            test "$(docker inspect "$container_id" --format '{{.HostConfig.ReadonlyRootfs}}')" = "true"
+            docker inspect "$container_id" --format '{{json .HostConfig.CapDrop}}' | grep -q '"ALL"'
+            docker inspect "$container_id" --format '{{json .HostConfig.SecurityOpt}}' | grep -q 'no-new-privileges:true'
           done
 
-          echo "Timed out waiting for container-supply-chain check." >&2
-          exit 1
+      - name: Tear down containers
+        if: always()
+        run: docker compose -p modacct-legacy-smoke -f config/docker-compose.yml down -v --remove-orphans
