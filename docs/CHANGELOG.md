@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 2026-08-08: Added the v0.2 authenticated Accountant Close Workspace: persistent periods and close cycles, inclusive posting locks, account reconciliations, BudgetService-backed variance reviews, staged-workflow blockers, independent journal approvals, deterministic checklist/readiness, spreadsheet-safe evidence ZIPs, Streamlit controls, multi-user demo data, fail-closed route inventory, and explicit critical-module line/branch coverage policy.
+
 - 2026-07-10: Refreshed the public-release audit against baseline
   `b00b2d84d082e8d97ee9dba0cf366c1fbe6f21e1`, aligned release notes and
   roadmap status, corrected setup commands, repaired container build/runtime

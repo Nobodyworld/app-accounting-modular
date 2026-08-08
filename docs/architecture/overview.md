@@ -98,6 +98,19 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    materializes its DataFrame internally, its HTTP response cannot be
    independently streamed or byte-counted at this adapter layer. Demo/reference
    providers perform no external I/O.
+
+## Accountant close domain
+
+The v0.2 close tranche follows the existing service-first architecture rather than placing accounting decisions in FastAPI or Streamlit:
+
+- `close_service.py` owns period/cycle transitions, deterministic checklist seeding, and the single readiness calculation used by both final close and the UI.
+- `period_lock.py` is the centralized service guard called by direct `LedgerService` posting and every `WorkflowService` posting, auto-post, and retry path before transaction, staged-status, or audit mutation.
+- `reconciliation_service.py` derives account balances from journal entries, reuses `BudgetService.budget_vs_actual`, and owns independent reconciliation and journal-approval decisions.
+- `close_evidence_service.py` builds bounded deterministic ZIP bytes in memory and persists only safe manifest metadata.
+- `routers/close.py` performs persisted-session authentication, tenant/role authorization, response-schema translation, and deliberate `400`/`403`/`404`/`409` mapping.
+- `close_workspace.py` uses the existing one-refresh Streamlit API session and renders the API's readiness result rather than recalculating accounting controls.
+
+`AccountingPeriod.status` is the authoritative posting lock. `CloseCycle.status` represents the workflow around that period: `DRAFT → IN_PROGRESS → READY_FOR_APPROVAL → CLOSED`; cancellation is terminal before close, and reopen explicitly moves a closed cycle back to `IN_PROGRESS` while unlocking the period and making prior evidence stale. The final close transition recalculates readiness and updates the cycle and period in one database transaction.
 5. **Observability** collects metrics, traces, and health reports. Metrics are
    exposed through `/health/metrics` while `/health/telemetry` and
    `apps.observability.diagnostics.collect_observability_snapshot` aggregate the

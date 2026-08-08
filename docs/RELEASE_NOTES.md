@@ -2,12 +2,16 @@
 
 ## Current Candidate
 
-Version file: `0.1.0`  
-Validated baseline before the current UX/UI pull request: `35292ea58555e7a8a35d054f98ebd95566c9129f`
+Version candidate: `0.2.0`
+Feature baseline: `483e56675a2ce0b40747974edffd95b976af322c`
 
 This public repository is an Early Beta / Portfolio Preview accounting-controls toolkit. It demonstrates modular snapshot orchestration, authenticated tenant-scoped review utilities, accountant-ready reports, provider provenance, journal controls, health diagnostics, scenario plans, CLI/API/Streamlit review surfaces, and extension contracts. It is not presented as a production ERP, tax engine, treasury system, regulated bank-feed product, or commercially supported accounting platform.
 
 ## Highlights
+
+- Authenticated Accountant Close Workspace for period administration, server-derived readiness, reconciliations, variance dispositions, journal approvals, checklist controls, evidence generation, final close, posting-lock verification, and explicit reopen.
+- Deterministic evidence ZIP with canonical JSON, LF spreadsheet-safe CSV, normalized entry timestamps, per-file SHA-256 values, and a manifest SHA-256.
+- Critical-module coverage policy with independent line and branch floors so aggregate coverage cannot mask close, ledger, workflow, or session-control regressions.
 
 - Public/local Streamlit review flow for financial snapshots, source evidence, freshness, and journal-control status.
 - Authenticated organization-scoped scenario-plan, budget, cashflow, FX, and market review workflows.
@@ -67,4 +71,4 @@ Demo providers use controlled sample data unless external credentials are config
 
 ## Release Decision
 
-The project remains an Early Beta / Portfolio Preview. Local demonstration is the validated deployment boundary. Trusted-team, LAN, or public hosting claims require completion of issue #87 and explicit deployment review.
+The project remains an Early Beta / Portfolio Preview. Local demonstration is the validated deployment boundary. The v0.2 close workspace is not ERP completeness, automatic bank reconciliation, production close certification, public-hosting approval, or regulatory compliance. Trusted-team, LAN, or public hosting claims require a separate deployment review.

@@ -1,0 +1,47 @@
+# Critical accounting and authentication modules. Existing floors reflect the
+# measured audited baseline; new close modules target the v0.2 acceptance bar.
+
+[[module]]
+path = "src/apps/api/services/ledger_service.py"
+line_floor = 90.0
+branch_floor = 80.0
+
+[[module]]
+path = "src/apps/api/services/workflow_service.py"
+line_floor = 81.0
+branch_floor = 68.0
+
+[[module]]
+path = "src/apps/api/security.py"
+line_floor = 87.0
+branch_floor = 80.0
+
+[[module]]
+path = "src/apps/api/services/auth_session_service.py"
+line_floor = 87.0
+branch_floor = 70.0
+
+[[module]]
+path = "src/apps/api/services/period_lock.py"
+line_floor = 85.0
+branch_floor = 70.0
+
+[[module]]
+path = "src/apps/api/services/close_service.py"
+line_floor = 85.0
+branch_floor = 70.0
+
+[[module]]
+path = "src/apps/api/services/reconciliation_service.py"
+line_floor = 85.0
+branch_floor = 70.0
+
+[[module]]
+path = "src/apps/api/services/close_evidence_service.py"
+line_floor = 85.0
+branch_floor = 70.0
+
+[[module]]
+path = "src/apps/api/routers/close.py"
+line_floor = 85.0
+branch_floor = 70.0

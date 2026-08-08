@@ -28,6 +28,8 @@ audit verdict.
 - Quality automation covers Ruff, Ruff format, mypy, pytest with coverage,
   focused accounting-control tests, `pip check`, `pip-audit` against the hashed
   runtime lock, and the lightweight current-tree secret scanner.
+- The v0.2 close tranche adds reviewable per-critical-module line and branch floors for ledger, workflow, persisted-session security, period lock, close lifecycle, reconciliation, evidence, and router modules; missing modules or branch evidence fail closed instead of being masked by aggregate coverage.
+- Accountant close now has one server-derived readiness contract, inclusive service-level posting locks, explicit two-person approvals, deterministic spreadsheet-safe evidence, and a protected Streamlit workflow. These remain Early Beta controls rather than ERP, production close, compliance, or public-hosting claims.
 - Central inbound resource policy bounds API bodies, expensive Pydantic
   collections, nested metadata, numeric controls, and retained Streamlit
   uploads while keeping rejected requests observable.

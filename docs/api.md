@@ -42,24 +42,44 @@ Access and refresh credentials are not interchangeable. Refresh reuse revokes th
 - `GET /tax/rules` - Tax rules by jurisdiction
 
 ### Ledger
-- `GET /ledger/accounts` - List accounts
-- `POST /ledger/accounts` - Create account
-- `GET /ledger/transactions` - List transactions
-- `POST /ledger/transactions` - Record transaction
-- `GET /ledger/balance` - Account balances
+- `POST /ledger/account` - Create a tenant account
+- `POST /ledger/post` - Record a balanced tenant transaction; dates in closed periods return `409` with `ACCOUNTING_PERIOD_CLOSED`
+- `GET /ledger/trial-balance` - Return tenant trial-balance rows and totals
 
 ### Reports
-- `GET /reports/pnl` - Profit & Loss report
-- `GET /reports/balance-sheet` - Balance sheet report
-- `GET /reports/tax-summary` - Tax summary report
+- `GET /reports/budget-vs-actual` - Tenant-scoped budget variance report used by close reviews
+- `GET /reports/cashflow-forecast` - Tenant-scoped cashflow report
 
 ### Forecasting
 - `POST /forecast` - Generate forecast
 - `GET /forecast/models` - List available models
 
 ### Audit
-- `GET /audit/snapshot` - Generate audit snapshot
-- `GET /audit/reports` - List audit reports
+- `GET /audit/` - Administrator-only tenant audit log with bounded pagination
+
+### Accountant close workspace
+
+Every route below requires a persisted access-token session and `organization_id`. Reads require tenant membership. Operational mutations require ledger-manager or administrator membership. Final close, reopen, cancellation, final checklist approval, and approval revocation require an administrator. Scoped objects from another tenant return a nondisclosing `404` after organization authorization.
+
+- `POST|GET /close/periods` and `GET /close/periods/{period_id}`
+- `POST|GET /close/periods/{period_id}/cycles` and `GET /close/cycles/{cycle_id}`
+- `POST /close/cycles/{cycle_id}/{start|ready|close|reopen|cancel}`
+- `GET /close/cycles/{cycle_id}/readiness`
+- `GET|POST /close/cycles/{cycle_id}/checklist`
+- `PATCH /close/cycles/{cycle_id}/checklist/{task_id}`
+- `GET|POST /close/cycles/{cycle_id}/reconciliations`
+- `PATCH /close/cycles/{cycle_id}/reconciliations/{reconciliation_id}`
+- `POST /close/cycles/{cycle_id}/reconciliations/{reconciliation_id}/approve`
+- `POST /close/cycles/{cycle_id}/variance-reviews/from-budget`
+- `GET /close/cycles/{cycle_id}/variance-reviews`
+- `PATCH /close/cycles/{cycle_id}/variance-reviews/{review_id}`
+- `GET|POST /close/cycles/{cycle_id}/journal-approvals`
+- `POST /close/cycles/{cycle_id}/journal-approvals/{approval_id}/decide`
+- `GET /close/cycles/{cycle_id}/evidence/preview`
+- `POST /close/cycles/{cycle_id}/evidence`
+- `GET /close/cycles/{cycle_id}/evidence/download`
+
+Reconciliation uses the explicit sign convention `difference = control_balance - ledger_ending_balance`. The ledger balance is server-derived from persisted journal entries through the inclusive period end. Evidence ZIPs contain canonical JSON and LF-terminated spreadsheet-safe CSV with deterministic filenames, row ordering, ZIP timestamps, per-file SHA-256 values, and a returned manifest SHA-256.
 
 ## Request/Response Format
 

@@ -56,6 +56,18 @@ human-readable wording.
 | Workflow transactions | 100 |
 | Postings per staged transaction | 100 |
 | Staged IDs per process request, before deduplication | 500 |
+| Accounting period label | 120 characters |
+| Close-cycle name | 160 characters |
+| Close/checklist/reconciliation notes | 2,000–4,096 characters by field |
+| Transition reason | 1,000 characters |
+| Custom close tasks per cycle | 50 |
+| Reconciliations per cycle | 500 |
+| Variance review rows per materialization | 5,000 |
+| Close evidence rows | 20,000 |
+| Close evidence ZIP | 8 MiB |
+| Close list page | 500 records |
+
+Close evidence row and archive limits are enforced while the deterministic bundle is assembled in memory. A rejected bundle is not persisted. Close policy and evidence metadata use the shared metadata validator below; configuration may tighten but may not raise these hard maxima.
 
 Names are limited to 255 characters, source names to 128, source references to
 255, and forecast model keys to 128. Currency strings retain the existing
