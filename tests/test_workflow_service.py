@@ -323,3 +323,8 @@ def test_rejections_and_retries_create_workflow_audit_records() -> None:
         transaction_audits = session.exec(select(AuditLog).where(AuditLog.entity_name == "Transaction")).all()
         assert len(transaction_audits) == 1
         assert (transaction_audits[0].context or {})["staged_transaction_id"] == staged.id
+
+
+def test_workflow_rejects_a_missing_persisted_identifier() -> None:
+    with pytest.raises(ValueError, match="missing identifier"):
+        WorkflowService._require_int(None, "staged transaction")

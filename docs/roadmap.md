@@ -1,6 +1,6 @@
 # Roadmap
 
-This roadmap reflects the repository state as of July 2026. Dates from the original modernization plan have been replaced with explicit status so completed foundations are not presented as overdue promises.
+This roadmap reflects the repository state as of August 2026. Dates from the original modernization plan have been replaced with explicit status so completed foundations are not presented as overdue promises.
 
 ## Current Status
 
@@ -10,6 +10,7 @@ This roadmap reflects the repository state as of July 2026. Dates from the origi
 | Adapter SDK foundation | Partial | Typed provider contracts, loader services, catalog metadata, caching behavior, and reference adapters exist. | Package a documented third-party adapter SDK with conformance tests. |
 | Provider marketplace | Planned | Provider discovery and metadata are represented in the internal catalog. No public marketplace or certification program exists. | Define package metadata, trust criteria, version compatibility, and review policy before implementation. |
 | Workflow recipes | Foundation complete | Scenario plans, preview/inspection commands, sample workflows, and orchestration helpers exist. | Add accountant-oriented reconciliation and close-control recipes with expected journal evidence. |
+| Accountant close workspace | Complete for v0.2 Early Beta | Immutable lifecycle states, serialized SQLite posting/close, explicit required scopes, CAS revisions, complete bounded evidence, API routes, and Streamlit workflow are present. | Collect hosted exact-head and operator acceptance evidence; evaluate database-native locks before any multi-writer deployment; do not expand the claim to ERP or production close certification. |
 | Observability pack | Foundation complete | Metrics, tracing hooks, health/readiness endpoints, startup diagnostics, scheduler state, and CLI observability commands exist. | Add deployment examples, alerting guidance, and optional OTLP collector integration. |
 | Container onboarding | In validation | API and Streamlit Dockerfiles plus Compose configuration exist. | Keep container build and startup smoke coverage in CI. |
 | Public portfolio release | In owner review | README, screenshots, architecture diagrams, case studies, security policy, license, contribution docs, and release audit are present. | Complete hosted CI and repository-setting review before changing visibility. |
@@ -21,7 +22,7 @@ This roadmap reflects the repository state as of July 2026. Dates from the origi
 3. Expand strict typing beyond the current targeted modules.
 4. Replace remaining Streamlit deprecated parameters and reduce UI maintenance warnings.
 5. Persist provider-catalog administration rather than relying only on process configuration.
-6. Add accountant-centered workflow recipes for reconciliation, period close, variance review, and journal approval evidence.
+6. Extend the validated v0.2 close controls only through explicit policy decisions and measured critical-module coverage.
 
 ## Future Opportunities
 

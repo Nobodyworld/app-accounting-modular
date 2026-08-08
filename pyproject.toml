@@ -56,6 +56,12 @@ mypy_path = ["src", "."]
 files = [
   "src/apps/api/config.py",
   "src/apps/api/services/forecast_service.py",
+  "src/apps/api/services/period_lock.py",
+  "src/apps/api/services/close_service.py",
+  "src/apps/api/services/reconciliation_service.py",
+  "src/apps/api/services/close_evidence_service.py",
+  "src/apps/api/routers/close.py",
+  "src/apps/api/close_schemas.py",
   "src/apps/api/audit.py",
   "src/apps/api/dependencies.py",
   "src/apps/api/db.py",
@@ -90,5 +96,9 @@ ignore_missing_imports = true
 module = [
   "src.apps.api.config",
   "src.apps.api.services.forecast_service",
+  "src.apps.api.services.period_lock",
+  "src.apps.api.services.close_service",
+  "src.apps.api.services.reconciliation_service",
+  "src.apps.api.services.close_evidence_service",
 ]
 strict = true

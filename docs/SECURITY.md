@@ -78,6 +78,16 @@ Streamlit keeps access, refresh, and session identifiers only in in-memory sessi
 - Audit startup failure logs for sensitive payloads; `StartupManager` surfaces exception metadata for diagnostics, so ensure startup steps raise errors without embedding secrets or personal data.
 - Preserve the centralized inbound request, collection, metadata, and upload limits documented in [`resource-limits.md`](resource-limits.md).
 
+## Accountant close trust boundary
+
+The `/close` surface inherits persisted access/refresh session separation and trusted audit attribution. Clients provide organization and resource identifiers but never trusted actor identifiers. Tenant membership is resolved before tenant-scoped object lookup; missing or cross-tenant close resources use the same nondisclosing `404` result. Ledger managers may prepare controls, while administrator-only final close, reopen, cancellation, and revocation preserve explicit separation of duties.
+
+The posting lock is enforced in `period_lock.py` from both direct and staged workflow paths. A no-op tenant-period update obtains the validated SQLite writer position before period state is checked, serializing close against posting; `auto_process=true` uses one transaction so rejection removes newly staged rows too. Period boundaries are inclusive, and reopen checks every inclusive overlap pattern before mutation. Journal requestors cannot approve their own request, reconciliation preparers cannot provide final approval, and assignment IDs must resolve to active same-tenant members.
+
+Lifecycle writes are guarded in services: ready freezes operational records, closed and cancelled are read-only, and administrator return-to-work/restart/reopen require bounded reasons. Atomic version and content-revision compare-and-swap updates prevent two sessions from both succeeding. Evidence freshness uses `CloseCycle.content_revision`; final close, audit records, and final `CLOSED` evidence commit atomically.
+
+Evidence is assembled in memory under hard row and archive-byte limits. Only manifest metadata is persisted. The archive excludes JWTs, passwords, credentials, environment dumps, host paths, unrestricted provider metadata, exception traces, and raw uploads. CSV text is neutralized through the existing spreadsheet-safety helper. The feature-specific review and remaining assumptions are recorded in [`security/V0_2_CLOSE_WORKSPACE_SECURITY_REVIEW.md`](security/V0_2_CLOSE_WORKSPACE_SECURITY_REVIEW.md); it does not rewrite or broaden the historical baseline audit.
+
 ### Outbound provider trust boundary
 
 The network-backed provider inventory is limited to ECB, OpenExchangeRates, and

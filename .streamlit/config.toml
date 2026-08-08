@@ -2,3 +2,11 @@
 # above the application's stricter 1 MiB (1,048,576-byte) upload policy.
 [server]
 maxUploadSize = 2
+
+[theme]
+base = "light"
+primaryColor = "#174EA6"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F7FA"
+textColor = "#172033"
+font = "sans serif"

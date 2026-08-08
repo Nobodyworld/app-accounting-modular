@@ -48,6 +48,14 @@ COMMANDS: Sequence[Sequence[str]] = (
     (
         sys.executable,
         "-m",
+        "src.tools.critical_coverage",
+        "coverage.json",
+        "--config",
+        "config/critical-coverage.toml",
+    ),
+    (
+        sys.executable,
+        "-m",
         "pytest",
         "-o",
         "cache_dir=.pytest_cache_runtime",

@@ -98,6 +98,19 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    materializes its DataFrame internally, its HTTP response cannot be
    independently streamed or byte-counted at this adapter layer. Demo/reference
    providers perform no external I/O.
+
+## Accountant close domain
+
+The v0.2 close tranche follows the existing service-first architecture rather than placing accounting decisions in FastAPI or Streamlit:
+
+- `close_service.py` owns lifecycle guards, atomic version/content-revision compare-and-swap updates, required control scope, effective checklist status, readiness, and finalization.
+- `period_lock.py` acquires a SQLite writer gate before either close or direct/workflow posting evaluates period state. `auto_process=true` stages and posts in one request transaction.
+- `reconciliation_service.py` derives account balances, creates durable period-scoped variance-run proof, and owns one current approval per durable journal reference plus append-only decisions.
+- `close_evidence_service.py` builds cycle-scoped, row-bounded deterministic ZIP bytes, including approval decisions and variance runs, and persists safe manifest metadata.
+- `routers/close.py` performs persisted-session authentication, tenant/role authorization, response-schema translation, and deliberate `400`/`403`/`404`/`409` mapping.
+- `close_workspace.py` uses the existing one-refresh Streamlit API session and renders the API's readiness result rather than recalculating accounting controls.
+
+`AccountingPeriod.status` is authoritative. The lifecycle is `DRAFT → IN_PROGRESS/BLOCKED → READY_FOR_APPROVAL → CLOSED`. Ready freezes operational rows and can return to work only with an administrator reason. Cancellation preserves the durable cycle and can restart with a reason. Reopen is overlap-safe. Final close recalculates readiness, establishes the final content revision, closes cycle and period, and records deterministic `CLOSED` evidence in one transaction. SQLite's single-writer gate is the validated backend strategy; a multi-writer deployment must replace it with database-native row locking or an equivalent posting gate.
 5. **Observability** collects metrics, traces, and health reports. Metrics are
    exposed through `/health/metrics` while `/health/telemetry` and
    `apps.observability.diagnostics.collect_observability_snapshot` aggregate the

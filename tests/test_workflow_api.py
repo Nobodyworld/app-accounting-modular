@@ -5,16 +5,22 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
 import pytest
 from apps.api import db
 from apps.api.main import create_app
 from apps.api.models.models import (
+    AccountingPeriod,
+    AccountingPeriodStatus,
+    AuditLog,
+    JournalEntry,
     Membership,
     Organization,
     StagedPosting,
     StagedTransaction,
+    Transaction,
     User,
     WorkflowStatus,
 )
@@ -216,6 +222,50 @@ def test_workflow_api_end_to_end() -> None:
         )
         assert list_response.status_code == 200
         assert len(list_response.json()) == 2
+
+
+def test_auto_process_closed_period_rolls_back_entire_ingest_request() -> None:
+    with create_client() as (client, context):
+        with Session(db.engine) as session:
+            session.add(
+                AccountingPeriod(
+                    organization_id=context.organization_id,
+                    label="April 2024",
+                    start_date=date(2024, 4, 1),
+                    end_date=date(2024, 4, 30),
+                    status=AccountingPeriodStatus.CLOSED,
+                )
+            )
+            session.commit()
+            before = {
+                "staged": len(session.exec(select(StagedTransaction)).all()),
+                "postings": len(session.exec(select(StagedPosting)).all()),
+                "transactions": len(session.exec(select(Transaction)).all()),
+                "entries": len(session.exec(select(JournalEntry)).all()),
+                "audits": len(session.exec(select(AuditLog)).all()),
+            }
+
+        response = client.post(
+            "/workflow/ingest",
+            params={"organization_id": context.organization_id},
+            json={
+                "source": "closed-period-atomic",
+                "auto_process": True,
+                "transactions": [_balanced_transaction(context, source_reference="closed-atomic-1")],
+            },
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "ACCOUNTING_PERIOD_CLOSED"
+
+        with Session(db.engine) as session:
+            after = {
+                "staged": len(session.exec(select(StagedTransaction)).all()),
+                "postings": len(session.exec(select(StagedPosting)).all()),
+                "transactions": len(session.exec(select(Transaction)).all()),
+                "entries": len(session.exec(select(JournalEntry)).all()),
+                "audits": len(session.exec(select(AuditLog)).all()),
+            }
+        assert after == before
 
 
 def test_workflow_routes_require_authentication() -> None:

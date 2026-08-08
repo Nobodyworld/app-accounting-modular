@@ -18,13 +18,15 @@ from apps.web.api_session import (
     SESSION_ID_KEY,
 )
 
+from tests.streamlit_helpers import streamlit_app_path
+
 pytest.importorskip("streamlit", reason="streamlit dependencies not available")
 from streamlit.testing.v1 import AppTest  # type: ignore[import-not-found]
 
 
 def _app_test() -> AppTest:
     st.cache_data.clear()
-    return AppTest.from_file("apps/web/app.py")
+    return AppTest.from_file(streamlit_app_path())
 
 
 class DummyResponse:
