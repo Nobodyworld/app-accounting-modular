@@ -31,6 +31,7 @@ from apps.web.api_session import (
     request_with_one_refresh,
     store_api_session,
 )
+from apps.web.close_workspace import render_close_workspace
 from apps.web.upload_limits import (
     clear_budget_upload_state,
     clear_scenario_upload_state,
@@ -490,7 +491,12 @@ ready_data, ready_error = _load_readiness()
 providers_payload, providers_error = _load_providers()
 providers_by_key = {entry["key"]: entry for entry in providers_payload if isinstance(entry, dict) and entry.get("key")}
 
-snapshot_tab, utility_tab, plan_tab = st.tabs(["Snapshot Review", "Review Utilities", "Scenario Plans"])
+close_tab, snapshot_tab, utility_tab, plan_tab = st.tabs(
+    ["Close Workspace", "Snapshot Review", "Review Utilities", "Scenario Plans"]
+)
+
+with close_tab:
+    render_close_workspace(access_token=access_token, organization_id=organization_id)
 
 with snapshot_tab:
     st.subheader("Snapshot Review")
