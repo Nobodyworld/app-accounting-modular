@@ -22,6 +22,7 @@ from ..models.models import (
     WorkflowStatus,
 )
 from .ledger_service import LedgerService
+from .period_lock import ClosedPeriodPostingError, ensure_posting_allowed
 
 
 @dataclass(slots=True, frozen=True)
@@ -180,8 +181,12 @@ class WorkflowService:
 
             try:
                 payload, organization_id = self._prepare_postings(postings)
+                ensure_posting_allowed(self.s, organization_id, staged.date)
                 ledger = LedgerService(self.s, organization_id=organization_id)
                 normalised = ledger.validate_transaction(staged.date, staged.description, payload)
+            except ClosedPeriodPostingError:
+                self.s.rollback()
+                raise
             except ValueError as exc:
                 error = str(exc)
                 staged.status = WorkflowStatus.FAILED

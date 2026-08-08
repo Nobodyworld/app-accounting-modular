@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 
 from ..audit import AuditAction, AuditLogger, apply_creation_metadata
 from ..models.models import Account, AccountType, JournalEntry, Rate, Transaction
+from .period_lock import ensure_posting_allowed
 
 
 @dataclass(slots=True)
@@ -165,6 +166,7 @@ class LedgerService:
         source: str | None = None,
         source_reference: str | None = None,
     ) -> Transaction:
+        ensure_posting_allowed(self.s, self.organization_id, date)
         normalised = self.validate_transaction(date, description, postings)
 
         txn = Transaction(
