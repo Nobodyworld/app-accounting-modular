@@ -67,7 +67,7 @@ human-readable wording.
 | Close evidence ZIP | 8 MiB |
 | Close list page | 500 records |
 
-Close evidence row and archive limits are enforced while the deterministic bundle is assembled in memory. A rejected bundle is not persisted. Close policy and evidence metadata use the shared metadata validator below; configuration may tighten but may not raise these hard maxima.
+Close evidence row and archive limits are enforced while the deterministic bundle is assembled in memory. A rejected bundle is not persisted. Close policy uses a fixed typed schema with bounded override reasons and account IDs; reconciliation evidence metadata uses the shared metadata validator below. Configuration may tighten but may not raise these hard maxima.
 
 Names are limited to 255 characters, source names to 128, source references to
 255, and forecast model keys to 128. Currency strings retain the existing

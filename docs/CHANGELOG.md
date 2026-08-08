@@ -4,6 +4,7 @@
 
 - 2026-08-08: Added the v0.2 authenticated Accountant Close Workspace: persistent periods and close cycles, inclusive posting locks, account reconciliations, BudgetService-backed variance reviews, staged-workflow blockers, independent journal approvals, deterministic checklist/readiness, spreadsheet-safe evidence ZIPs, Streamlit controls, multi-user demo data, fail-closed route inventory, and explicit critical-module line/branch coverage policy.
 - 2026-08-08: Corrected v0.2 integrity controls with immutable ready/closed/cancelled states, restart and return-to-work, overlap-safe reopen, database compare-and-swap revisions, serialized close/posting, atomic workflow auto-process, required control scopes, durable variance runs, one current journal approval reference, complete decision-history evidence, and atomic final `CLOSED` evidence.
+- 2026-08-08: Completed the v0.2 correction with an authoritative ledger-activity revision, READY direct/workflow posting freeze, stale reconciliation/variance/evidence blockers, typed reasoned administrator policy overrides, latest-run variance ownership, create/reopen and close/post race coverage, conditional evidence source locks, one manifest hash across bytes/metadata/audit, enforced close row limits, regenerated route evidence, and final responsive/keyboard/browser evidence.
 
 - 2026-07-10: Refreshed the public-release audit against baseline
   `b00b2d84d082e8d97ee9dba0cf366c1fbe6f21e1`, aligned release notes and

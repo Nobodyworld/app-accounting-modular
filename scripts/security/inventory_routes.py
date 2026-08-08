@@ -140,7 +140,9 @@ POLICIES: dict[str, Policy] = {
         "tenant manager",
         "organization_id, account_id, source_reference",
         "transaction and postings (create)",
-        "tests/test_ledger_api_invariants.py; tests/test_ledger_service.py",
+        "tests/test_ledger_api_invariants.py; tests/test_ledger_service.py; tests/test_period_posting_lock.py; "
+        "tests/test_close_integrity_regressions.py::"
+        "test_final_close_serializes_against_direct_and_workflow_posting",
         "concurrent duplicate source_reference API requests",
     ),
     "GET /ledger/trial-balance": Policy(
@@ -250,7 +252,8 @@ POLICIES: dict[str, Policy] = {
         "tenant manager",
         "organization_id, staged_id",
         "staged transactions and ledger postings (read/update/create)",
-        "tests/test_workflow_api.py",
+        "tests/test_workflow_api.py; tests/test_period_posting_lock.py; tests/test_close_integrity_regressions.py::"
+        "test_final_close_serializes_against_direct_and_workflow_posting",
         "concurrent processing of identical staged ids",
     ),
     "GET /workflow/{staged_id}": Policy(
@@ -282,8 +285,10 @@ POLICIES.update(
             "tenant ledger manager",
             "organization_id",
             "accounting period and posting-boundary metadata (create)",
-            "tests/test_close_api.py; tests/test_close_service.py; tests/test_close_tenant_isolation.py",
-            "cross-process overlap serialization beyond SQLite transaction guarantees",
+            "tests/test_close_api.py; tests/test_close_service.py; tests/test_close_tenant_isolation.py; "
+            "tests/test_close_integrity_regressions.py::"
+            "test_overlapping_period_creation_is_serialized_across_sessions",
+            "multi-writer database implementations require a database-native gate",
         ),
         "GET /close/periods": Policy(
             "tenant member",
@@ -303,7 +308,8 @@ POLICIES.update(
             "tenant ledger manager",
             "organization_id, period_id",
             "close cycle, policy snapshot, and standard checklist (create)",
-            "tests/test_close_api.py; tests/test_close_service.py",
+            "tests/test_close_api.py::test_cycle_policy_override_is_typed_reasoned_and_admin_only; "
+            "tests/test_close_service.py; tests/test_close_integrity_regressions.py",
             "none identified",
         ),
         "GET /close/periods/{period_id}/cycles": Policy(
@@ -338,8 +344,10 @@ POLICIES.update(
             "tenant administrator",
             "organization_id, cycle_id, version",
             "atomic close-cycle and accounting-period posting lock (update)",
-            "tests/test_close_readiness.py; tests/test_period_posting_lock.py; tests/test_close_api.py",
-            "cross-process writer scheduling beyond SQLite transaction guarantees",
+            "tests/test_close_readiness.py; tests/test_period_posting_lock.py; tests/test_close_api.py; "
+            "tests/test_close_integrity_regressions.py::"
+            "test_final_close_serializes_against_direct_and_workflow_posting",
+            "multi-writer database implementations require a database-native gate",
         ),
         "POST /close/cycles/{cycle_id}/reopen": Policy(
             "tenant administrator",
@@ -478,7 +486,8 @@ POLICIES.update(
             "tenant ledger manager",
             "organization_id, cycle_id",
             "deterministic evidence computation, manifest metadata, and audit reference (create)",
-            "tests/test_close_evidence.py",
+            "tests/test_close_evidence.py; tests/test_close_integrity_regressions.py::"
+            "test_evidence_persistence_rejects_a_source_changed_by_another_session",
             "none identified",
         ),
         "GET /close/cycles/{cycle_id}/evidence/download": Policy(

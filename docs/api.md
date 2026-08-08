@@ -43,7 +43,7 @@ Access and refresh credentials are not interchangeable. Refresh reuse revokes th
 
 ### Ledger
 - `POST /ledger/account` - Create a tenant account
-- `POST /ledger/post` - Record a balanced tenant transaction; dates in closed periods return `409` with `ACCOUNTING_PERIOD_CLOSED`
+- `POST /ledger/post` - Record a balanced tenant transaction; dates in closed periods return `409` with `ACCOUNTING_PERIOD_CLOSED`, and dates in a cycle awaiting approval return `409` with `ACCOUNTING_PERIOD_CLOSE_READY`
 - `GET /ledger/trial-balance` - Return tenant trial-balance rows and totals
 
 ### Reports
@@ -79,9 +79,9 @@ Every route below requires a persisted access-token session and `organization_id
 - `POST /close/cycles/{cycle_id}/evidence`
 - `GET /close/cycles/{cycle_id}/evidence/download`
 
-Reconciliation uses the explicit sign convention `difference = control_balance - ledger_ending_balance`. Cycle creation snapshots required `ASSET`, `LIABILITY`, and `EQUITY` account IDs unless an explicit not-applicable policy is stored. Variance readiness requires a durable in-period run when enabled, including a zero-row run. Journal policy is explicit: `REQUESTED_ONLY` or `ALL_PERIOD_TRANSACTIONS`.
+Reconciliation uses the explicit sign convention `difference = control_balance - ledger_ending_balance`. Cycle creation by a ledger manager uses server defaults. An administrator may supply only the typed policy fields for reconciliation scope/not-applicable status, variance requirement, and journal mode, and every override requires a bounded reason; unknown and inconsistent fields are rejected. Variance readiness requires the latest durable in-period run when enabled, including a zero-row run. Each rerun owns fresh rows, and only its current rows can be updated or affect readiness. Journal policy is explicit: `REQUESTED_ONLY` or `ALL_PERIOD_TRANSACTIONS`.
 
-Operational writes are allowed only in `IN_PROGRESS`/`BLOCKED`; `READY_FOR_APPROVAL` is frozen except finalization or reasoned return-to-work; `CLOSED` and `CANCELLED` are read-only except administrator reopen/restart. `CloseCycle.content_revision` is atomically incremented for every evidence-relevant mutation. Evidence is current only when its source revision matches. Final close creates current `CLOSED` evidence in the same transaction. ZIPs also contain variance-run proof and immutable journal approval decision history.
+Operational writes are allowed only in `IN_PROGRESS`/`BLOCKED`; `READY_FOR_APPROVAL` freezes direct and workflow posting as well as close controls until an administrator records a reasoned return-to-work. `CLOSED` and `CANCELLED` are read-only except administrator reopen/restart. Every successful in-period post atomically advances `AccountingPeriod.ledger_activity_revision`. Approved reconciliations, the latest variance run, and evidence must match that revision. `CloseCycle.content_revision` independently tracks close-control mutations. Draft evidence conditionally verifies cycle status, close revision, and ledger revision at persistence time. Final close creates current `CLOSED` evidence in the same transaction. ZIPs contain only the latest variance run's current rows, durable run proof, immutable approval decisions, and a typed safe policy.
 
 ## Request/Response Format
 

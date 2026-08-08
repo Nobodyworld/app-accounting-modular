@@ -9,8 +9,8 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 
 ## Highlights
 
-- Authenticated Accountant Close Workspace with immutable lifecycle states, reasoned restart/return-to-work/reopen, required reconciliation scope, durable period variance runs, explicit journal-approval policy, revision-bound draft evidence, and atomic final `CLOSED` evidence.
-- Deterministic evidence ZIP with canonical JSON, LF spreadsheet-safe CSV, normalized entry timestamps, per-file SHA-256 values, and a manifest SHA-256.
+- Authenticated Accountant Close Workspace with immutable lifecycle states, a READY posting freeze, reasoned restart/return-to-work/reopen, typed administrator policy exceptions, ledger-revision-bound reconciliations and current variance runs, explicit journal-approval policy, conditionally persisted draft evidence, and atomic final `CLOSED` evidence.
+- Deterministic evidence ZIP with canonical JSON, LF spreadsheet-safe CSV, normalized entry timestamps, per-file SHA-256 values, one non-self-referential manifest hash across bytes/metadata/audit, and typed safe policy output.
 - Critical-module coverage policy with independent line and branch floors so aggregate coverage cannot mask close, ledger, workflow, or session-control regressions.
 
 - Public/local Streamlit review flow for financial snapshots, source evidence, freshness, and journal-control status.

@@ -24,19 +24,19 @@ The command creates one organization, a preparer, an independent reviewer, an ad
 6. In **Variance review**, filter material rows, select the unresolved revenue variance, record a disposition, and add the required reviewer note. The row came from the existing BudgetService report and retains its budget, horizon, plan, revision, currency, and generation provenance.
 7. Review the already approved posted-journal request and its append-only decision history. A requestor cannot approve their own request.
 8. In **Checklist**, complete the provider/report freshness attestation. System-derived tasks cannot be manually overridden.
-9. When readiness has no blockers, mark the cycle **Ready for approval**. Ready is operationally frozen. Generate explicitly labeled draft evidence; if a correction is needed, an administrator can return the cycle to work with a reason, which makes that evidence stale.
+9. When readiness has no blockers, mark the cycle **Ready for approval**. Ready freezes close controls and both direct/workflow posting. An in-period attempt returns `409` with `ACCOUNTING_PERIOD_CLOSE_READY`; an administrator must return the cycle to work with a reason before posting. A later successful post advances the period ledger revision, making the prior reconciliation, variance run, and evidence stale until refreshed.
 10. Log out and sign in as `close-admin@example.test`. Close the accounting period. Final close recalculates readiness and atomically closes the cycle and period while generating current final evidence from the `CLOSED` state. `approved_at` and the final checklist task are set only here.
 11. In **Evidence & close**, use the posting-lock verification form with the printed cash and revenue account IDs and a March 2026 date. The API must return `409` with `ACCOUNTING_PERIOD_CLOSED`, and no journal or audit mutation remains.
 12. Enter a nonempty reason and explicitly reopen the period. Reopen is rejected if another same-tenant open period overlaps any inclusive boundary. Prior evidence becomes stale and ordinary posting is permitted again. A cancelled cycle remains durable and read-only until an administrator restarts it with a reason.
 
 ## Evidence contents
 
-The ZIP contains `manifest.json`, `close-cycle.json`, `readiness.json`, `trial-balance.csv`, `reconciliations.csv`, `reconciliation-exceptions.csv`, `variance-reviews.csv`, `variance-review-runs.csv`, `journal-approvals.csv`, `journal-approval-decisions.csv`, `checklist.csv`, `audit-references.csv`, and `provenance.json`. Audit references are limited to the selected period/cycle and its exact child/reference IDs. Every exported row type counts toward the cap. Files have deterministic ordering, canonical JSON, LF line endings, normalized ZIP timestamps, and spreadsheet-safe text.
+The ZIP contains `manifest.json`, `close-cycle.json`, `readiness.json`, `trial-balance.csv`, `reconciliations.csv`, `reconciliation-exceptions.csv`, `variance-reviews.csv`, `variance-review-runs.csv`, `journal-approvals.csv`, `journal-approval-decisions.csv`, `checklist.csv`, `audit-references.csv`, and `provenance.json`. Audit references are limited to the selected period/cycle and its exact child/reference IDs, with evidence records and their own audit rows outside the explicit snapshot cutoff. Only the latest variance run's current rows appear in `variance-reviews.csv`; durable run history remains in `variance-review-runs.csv`. Every exported row type counts toward the cap. Files have deterministic ordering, canonical JSON, LF line endings, normalized ZIP timestamps, spreadsheet-safe text, and one manifest hash shared by returned/downloaded bytes, persisted metadata, and the generation audit.
 
 ## Reproducible control tests
 
 ```powershell
-pytest -q tests/test_close_readiness.py tests/test_period_posting_lock.py tests/test_close_evidence.py
+pytest -q tests/test_close_readiness.py tests/test_period_posting_lock.py tests/test_close_evidence.py tests/test_close_integrity_regressions.py
 ```
 
-These tests prove the legal/illegal lifecycle, two-person controls, inclusive direct/workflow posting lock, no partial writes, evidence determinism, final close, rejection after close, and explicit reopen.
+These tests prove the legal/illegal lifecycle, two-person controls, inclusive direct/workflow READY and CLOSED posting locks, separate-session close/post and overlap races, ledger-revision staleness, no partial writes, conditional evidence persistence, manifest equality, final close, and explicit reopen.
