@@ -10,6 +10,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from ..limits import MAX_RECONCILIATIONS_PER_CYCLE, MAX_VARIANCE_REVIEW_ROWS
 from ..metadata_limits import validate_metadata
 from ..models.models import (
     Account,
@@ -112,7 +113,7 @@ class ReconciliationService:
         owner_user_id: int | None = None,
         version: int | None = None,
     ) -> AccountReconciliation:
-        cycle, _ = self._cycle_and_period(cycle_id, mutation="Reconciliation preparation")
+        cycle, period = self._cycle_and_period(cycle_id, mutation="Reconciliation preparation")
         self._account(account_id)
         owner = owner_user_id or self.actor_user_id
         self.close.validate_owner(owner)
@@ -134,6 +135,18 @@ class ReconciliationService:
         ).first()
         now = self._now()
         if existing is None:
+            reconciliation_ids = list(
+                self.s.exec(
+                    select(AccountReconciliation.id)
+                    .where(
+                        AccountReconciliation.organization_id == self.organization_id,
+                        AccountReconciliation.cycle_id == cycle_id,
+                    )
+                    .limit(MAX_RECONCILIATIONS_PER_CYCLE)
+                )
+            )
+            if len(reconciliation_ids) >= MAX_RECONCILIATIONS_PER_CYCLE:
+                raise CloseValidationError("Maximum reconciliations per close cycle reached")
             reconciliation = AccountReconciliation(
                 organization_id=self.organization_id,
                 cycle_id=cycle_id,
@@ -146,6 +159,7 @@ class ReconciliationService:
                 owner_user_id=owner,
                 prepared_by_id=self.actor_user_id,
                 prepared_at=now,
+                ledger_activity_revision=period.ledger_activity_revision,
                 notes=normalized_notes,
                 evidence_metadata=metadata,
                 created_at=now,
@@ -200,7 +214,7 @@ class ReconciliationService:
         evidence_metadata: dict[str, Any] | None = None,
         owner_user_id: int | None = None,
     ) -> AccountReconciliation:
-        cycle, _ = self._cycle_and_period(cycle_id, mutation="Reconciliation update")
+        cycle, period = self._cycle_and_period(cycle_id, mutation="Reconciliation update")
         reconciliation = self.s.exec(
             select(AccountReconciliation).where(
                 AccountReconciliation.organization_id == self.organization_id,
@@ -254,6 +268,7 @@ class ReconciliationService:
                 approved_at=None,
                 notes=normalized_notes,
                 evidence_metadata=metadata,
+                ledger_activity_revision=period.ledger_activity_revision,
                 version=version + 1,
                 updated_at=now,
             )
@@ -282,7 +297,7 @@ class ReconciliationService:
         return reconciliation
 
     def approve_reconciliation(self, cycle_id: int, reconciliation_id: int, *, version: int) -> AccountReconciliation:
-        cycle, _ = self._cycle_and_period(cycle_id, mutation="Reconciliation approval")
+        cycle, period = self._cycle_and_period(cycle_id, mutation="Reconciliation approval")
         reconciliation = self.s.exec(
             select(AccountReconciliation).where(
                 AccountReconciliation.organization_id == self.organization_id,
@@ -294,6 +309,8 @@ class ReconciliationService:
             raise CloseNotFoundError("Reconciliation not found")
         if reconciliation.version != version:
             raise CloseConflictError("Reconciliation version is stale")
+        if reconciliation.ledger_activity_revision != period.ledger_activity_revision:
+            raise CloseConflictError("Reconciliation predates current ledger activity and must be re-prepared")
         if reconciliation.prepared_by_id == self.actor_user_id:
             raise CloseConflictError("The reconciliation preparer cannot provide final approval")
         if reconciliation.status not in {ReconciliationStatus.MATCHED, ReconciliationStatus.IN_PROGRESS}:
@@ -372,52 +389,8 @@ class ReconciliationService:
             raise CloseValidationError("Materiality thresholds must be nonnegative")
         report = BudgetService(self.s).budget_vs_actual(budget_id, horizon=horizon, refresh=refresh)
         period_lines = [line for line in report.lines if period.start_date <= line.period_start <= period.end_date]
-        if len(period_lines) > 5_000:
+        if len(period_lines) > MAX_VARIANCE_REVIEW_ROWS:
             raise CloseValidationError("Budget report exceeds the maximum variance review rows")
-        created: list[VarianceReview] = []
-        for line in period_lines:
-            budget_amount = Decimal(str(line.budget_amount))
-            actual_amount = Decimal(str(line.actual_amount))
-            variance = Decimal(str(line.variance))
-            variance_percent = abs(variance / budget_amount) if budget_amount != 0 else None
-            is_material = abs(variance) >= absolute or (
-                percentage is not None and variance_percent is not None and variance_percent >= percentage
-            )
-            existing = self.s.exec(
-                select(VarianceReview).where(
-                    VarianceReview.cycle_id == cycle_id,
-                    VarianceReview.budget_id == budget_id,
-                    VarianceReview.account_id == line.account_id,
-                    VarianceReview.period_start == line.period_start,
-                )
-            ).first()
-            if existing is not None:
-                continue
-            review = VarianceReview(
-                organization_id=self.organization_id,
-                cycle_id=cycle_id,
-                budget_id=budget_id,
-                account_id=line.account_id,
-                period_start=line.period_start,
-                horizon=horizon,
-                budget_amount=budget_amount,
-                actual_amount=actual_amount,
-                variance_amount=variance,
-                variance_percent=variance_percent,
-                absolute_threshold=absolute,
-                percentage_threshold=percentage,
-                is_material=is_material,
-                report_metadata={
-                    "budget_id": budget_id,
-                    "horizon": horizon,
-                    "plan_id": report.metadata.get("plan_id"),
-                    "plan_revision": str(report.metadata.get("plan_revision") or ""),
-                    "generated_at": str(report.metadata.get("generated_at") or ""),
-                    "reporting_currency": report.metadata.get("reporting_currency"),
-                },
-            )
-            self.s.add(review)
-            created.append(review)
         new_revision = self.close.bump_content_revision(cycle)
         run = VarianceReviewRun(
             organization_id=self.organization_id,
@@ -440,9 +413,46 @@ class ReconciliationService:
             generated_by_id=self.actor_user_id,
             row_count=len(period_lines),
             content_revision=new_revision,
+            ledger_activity_revision=period.ledger_activity_revision,
         )
         self.s.add(run)
         self.s.flush()
+        run_id = self.close._id(run.id, "variance review run")
+        created: list[VarianceReview] = []
+        for line in period_lines:
+            budget_amount = Decimal(str(line.budget_amount))
+            actual_amount = Decimal(str(line.actual_amount))
+            variance = Decimal(str(line.variance))
+            variance_percent = abs(variance / budget_amount) if budget_amount != 0 else None
+            is_material = abs(variance) >= absolute or (
+                percentage is not None and variance_percent is not None and variance_percent >= percentage
+            )
+            review = VarianceReview(
+                organization_id=self.organization_id,
+                cycle_id=cycle_id,
+                run_id=run_id,
+                budget_id=budget_id,
+                account_id=line.account_id,
+                period_start=line.period_start,
+                horizon=horizon,
+                budget_amount=budget_amount,
+                actual_amount=actual_amount,
+                variance_amount=variance,
+                variance_percent=variance_percent,
+                absolute_threshold=absolute,
+                percentage_threshold=percentage,
+                is_material=is_material,
+                report_metadata={
+                    "budget_id": budget_id,
+                    "horizon": horizon,
+                    "plan_id": report.metadata.get("plan_id"),
+                    "plan_revision": str(report.metadata.get("plan_revision") or ""),
+                    "generated_at": str(report.metadata.get("generated_at") or ""),
+                    "reporting_currency": report.metadata.get("reporting_currency"),
+                },
+            )
+            self.s.add(review)
+            created.append(review)
         self.close._audit(
             AuditAction.CREATE,
             "VarianceReviewRun",
@@ -453,6 +463,7 @@ class ReconciliationService:
                 "rows_created": len(created),
                 "period_rows": len(period_lines),
                 "content_revision": new_revision,
+                "ledger_activity_revision": period.ledger_activity_revision,
             },
             event="variance_reviews_materialized",
         )
@@ -463,10 +474,24 @@ class ReconciliationService:
 
     def list_variances(self, cycle_id: int) -> list[VarianceReview]:
         self.close.require_cycle(cycle_id)
+        latest_run = self.s.exec(
+            select(VarianceReviewRun)
+            .where(
+                VarianceReviewRun.organization_id == self.organization_id,
+                VarianceReviewRun.cycle_id == cycle_id,
+            )
+            .order_by(cast(Any, VarianceReviewRun.id).desc())
+        ).first()
+        if latest_run is None:
+            return []
         return list(
             self.s.exec(
                 select(VarianceReview)
-                .where(VarianceReview.organization_id == self.organization_id, VarianceReview.cycle_id == cycle_id)
+                .where(
+                    VarianceReview.organization_id == self.organization_id,
+                    VarianceReview.cycle_id == cycle_id,
+                    VarianceReview.run_id == latest_run.id,
+                )
                 .order_by(cast(Any, VarianceReview.period_start), cast(Any, VarianceReview.account_id))
             )
         )
@@ -491,6 +516,16 @@ class ReconciliationService:
         ).first()
         if review is None:
             raise CloseNotFoundError("Variance review not found")
+        latest_run_id = self.s.exec(
+            select(VarianceReviewRun.id)
+            .where(
+                VarianceReviewRun.organization_id == self.organization_id,
+                VarianceReviewRun.cycle_id == cycle_id,
+            )
+            .order_by(cast(Any, VarianceReviewRun.id).desc())
+        ).first()
+        if review.run_id != latest_run_id:
+            raise CloseConflictError("Only the latest variance review run can be updated")
         owner = owner_user_id or review.owner_user_id
         self.close.validate_owner(owner)
         if review.is_material and disposition != VarianceDisposition.UNRESOLVED and not (note or "").strip():

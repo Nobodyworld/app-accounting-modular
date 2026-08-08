@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
+from threading import Barrier
 from zipfile import ZipFile
 
 import pytest
@@ -22,10 +24,14 @@ from apps.api.models.models import (
     JournalApprovalStatus,
     Membership,
     Organization,
+    StagedPosting,
+    StagedTransaction,
+    Transaction,
     User,
     VarianceDisposition,
     VarianceReview,
     VarianceReviewRun,
+    WorkflowStatus,
 )
 from apps.api.services.close_evidence_service import CloseEvidenceService
 from apps.api.services.close_service import (
@@ -35,10 +41,22 @@ from apps.api.services.close_service import (
     CloseValidationError,
 )
 from apps.api.services.ledger_service import LedgerService
+from apps.api.services.period_lock import PeriodPostingError
 from apps.api.services.reconciliation_service import ReconciliationService
+from apps.api.services.workflow_service import WorkflowService
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from tests._close_helpers import close_session
+
+
+def _create_cycle_without_variance(session, actors, period_id: int, name: str):
+    assert actors.organization.id and actors.preparer.id and actors.administrator.id
+    return CloseService(session, actors.organization.id, actors.administrator.id).create_cycle(
+        period_id,
+        name,
+        owner_user_id=actors.preparer.id,
+        policy={"variance_review_required": False, "override_reason": "Focused regression fixture"},
+    )
 
 
 def test_cancelled_cycle_is_immutable_and_restart_preserves_period_and_evidence() -> None:
@@ -47,7 +65,7 @@ def test_cancelled_cycle_is_immutable_and_restart_preserves_period_and_evidence(
         preparer = CloseService(session, actors.organization.id, actors.preparer.id)
         administrator = CloseService(session, actors.organization.id, actors.administrator.id)
         period = preparer.create_period("Restartable period", date(2028, 1, 1), date(2028, 1, 31))
-        cycle = preparer.create_cycle(period.id, "Restartable close", policy={"variance_review_required": False})
+        cycle = _create_cycle_without_variance(session, actors, period.id, "Restartable close")
         evidence = CloseEvidenceService(session, actors.organization.id, actors.preparer.id)
         evidence.record_generation(cycle.id, evidence.build_bundle(cycle.id))
         original_evidence_id = session.exec(select(CloseEvidence.id)).one()
@@ -81,7 +99,7 @@ def test_wrong_reconciliation_path_is_zero_mutation() -> None:
         ledger = LedgerService(session, actors.organization.id)
         account = ledger.create_account("Cash", "ASSET", code="1000")
         period = close.create_period("Path scope", date(2028, 2, 1), date(2028, 2, 29))
-        cycle = close.create_cycle(period.id, "Path scoped close", policy={"variance_review_required": False})
+        cycle = _create_cycle_without_variance(session, actors, period.id, "Path scoped close")
         cycle = close.start(cycle.id, cycle.version)
         reconciliations = ReconciliationService(session, actors.organization.id, actors.preparer.id)
         row = reconciliations.prepare_reconciliation(
@@ -173,7 +191,7 @@ def test_rejected_approval_can_be_rerequested_and_independently_approved() -> No
         assert actors.organization.id and actors.preparer.id and actors.reviewer.id and actors.administrator.id
         close = CloseService(session, actors.organization.id, actors.preparer.id)
         period = close.create_period("Approval lifecycle", date(2028, 3, 1), date(2028, 3, 31))
-        cycle = close.create_cycle(period.id, "Approval close", policy={"variance_review_required": False})
+        cycle = _create_cycle_without_variance(session, actors, period.id, "Approval close")
         cycle = close.start(cycle.id, cycle.version)
         ledger = LedgerService(session, actors.organization.id)
         cash = ledger.create_account("Cash", "ASSET", code="1000")
@@ -291,7 +309,7 @@ def test_final_close_bundle_is_current_closed_and_exports_decision_history() -> 
         assert actors.organization.id and actors.preparer.id and actors.administrator.id
         preparer = CloseService(session, actors.organization.id, actors.preparer.id)
         period = preparer.create_period("Final evidence", date(2028, 5, 1), date(2028, 5, 31))
-        cycle = preparer.create_cycle(period.id, "Final close", policy={"variance_review_required": False})
+        cycle = _create_cycle_without_variance(session, actors, period.id, "Final close")
         cycle = preparer.start(cycle.id, cycle.version)
         attestation = next(
             task for task in preparer.list_checklist(cycle.id) if task.control_type == CloseTaskControlType.ATTESTATION
@@ -334,11 +352,15 @@ def test_cycle_transition_compare_and_swap_allows_only_one_session(tmp_path) -> 
         seed.commit()
         seed.refresh(organization)
         seed.refresh(user)
-        seed.add(Membership(user_id=user.id, organization_id=organization.id, can_manage_ledger=True))
+        seed.add(Membership(user_id=user.id, organization_id=organization.id, can_manage_ledger=True, is_admin=True))
         seed.commit()
         service = CloseService(seed, organization.id, user.id)
         period = service.create_period("CAS period", date(2028, 6, 1), date(2028, 6, 30))
-        cycle = service.create_cycle(period.id, "CAS close", policy={"variance_review_required": False})
+        cycle = service.create_cycle(
+            period.id,
+            "CAS close",
+            policy={"variance_review_required": False, "override_reason": "Focused CAS fixture"},
+        )
         organization_id = organization.id
         user_id = user.id
         cycle_id = cycle.id
@@ -360,6 +382,215 @@ def test_cycle_transition_compare_and_swap_allows_only_one_session(tmp_path) -> 
     engine.dispose()
 
 
+def test_overlapping_period_creation_is_serialized_across_sessions(tmp_path) -> None:
+    database = tmp_path / "period-create-race.db"
+    engine = create_engine(
+        f"sqlite:///{database}",
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    SQLModel.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as seed:
+        organization = Organization(name="Period race tenant")
+        user = User(email="period-race@example.test", password_hash="stub")
+        seed.add_all([organization, user])
+        seed.commit()
+        seed.refresh(organization)
+        seed.refresh(user)
+        seed.add(Membership(user_id=user.id, organization_id=organization.id, can_manage_ledger=True))
+        seed.commit()
+        organization_id = organization.id
+        user_id = user.id
+
+    start = Barrier(2)
+
+    def create(label: str, start_date: date, end_date: date) -> str:
+        with Session(engine, expire_on_commit=False) as session:
+            start.wait()
+            try:
+                CloseService(session, organization_id, user_id).create_period(label, start_date, end_date)
+            except CloseConflictError:
+                return "conflict"
+            return "created"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(create, "Race A", date(2028, 10, 1), date(2028, 10, 31))
+        second = pool.submit(create, "Race B", date(2028, 10, 15), date(2028, 11, 15))
+        assert sorted([first.result(), second.result()]) == ["conflict", "created"]
+    with Session(engine) as verify:
+        periods = verify.exec(select(AccountingPeriod)).all()
+        assert len(periods) == 1
+        assert periods[0].status == AccountingPeriodStatus.OPEN
+    engine.dispose()
+
+
+@pytest.mark.parametrize("posting_path", ["direct", "workflow"])
+def test_final_close_serializes_against_direct_and_workflow_posting(tmp_path, posting_path: str) -> None:
+    database = tmp_path / f"close-{posting_path}-race.db"
+    engine = create_engine(
+        f"sqlite:///{database}",
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    SQLModel.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as seed:
+        organization = Organization(name=f"Close {posting_path} race tenant")
+        administrator = User(email=f"close-{posting_path}-race@example.test", password_hash="stub")
+        seed.add_all([organization, administrator])
+        seed.commit()
+        seed.refresh(organization)
+        seed.refresh(administrator)
+        seed.add(
+            Membership(
+                user_id=administrator.id,
+                organization_id=organization.id,
+                can_manage_ledger=True,
+                is_admin=True,
+            )
+        )
+        seed.commit()
+        ledger = LedgerService(seed, organization.id)
+        cash = ledger.create_account("Race cash", "ASSET", code="1000")
+        revenue = ledger.create_account("Race revenue", "REVENUE", code="4000")
+        close = CloseService(seed, organization.id, administrator.id)
+        period = close.create_period("Close race", date(2028, 11, 1), date(2028, 11, 30))
+        cycle = close.create_cycle(
+            period.id,
+            "Close race",
+            policy={
+                "required_reconciliation_account_ids": [],
+                "reconciliation_scope_not_applicable": True,
+                "variance_review_required": False,
+                "override_reason": "Concurrent posting regression fixture",
+            },
+        )
+        cycle = close.start(cycle.id, cycle.version)
+        attestation = next(
+            task for task in close.list_checklist(cycle.id) if task.control_type == CloseTaskControlType.ATTESTATION
+        )
+        close.update_manual_task(
+            cycle.id,
+            attestation.id,
+            version=attestation.version,
+            complete=True,
+            notes="Reviewed",
+        )
+        cycle = close.require_cycle(cycle.id)
+        cycle = close.mark_ready(cycle.id, cycle.version)
+        evidence = CloseEvidenceService(seed, organization.id, administrator.id)
+        evidence.record_generation(cycle.id, evidence.build_bundle(cycle.id))
+        staged_id = None
+        if posting_path == "workflow":
+            staged = StagedTransaction(
+                date=date(2028, 11, 20),
+                description="Concurrent workflow posting",
+                source="race-test",
+                status=WorkflowStatus.POSTED,
+            )
+            seed.add(staged)
+            seed.flush()
+            seed.add_all(
+                [
+                    StagedPosting(staged_transaction_id=staged.id, account_id=cash.id, debit=10, credit=0),
+                    StagedPosting(staged_transaction_id=staged.id, account_id=revenue.id, debit=0, credit=10),
+                ]
+            )
+            seed.commit()
+            staged_id = staged.id
+        organization_id = organization.id
+        administrator_id = administrator.id
+        cycle_id = cycle.id
+        cycle_version = cycle.version
+        cash_id = cash.id
+        revenue_id = revenue.id
+        period_id = period.id
+
+    start = Barrier(2)
+
+    def run_close() -> str:
+        with Session(engine, expire_on_commit=False) as session:
+            start.wait()
+            closed = CloseService(session, organization_id, administrator_id).close(cycle_id, cycle_version)
+            return closed.status.value
+
+    def run_post() -> str:
+        with Session(engine, expire_on_commit=False) as session:
+            start.wait()
+            try:
+                if posting_path == "direct":
+                    LedgerService(session, organization_id).post_transaction(
+                        date(2028, 11, 20),
+                        "Concurrent direct posting",
+                        [
+                            {"account_id": cash_id, "debit": 10, "credit": 0},
+                            {"account_id": revenue_id, "debit": 0, "credit": 10},
+                        ],
+                    )
+                else:
+                    assert staged_id is not None
+                    WorkflowService(session).process_transactions([staged_id])
+            except PeriodPostingError as exc:
+                return exc.code
+            return "posted"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        closing = pool.submit(run_close)
+        posting = pool.submit(run_post)
+        assert closing.result() == CloseCycleStatus.CLOSED.value
+        assert posting.result() in {"ACCOUNTING_PERIOD_CLOSE_READY", "ACCOUNTING_PERIOD_CLOSED"}
+    with Session(engine) as verify:
+        persisted_period = verify.get(AccountingPeriod, period_id)
+        assert persisted_period is not None and persisted_period.status == AccountingPeriodStatus.CLOSED
+        assert verify.exec(select(Transaction)).all() == []
+    engine.dispose()
+
+
+def test_evidence_persistence_rejects_a_source_changed_by_another_session(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = tmp_path / "evidence-source-race.db"
+    engine = create_engine(f"sqlite:///{database}", connect_args={"check_same_thread": False, "timeout": 30})
+    SQLModel.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as seed:
+        organization = Organization(name="Evidence source race tenant")
+        user = User(email="evidence-source-race@example.test", password_hash="stub")
+        seed.add_all([organization, user])
+        seed.commit()
+        seed.refresh(organization)
+        seed.refresh(user)
+        seed.add(Membership(user_id=user.id, organization_id=organization.id, can_manage_ledger=True))
+        seed.commit()
+        close = CloseService(seed, organization.id, user.id)
+        period = close.create_period("Evidence race", date(2028, 12, 1), date(2028, 12, 31))
+        cycle = close.create_cycle(period.id, "Evidence race")
+        organization_id = organization.id
+        user_id = user.id
+        cycle_id = cycle.id
+
+    with Session(engine, expire_on_commit=False) as snapshot_session:
+        evidence = CloseEvidenceService(snapshot_session, organization_id, user_id)
+        bundle = evidence.build_bundle(cycle_id)
+        original_require_period = evidence.close.require_period
+        source_mutated = False
+
+        def require_period_and_mutate(period_id: int):
+            nonlocal source_mutated
+            period = original_require_period(period_id)
+            if not source_mutated:
+                source_mutated = True
+                with Session(engine, expire_on_commit=False) as writer:
+                    CloseService(writer, organization_id, user_id).create_custom_task(
+                        cycle_id,
+                        title="Concurrent source mutation",
+                    )
+            return period
+
+        monkeypatch.setattr(evidence.close, "require_period", require_period_and_mutate)
+        with pytest.raises(CloseConflictError, match="source changed"):
+            evidence.record_generation(cycle_id, bundle)
+    with Session(engine) as verify:
+        assert verify.exec(select(CloseEvidence)).all() == []
+    engine.dispose()
+
+
 def test_final_evidence_build_failure_rolls_back_cycle_period_revision_and_audit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -367,7 +598,7 @@ def test_final_evidence_build_failure_rolls_back_cycle_period_revision_and_audit
         assert actors.organization.id and actors.preparer.id and actors.administrator.id
         preparer = CloseService(session, actors.organization.id, actors.preparer.id)
         period = preparer.create_period("Rollback close", date(2028, 7, 1), date(2028, 7, 31))
-        cycle = preparer.create_cycle(period.id, "Rollback close", policy={"variance_review_required": False})
+        cycle = _create_cycle_without_variance(session, actors, period.id, "Rollback close")
         cycle = preparer.start(cycle.id, cycle.version)
         attestation = next(
             task for task in preparer.list_checklist(cycle.id) if task.control_type == CloseTaskControlType.ATTESTATION
@@ -421,19 +652,46 @@ def test_close_configuration_and_manual_control_guards() -> None:
         period = close.create_period("Guard period", date(2028, 8, 1), date(2028, 8, 31))
         with pytest.raises(CloseValidationError, match="name"):
             close.create_cycle(period.id, " ")
+        with pytest.raises(CloseConflictError, match="administrator"):
+            close.create_cycle(
+                period.id,
+                "Manager override",
+                policy={"variance_review_required": False, "override_reason": "Unauthorized"},
+            )
         with pytest.raises(CloseValidationError, match="journal_approval_mode"):
-            close.create_cycle(period.id, "Bad mode", policy={"journal_approval_mode": "SOMETIMES"})
+            admin.create_cycle(
+                period.id,
+                "Bad mode",
+                policy={"journal_approval_mode": "SOMETIMES", "override_reason": "Invalid fixture"},
+            )
         with pytest.raises(CloseValidationError, match="positive account IDs"):
-            close.create_cycle(period.id, "Bad scope", policy={"required_reconciliation_account_ids": [True]})
+            admin.create_cycle(
+                period.id,
+                "Bad scope",
+                policy={"required_reconciliation_account_ids": [True], "override_reason": "Invalid fixture"},
+            )
         with pytest.raises(CloseNotFoundError, match="reconciliation account"):
-            close.create_cycle(period.id, "Foreign scope", policy={"required_reconciliation_account_ids": [999_999]})
+            admin.create_cycle(
+                period.id,
+                "Foreign scope",
+                policy={"required_reconciliation_account_ids": [999_999], "override_reason": "Invalid fixture"},
+            )
         with pytest.raises(CloseValidationError, match="boolean"):
-            close.create_cycle(period.id, "Bad variance", policy={"variance_review_required": "yes"})
+            admin.create_cycle(
+                period.id,
+                "Bad variance",
+                policy={"variance_review_required": "yes", "override_reason": "Invalid fixture"},
+            )
 
-        cycle = close.create_cycle(
+        cycle = admin.create_cycle(
             period.id,
             "Guarded close",
-            policy={"required_reconciliation_account_ids": [cash.id], "variance_review_required": False},
+            owner_user_id=actors.preparer.id,
+            policy={
+                "required_reconciliation_account_ids": [cash.id],
+                "variance_review_required": False,
+                "override_reason": "Focused guard fixture",
+            },
         )
         with pytest.raises(CloseConflictError, match="already exists"):
             close.create_cycle(period.id, "Duplicate")
@@ -470,7 +728,7 @@ def test_reconciliation_variance_and_approval_decision_guards() -> None:
         cash = ledger.create_account("Decision cash", "ASSET", code="1200")
         revenue = ledger.create_account("Decision revenue", "REVENUE", code="4200")
         period = close.create_period("Decision period", date(2028, 9, 1), date(2028, 9, 30))
-        cycle = close.create_cycle(period.id, "Decision close", policy={"variance_review_required": False})
+        cycle = _create_cycle_without_variance(session, actors, period.id, "Decision close")
         cycle = close.start(cycle.id, cycle.version)
         preparer = ReconciliationService(session, actors.organization.id, actors.preparer.id)
         reviewer = ReconciliationService(session, actors.organization.id, actors.reviewer.id)

@@ -6,9 +6,11 @@ from io import BytesIO
 from zipfile import ZipFile
 
 import pytest
+from apps.api.models.models import AuditLog
 from apps.api.services import close_evidence_service as evidence_module
 from apps.api.services.close_evidence_service import CloseEvidenceService
 from apps.api.services.close_service import CloseService, CloseValidationError
+from sqlmodel import select
 
 from tests._close_helpers import close_session
 
@@ -39,10 +41,20 @@ def test_recorded_evidence_download_remains_deterministic() -> None:
         cycle = close.create_cycle(period.id, "December close")
         evidence = CloseEvidenceService(session, actors.organization.id, actors.preparer.id)
         generated = evidence.build_bundle(cycle.id)
-        evidence.record_generation(cycle.id, generated)
+        record = evidence.record_generation(cycle.id, generated)
         downloaded = evidence.build_bundle(cycle.id)
         repeated = evidence.build_bundle(cycle.id)
+        assert generated.content == downloaded.content
         assert downloaded.content == repeated.content
+        assert record.manifest_sha256 == generated.manifest_sha256 == downloaded.manifest_sha256
+        audit = session.exec(
+            select(AuditLog)
+            .where(AuditLog.entity_name == "CloseEvidence", AuditLog.entity_id == str(record.id))
+            .order_by(AuditLog.id.desc())
+        ).first()
+        assert audit is not None and audit.after_state is not None
+        assert audit.context is not None and audit.context["event"] == "close_evidence_generated"
+        assert audit.after_state["manifest_sha256"] == downloaded.manifest_sha256
         assert evidence.preview(cycle.id)["freshness"] == "CURRENT"
 
 

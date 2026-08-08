@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -17,6 +17,7 @@ from .limits import (
     MAX_CLOSE_NOTES_LENGTH,
     MAX_PERIOD_LABEL_LENGTH,
     MAX_RECONCILIATION_NOTES_LENGTH,
+    MAX_RECONCILIATIONS_PER_CYCLE,
     MAX_TRANSITION_REASON_LENGTH,
 )
 from .metadata_limits import validate_metadata
@@ -57,23 +58,56 @@ class PeriodRead(OrmSchema):
     end_date: date
     status: AccountingPeriodStatus
     version: int
+    ledger_activity_revision: int
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
     reopened_at: datetime | None
 
 
+class ClosePolicyOverride(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    required_reconciliation_account_ids: list[int] | None = Field(
+        default=None, max_length=MAX_RECONCILIATIONS_PER_CYCLE
+    )
+    reconciliation_scope_not_applicable: bool | None = None
+    variance_review_required: bool | None = None
+    journal_approval_mode: Literal["REQUESTED_ONLY", "ALL_PERIOD_TRANSACTIONS"] | None = None
+    reason: str = Field(min_length=1, max_length=MAX_TRANSITION_REASON_LENGTH)
+
+    @field_validator("required_reconciliation_account_ids")
+    @classmethod
+    def positive_unique_account_ids(cls, value: list[int] | None) -> list[int] | None:
+        if value is None:
+            return None
+        if any(isinstance(account_id, bool) or account_id < 1 for account_id in value):
+            raise ValueError("required reconciliation accounts must contain positive IDs")
+        if len(set(value)) != len(value):
+            raise ValueError("required reconciliation accounts must be unique")
+        return value
+
+    def service_policy(self) -> dict[str, Any]:
+        values = self.model_dump(exclude_none=True, exclude={"reason"})
+        values["override_reason"] = self.reason
+        return values
+
+
+class ClosePolicyRead(BaseModel):
+    required_reconciliation_account_ids: list[int]
+    reconciliation_scope_not_applicable: bool
+    variance_review_required: bool
+    journal_approval_mode: Literal["REQUESTED_ONLY", "ALL_PERIOD_TRANSACTIONS"]
+    override_reason: str | None
+    overridden_by_user_id: int | None
+
+
 class CycleCreate(BaseModel):
     name: str = Field(min_length=1, max_length=MAX_CLOSE_NAME_LENGTH)
     owner_user_id: int | None = Field(default=None, ge=1)
     due_date: date | None = None
-    policy: dict[str, Any] = Field(default_factory=dict)
+    policy: ClosePolicyOverride | None = None
     notes: str | None = Field(default=None, max_length=MAX_CLOSE_NOTES_LENGTH)
-
-    @field_validator("policy")
-    @classmethod
-    def bounded_policy(cls, value: dict[str, Any]) -> dict[str, Any]:
-        return cast(dict[str, Any], validate_metadata(value))
 
 
 class CycleRead(OrmSchema):
@@ -84,7 +118,7 @@ class CycleRead(OrmSchema):
     status: CloseCycleStatus
     owner_user_id: int | None
     due_date: date | None
-    policy: dict[str, Any]
+    policy: ClosePolicyRead
     notes: str | None
     version: int
     content_revision: int
@@ -132,8 +166,10 @@ class ReadinessResponse(BaseModel):
     evidence_freshness: str
     version: int
     content_revision: int
+    ledger_activity_revision: int
     latest_variance_run_id: int | None
     latest_variance_run_row_count: int | None
+    latest_variance_run_ledger_activity_revision: int | None
 
     @classmethod
     def from_domain(cls, readiness: CloseReadiness) -> ReadinessResponse:
@@ -158,8 +194,10 @@ class ReadinessResponse(BaseModel):
             evidence_freshness=readiness.evidence_freshness,
             version=readiness.version,
             content_revision=readiness.content_revision,
+            ledger_activity_revision=readiness.ledger_activity_revision,
             latest_variance_run_id=readiness.latest_variance_run_id,
             latest_variance_run_row_count=readiness.latest_variance_run_row_count,
+            latest_variance_run_ledger_activity_revision=(readiness.latest_variance_run_ledger_activity_revision),
         )
 
 
@@ -238,6 +276,7 @@ class ReconciliationRead(OrmSchema):
     prepared_at: datetime | None
     reviewed_at: datetime | None
     approved_at: datetime | None
+    ledger_activity_revision: int
     version: int
 
 
@@ -259,6 +298,7 @@ class VarianceUpdate(BaseModel):
 class VarianceRead(OrmSchema):
     id: int
     cycle_id: int
+    run_id: int | None
     budget_id: int
     account_id: int
     period_start: date
@@ -341,6 +381,7 @@ class EvidenceGenerateResponse(BaseModel):
     manifest_sha256: str
     source_version: int
     source_revision: int
+    source_ledger_activity_revision: int
     archive_bytes: int
     filename: str
     files: list[EvidenceFileRead]
@@ -352,6 +393,7 @@ class EvidenceGenerateResponse(BaseModel):
             manifest_sha256=bundle.manifest_sha256,
             source_version=bundle.source_version,
             source_revision=bundle.source_version,
+            source_ledger_activity_revision=bundle.source_ledger_activity_revision,
             archive_bytes=len(bundle.content),
             filename=bundle.filename,
             files=[EvidenceFileRead.model_validate(item, from_attributes=True) for item in bundle.files],
@@ -362,6 +404,7 @@ class EvidencePreviewResponse(BaseModel):
     cycle_id: int
     source_version: int
     source_revision: int
+    source_ledger_activity_revision: int
     deterministic_files: list[str]
     latest_manifest_sha256: str | None
     freshness: str

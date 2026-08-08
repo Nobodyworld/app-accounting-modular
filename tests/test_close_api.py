@@ -117,7 +117,7 @@ def test_close_api_authentication_lifecycle_and_readiness(close_api) -> None:
         f"/close/periods/{period_id}/cycles",
         params={"organization_id": context["org1"]},
         headers=_headers(context["manager"]),
-        json={"name": "March close", "policy": {}},
+        json={"name": "March close"},
     )
     assert cycle_response.status_code == 201, cycle_response.text
     cycle = cycle_response.json()
@@ -150,6 +150,64 @@ def test_close_api_authentication_lifecycle_and_readiness(close_api) -> None:
     assert payload["blockers_by_category"]
 
 
+def test_cycle_policy_override_is_typed_reasoned_and_admin_only(close_api) -> None:
+    client, context = close_api
+    period = client.post(
+        "/close/periods",
+        params={"organization_id": context["org1"]},
+        headers=_headers(context["admin"]),
+        json={"label": "May 2028", "start_date": "2028-05-01", "end_date": "2028-05-31"},
+    ).json()
+    endpoint = f"/close/periods/{period['id']}/cycles"
+    params = {"organization_id": context["org1"]}
+    denied = client.post(
+        endpoint,
+        params=params,
+        headers=_headers(context["manager"]),
+        json={
+            "name": "Manager override",
+            "policy": {"variance_review_required": False, "reason": "Manager request"},
+        },
+    )
+    assert denied.status_code == 403
+    malformed = client.post(
+        endpoint,
+        params=params,
+        headers=_headers(context["admin"]),
+        json={
+            "name": "Unknown override",
+            "policy": {"variance_review_required": False, "reason": "Admin request", "arbitrary": "unsafe"},
+        },
+    )
+    assert malformed.status_code == 422
+    created = client.post(
+        endpoint,
+        params=params,
+        headers=_headers(context["admin"]),
+        json={
+            "name": "Controlled override",
+            "policy": {
+                "required_reconciliation_account_ids": [],
+                "reconciliation_scope_not_applicable": True,
+                "variance_review_required": False,
+                "journal_approval_mode": "ALL_PERIOD_TRANSACTIONS",
+                "reason": "No applicable reconciliations or budget for this controlled fixture",
+            },
+        },
+    )
+    assert created.status_code == 201, created.text
+    policy = created.json()["policy"]
+    assert policy == {
+        "required_reconciliation_account_ids": [],
+        "reconciliation_scope_not_applicable": True,
+        "variance_review_required": False,
+        "journal_approval_mode": "ALL_PERIOD_TRANSACTIONS",
+        "override_reason": "No applicable reconciliations or budget for this controlled fixture",
+        "overridden_by_user_id": policy["overridden_by_user_id"],
+    }
+    assert isinstance(policy["overridden_by_user_id"], int)
+
+
 def test_admin_only_transition_and_nondisclosing_object_scope(close_api) -> None:
     client, context = close_api
     created = client.post(
@@ -162,7 +220,7 @@ def test_admin_only_transition_and_nondisclosing_object_scope(close_api) -> None
         f"/close/periods/{created['id']}/cycles",
         params={"organization_id": context["org1"]},
         headers=_headers(context["admin"]),
-        json={"name": "April close", "policy": {}},
+        json={"name": "April close"},
     ).json()
     denied = client.post(
         f"/close/cycles/{cycle['id']}/cancel",
@@ -225,7 +283,7 @@ def test_close_api_rejects_overlap_and_stale_version(close_api) -> None:
         f"/close/periods/{period_id}/cycles",
         params={"organization_id": context["org1"]},
         headers=_headers(context["manager"]),
-        json={"name": "May close", "policy": {}},
+        json={"name": "May close"},
     ).json()
     stale = client.post(
         f"/close/cycles/{cycle['id']}/start",
@@ -251,7 +309,7 @@ def test_complete_close_control_surface_and_evidence_download(close_api) -> None
         f"/close/periods/{period['id']}/cycles",
         params=params,
         headers=manager_headers,
-        json={"name": "September close", "policy": {}, "due_date": "2027-10-05"},
+        json={"name": "September close", "due_date": "2027-10-05"},
     ).json()
     cycle = client.post(
         f"/close/cycles/{cycle['id']}/start",

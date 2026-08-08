@@ -19,7 +19,7 @@ from ..schemas import (
     WorkflowResultSchema,
 )
 from ..security import get_current_organization, get_current_user
-from ..services.period_lock import ClosedPeriodPostingError
+from ..services.period_lock import PeriodPostingError
 from ..services.workflow_service import WorkflowService
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
@@ -257,7 +257,7 @@ def ingest_transactions(
         try:
             results = svc.process_transactions(staged_ids, commit=False)
             s.commit()
-        except ClosedPeriodPostingError as exc:
+        except PeriodPostingError as exc:
             s.rollback()
             raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
         except Exception:
@@ -295,7 +295,7 @@ def process_transactions(
 
     try:
         results = svc.process_transactions(staged_ids, auto_post=payload.auto_post)
-    except ClosedPeriodPostingError as exc:
+    except PeriodPostingError as exc:
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
     return [WorkflowResultSchema.from_result(result) for result in results]
 

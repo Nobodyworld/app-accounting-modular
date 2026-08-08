@@ -18,8 +18,14 @@ def test_complete_controlled_close_blocks_then_closes_and_reopens() -> None:
     with close_session() as (session, actors):
         assert actors.organization.id and actors.preparer.id and actors.reviewer.id and actors.administrator.id
         preparer = CloseService(session, actors.organization.id, actors.preparer.id)
+        administrator = CloseService(session, actors.organization.id, actors.administrator.id)
         period = preparer.create_period("February 2027", date(2027, 2, 1), date(2027, 2, 28))
-        cycle = preparer.create_cycle(period.id, "February close", policy={"variance_review_required": False})
+        cycle = administrator.create_cycle(
+            period.id,
+            "February close",
+            owner_user_id=actors.preparer.id,
+            policy={"variance_review_required": False, "override_reason": "Focused close test"},
+        )
         cycle = preparer.start(cycle.id, cycle.version)
         with pytest.raises(CloseConflictError, match="blockers"):
             preparer.mark_ready(cycle.id, cycle.version)
@@ -54,7 +60,6 @@ def test_complete_controlled_close_blocks_then_closes_and_reopens() -> None:
         evidence_service = CloseEvidenceService(session, actors.organization.id, actors.preparer.id)
         bundle = evidence_service.build_bundle(cycle.id)
         evidence_service.record_generation(cycle.id, bundle)
-        administrator = CloseService(session, actors.organization.id, actors.administrator.id)
         cycle = administrator.close(cycle.id, cycle.version)
         closed_readiness = administrator.readiness(cycle.id)
         assert closed_readiness.state == "CLOSED"

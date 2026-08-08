@@ -157,9 +157,18 @@ def create_cycle(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CycleRead:
-    service, _ = _service(organization_id, session, current_user, manager=True)
+    service, membership = _service(organization_id, session, current_user, manager=True)
+    if payload.policy is not None and not membership.is_admin:
+        raise HTTPException(
+            status_code=403, detail="Organization administrator access is required for policy overrides"
+        )
     try:
-        cycle = service.create_cycle(period_id, **payload.model_dump())
+        values = payload.model_dump(exclude={"policy"})
+        cycle = service.create_cycle(
+            period_id,
+            **values,
+            policy=payload.policy.service_policy() if payload.policy is not None else None,
+        )
         return CycleRead.model_validate(cycle)
     except CloseDomainError as exc:
         _raise_domain(exc)

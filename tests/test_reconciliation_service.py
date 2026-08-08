@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import apps.api.services.reconciliation_service as reconciliation_module
 import pytest
 from apps.api.models.models import ReconciliationStatus, VarianceDisposition
 from apps.api.services.close_service import CloseConflictError, CloseNotFoundError, CloseService, CloseValidationError
@@ -125,3 +126,26 @@ def test_reconciliation_validation_and_missing_reference_paths() -> None:
             service.request_approval(cycle.id, transaction_id=999_999)
         with pytest.raises(CloseNotFoundError, match="Staged transaction"):
             service.request_approval(cycle.id, staged_transaction_id=999_999)
+
+
+def test_reconciliation_limit_is_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(reconciliation_module, "MAX_RECONCILIATIONS_PER_CYCLE", 1)
+    with close_session() as (session, actors):
+        assert actors.organization.id and actors.preparer.id
+        close = CloseService(session, actors.organization.id, actors.preparer.id)
+        period = close.create_period("November 2026", date(2026, 11, 1), date(2026, 11, 30))
+        cycle = close.create_cycle(period.id, "November close")
+        close.start(cycle.id, cycle.version)
+        ledger = LedgerService(session, actors.organization.id)
+        cash = ledger.create_account("Cash", "ASSET", code="1000")
+        receivable = ledger.create_account("Receivable", "ASSET", code="1100")
+        service = ReconciliationService(session, actors.organization.id, actors.preparer.id)
+
+        service.prepare_reconciliation(cycle.id, cash.id, control_balance=None, tolerance=Decimal("0"))
+        with pytest.raises(CloseValidationError, match="Maximum reconciliations"):
+            service.prepare_reconciliation(
+                cycle.id,
+                receivable.id,
+                control_balance=None,
+                tolerance=Decimal("0"),
+            )

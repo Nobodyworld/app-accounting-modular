@@ -402,6 +402,7 @@ class AccountingPeriod(SQLModel, table=True):
     end_date: date
     status: AccountingPeriodStatus = Field(default=AccountingPeriodStatus.OPEN, index=True)
     version: int = Field(default=1, ge=1, le=2_147_483_647)
+    ledger_activity_revision: int = Field(default=1, ge=1, le=2_147_483_647)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     created_by_id: int | None = Field(default=None, foreign_key="user.id")
@@ -415,6 +416,7 @@ class AccountingPeriod(SQLModel, table=True):
         UniqueConstraint("organization_id", "label", name="uq_accounting_period_org_label"),
         CheckConstraint("start_date <= end_date", name="ck_accounting_period_dates"),
         CheckConstraint("version >= 1", name="ck_accounting_period_version"),
+        CheckConstraint("ledger_activity_revision >= 1", name="ck_accounting_period_ledger_revision"),
         Index("ix_accounting_period_org_dates", "organization_id", "start_date", "end_date"),
         TABLE_KWARGS,
     )
@@ -507,6 +509,7 @@ class AccountReconciliation(SQLModel, table=True):
     prepared_at: datetime | None = None
     reviewed_at: datetime | None = None
     approved_at: datetime | None = None
+    ledger_activity_revision: int = Field(default=1, ge=1, le=2_147_483_647)
     version: int = Field(default=1, ge=1, le=2_147_483_647)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -525,6 +528,7 @@ class VarianceReview(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     organization_id: int = Field(foreign_key="organization.id", index=True)
     cycle_id: int = Field(foreign_key="closecycle.id")
+    run_id: int | None = Field(default=None, foreign_key="variancereviewrun.id", index=True)
     budget_id: int = Field(foreign_key="budget.id")
     account_id: int = Field(foreign_key="account.id")
     period_start: date
@@ -547,7 +551,7 @@ class VarianceReview(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     __table_args__ = (
-        UniqueConstraint("cycle_id", "budget_id", "account_id", "period_start", name="uq_variance_review_line"),
+        UniqueConstraint("run_id", "account_id", "period_start", name="uq_variance_review_run_line"),
         Index("ix_variance_review_org_cycle", "organization_id", "cycle_id"),
         TABLE_KWARGS,
     )
@@ -569,6 +573,7 @@ class VarianceReviewRun(SQLModel, table=True):
     generated_by_id: int = Field(foreign_key="user.id")
     row_count: int = Field(default=0, ge=0)
     content_revision: int = Field(ge=1)
+    ledger_activity_revision: int = Field(default=1, ge=1, le=2_147_483_647)
 
     __table_args__ = (
         Index("ix_variance_review_run_org_cycle", "organization_id", "cycle_id"),
@@ -634,6 +639,7 @@ class CloseEvidence(SQLModel, table=True):
     # Kept as ``source_version`` for API compatibility. It stores the cycle's
     # authoritative content revision, not its lifecycle compare-and-swap version.
     source_version: int = Field(ge=1)
+    source_ledger_activity_revision: int = Field(default=1, ge=1, le=2_147_483_647)
     is_final: bool = False
     summary: str | None = Field(default=None, max_length=1000)
 

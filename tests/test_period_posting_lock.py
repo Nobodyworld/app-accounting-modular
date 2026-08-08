@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from apps.api.models.models import (
     AccountingPeriodStatus,
     AuditLog,
+    CloseTaskControlType,
     JournalEntry,
     StagedTransaction,
     Transaction,
     WorkflowStatus,
 )
+from apps.api.services.close_evidence_service import CloseEvidenceService
 from apps.api.services.close_service import CloseService
 from apps.api.services.ledger_service import LedgerService
-from apps.api.services.period_lock import ClosedPeriodPostingError
+from apps.api.services.period_lock import ClosedPeriodPostingError, ReadyPeriodPostingError
+from apps.api.services.reconciliation_service import ReconciliationService
 from apps.api.services.workflow_service import WorkflowService
 from sqlmodel import select
 
@@ -63,7 +67,90 @@ def test_reopened_period_allows_normal_posting() -> None:
             ],
         )
         assert period.status == AccountingPeriodStatus.OPEN
+        session.refresh(period)
+        assert period.ledger_activity_revision == 2
         assert transaction.id is not None
+
+
+def test_ready_cycle_freezes_direct_and_workflow_posting_and_new_activity_stales_controls() -> None:
+    with close_session() as (session, actors):
+        assert actors.organization.id and actors.preparer.id and actors.reviewer.id and actors.administrator.id
+        ledger = LedgerService(session, actors.organization.id)
+        cash = ledger.create_account("Revision cash", "ASSET", code="1100")
+        revenue = ledger.create_account("Revision revenue", "REVENUE", code="4100")
+        preparer = CloseService(session, actors.organization.id, actors.preparer.id)
+        admin = CloseService(session, actors.organization.id, actors.administrator.id)
+        period = preparer.create_period("Revision period", date(2027, 9, 1), date(2027, 9, 30))
+        cycle = admin.create_cycle(
+            period.id,
+            "Revision close",
+            owner_user_id=actors.preparer.id,
+            policy={"variance_review_required": False, "override_reason": "Focused revision fixture"},
+        )
+        cycle = preparer.start(cycle.id, cycle.version)
+        ledger.post_transaction(
+            date(2027, 9, 10),
+            "Initial journal",
+            [
+                {"account_id": cash.id, "debit": 10, "credit": 0},
+                {"account_id": revenue.id, "debit": 0, "credit": 10},
+            ],
+        )
+        session.refresh(period)
+        assert period.ledger_activity_revision == 2
+
+        controls = ReconciliationService(session, actors.organization.id, actors.preparer.id)
+        reconciliation = controls.prepare_reconciliation(
+            cycle.id,
+            cash.id,
+            control_balance=Decimal("10"),
+            tolerance=Decimal("0"),
+        )
+        ReconciliationService(session, actors.organization.id, actors.reviewer.id).approve_reconciliation(
+            cycle.id, reconciliation.id, version=reconciliation.version
+        )
+        attestation = next(
+            task for task in preparer.list_checklist(cycle.id) if task.control_type == CloseTaskControlType.ATTESTATION
+        )
+        preparer.update_manual_task(cycle.id, attestation.id, version=attestation.version, complete=True)
+        cycle = preparer.require_cycle(cycle.id)
+        cycle = preparer.mark_ready(cycle.id, cycle.version)
+        evidence = CloseEvidenceService(session, actors.organization.id, actors.preparer.id)
+        evidence.record_generation(cycle.id, evidence.build_bundle(cycle.id))
+
+        second_postings = [
+            {"account_id": cash.id, "debit": 5, "credit": 0},
+            {"account_id": revenue.id, "debit": 0, "credit": 5},
+        ]
+        with pytest.raises(ReadyPeriodPostingError) as direct_error:
+            ledger.post_transaction(date(2027, 9, 20), "Frozen direct journal", second_postings)
+        assert direct_error.value.code == "ACCOUNTING_PERIOD_CLOSE_READY"
+
+        workflow = WorkflowService(session)
+        staged = workflow.ingest_transactions(
+            [
+                {
+                    "date": date(2027, 9, 21),
+                    "description": "Frozen workflow journal",
+                    "postings": second_postings,
+                    "metadata": {"_organization_id": actors.organization.id},
+                }
+            ],
+            source="ready-freeze",
+            metadata={"_organization_id": actors.organization.id},
+        )[0]
+        with pytest.raises(ReadyPeriodPostingError):
+            workflow.process_transactions([staged.id])
+        session.refresh(period)
+        assert period.ledger_activity_revision == 2
+
+        cycle = admin.return_to_work(cycle.id, cycle.version, "Additional journal required")
+        ledger.post_transaction(date(2027, 9, 20), "Returned-to-work journal", second_postings)
+        session.refresh(period)
+        assert period.ledger_activity_revision == 3
+        readiness = preparer.readiness(cycle.id)
+        assert readiness.evidence_freshness == "STALE"
+        assert "RECONCILIATIONS_STALE" in {blocker.code for blocker in readiness.blockers}
 
 
 @pytest.mark.parametrize("initial_status", [WorkflowStatus.INGESTED, WorkflowStatus.VALIDATED, WorkflowStatus.FAILED])

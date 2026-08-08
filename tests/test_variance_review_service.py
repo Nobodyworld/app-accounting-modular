@@ -3,10 +3,13 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from apps.api.models.models import Budget, BudgetLine, VarianceDisposition
-from apps.api.services.close_service import CloseService
+import apps.api.services.reconciliation_service as reconciliation_module
+import pytest
+from apps.api.models.models import Budget, BudgetLine, VarianceDisposition, VarianceReview, VarianceReviewRun
+from apps.api.services.close_service import CloseConflictError, CloseService, CloseValidationError
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.reconciliation_service import ReconciliationService
+from sqlmodel import select
 
 from tests._close_helpers import close_session
 
@@ -38,7 +41,13 @@ def test_budget_report_is_reused_for_decimal_materiality_and_disposition() -> No
         session.add(budget)
         session.commit()
         session.refresh(budget)
-        session.add(BudgetLine(budget_id=budget.id, account_id=expense.id, period_start=date(2027, 1, 1), amount=1000))
+        budget_line = BudgetLine(
+            budget_id=budget.id,
+            account_id=expense.id,
+            period_start=date(2027, 1, 1),
+            amount=1000,
+        )
+        session.add(budget_line)
         session.commit()
         service = ReconciliationService(session, actors.organization.id, actors.preparer.id)
         reviews = service.materialize_variances(
@@ -61,3 +70,68 @@ def test_budget_report_is_reused_for_decimal_materiality_and_disposition() -> No
             note="One-time payroll catch-up",
         )
         assert updated.reviewed_at is not None
+
+        budget_line.amount = 1250
+        session.add(budget_line)
+        session.commit()
+        current = service.materialize_variances(
+            cycle.id,
+            budget_id=budget.id,
+            horizon=30,
+            absolute_threshold=Decimal("1"),
+            percentage_threshold=None,
+            refresh=True,
+        )
+        assert len(current) == 1
+        assert current[0].run_id != review.run_id
+        assert current[0].variance_amount == Decimal("0.0000")
+        assert current[0].is_material is False
+        assert current[0].disposition == VarianceDisposition.UNRESOLVED
+        assert len(session.exec(select(VarianceReviewRun)).all()) == 2
+        assert len(session.exec(select(VarianceReview)).all()) == 2
+        with pytest.raises(CloseConflictError, match="latest variance"):
+            service.update_variance(
+                cycle.id,
+                review.id,
+                version=updated.version,
+                disposition=VarianceDisposition.EXPLAINED,
+                note="Historical row must remain immutable",
+            )
+
+
+def test_variance_review_row_limit_is_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(reconciliation_module, "MAX_VARIANCE_REVIEW_ROWS", 0)
+    with close_session() as (session, actors):
+        assert actors.organization.id and actors.preparer.id
+        close = CloseService(session, actors.organization.id, actors.preparer.id)
+        period = close.create_period("February 2027", date(2027, 2, 1), date(2027, 2, 28))
+        cycle = close.create_cycle(period.id, "February close")
+        close.start(cycle.id, cycle.version)
+        expense = LedgerService(session, actors.organization.id).create_account("Expense", "EXPENSE", code="6000")
+        budget = Budget(
+            organization_id=actors.organization.id,
+            name="February budget",
+            start_date=date(2027, 2, 1),
+            end_date=date(2027, 2, 28),
+        )
+        session.add(budget)
+        session.commit()
+        session.refresh(budget)
+        session.add(
+            BudgetLine(
+                budget_id=budget.id,
+                account_id=expense.id,
+                period_start=date(2027, 2, 1),
+                amount=Decimal("100"),
+            )
+        )
+        session.commit()
+
+        with pytest.raises(CloseValidationError, match="maximum variance review rows"):
+            ReconciliationService(session, actors.organization.id, actors.preparer.id).materialize_variances(
+                cycle.id,
+                budget_id=budget.id,
+                horizon=30,
+                absolute_threshold=Decimal("0"),
+                percentage_threshold=None,
+            )

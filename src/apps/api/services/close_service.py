@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..audit import get_current_actor
-from ..limits import MAX_CUSTOM_CLOSE_TASKS
+from ..limits import MAX_CUSTOM_CLOSE_TASKS, MAX_TRANSITION_REASON_LENGTH
 from ..models.models import (
     Account,
     AccountingPeriod,
@@ -87,23 +87,45 @@ class CloseReadiness:
     evidence_freshness: str
     version: int
     content_revision: int
+    ledger_activity_revision: int
     effective_task_statuses: dict[str, CloseTaskStatus]
     latest_variance_run_id: int | None
     latest_variance_run_row_count: int | None
+    latest_variance_run_ledger_activity_revision: int | None
 
 
 DEFAULT_CLOSE_POLICY: dict[str, Any] = {
-    "reconciliation_tolerance": "0.00",
-    "variance_absolute_threshold": "1000.00",
-    "variance_percentage_threshold": "0.10",
-    "second_person_reconciliation_review": True,
-    "journal_approval_required_when_requested": True,
-    "approval_before_posting": False,
     "required_reconciliation_account_ids": [],
     "reconciliation_scope_not_applicable": False,
     "variance_review_required": True,
     "journal_approval_mode": "REQUESTED_ONLY",
+    "override_reason": None,
+    "overridden_by_user_id": None,
 }
+
+_POLICY_OVERRIDE_FIELDS = {
+    "required_reconciliation_account_ids",
+    "reconciliation_scope_not_applicable",
+    "variance_review_required",
+    "journal_approval_mode",
+    "override_reason",
+}
+
+
+def safe_close_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    """Return only the typed, evidence-safe policy contract."""
+
+    return {
+        "required_reconciliation_account_ids": [
+            int(account_id) for account_id in policy.get("required_reconciliation_account_ids", [])
+        ],
+        "reconciliation_scope_not_applicable": bool(policy.get("reconciliation_scope_not_applicable", False)),
+        "variance_review_required": bool(policy.get("variance_review_required", True)),
+        "journal_approval_mode": str(policy.get("journal_approval_mode", "REQUESTED_ONLY")),
+        "override_reason": policy.get("override_reason"),
+        "overridden_by_user_id": policy.get("overridden_by_user_id"),
+    }
+
 
 OPERATIONAL_CYCLE_STATES = {CloseCycleStatus.IN_PROGRESS, CloseCycleStatus.BLOCKED}
 
@@ -299,11 +321,14 @@ class CloseService:
         return cycle.content_revision
 
     def create_period(self, label: str, start_date: date, end_date: date) -> AccountingPeriod:
+        from .period_lock import acquire_period_write_gate
+
         normalized = label.strip()
         if not normalized:
             raise CloseValidationError("Period label is required")
         if start_date > end_date:
             raise CloseValidationError("Period start date must not be after end date")
+        acquire_period_write_gate(self.s, self.organization_id)
         overlap = self.s.exec(
             select(AccountingPeriod).where(
                 AccountingPeriod.organization_id == self.organization_id,
@@ -384,13 +409,27 @@ class CloseService:
                 .order_by(cast(Any, Account.id))
             )
         )
+        policy_override = dict(policy or {})
+        unknown_policy_fields = sorted(set(policy_override) - _POLICY_OVERRIDE_FIELDS)
+        if unknown_policy_fields:
+            raise CloseValidationError(f"Unknown close policy field(s): {', '.join(unknown_policy_fields)}")
+        if policy_override:
+            self.require_admin_actor()
+            reason_value = policy_override.get("override_reason")
+            reason = reason_value.strip() if isinstance(reason_value, str) else ""
+            if not reason:
+                raise CloseValidationError("A nonempty policy override reason is required")
+            if len(reason) > MAX_TRANSITION_REASON_LENGTH:
+                raise CloseValidationError("Policy override reason exceeds the maximum length")
+            policy_override["override_reason"] = reason
+
         merged_policy = {
             **DEFAULT_CLOSE_POLICY,
             "required_reconciliation_account_ids": [
                 int(account_id) for account_id in required_accounts if account_id is not None
             ],
             "reconciliation_scope_not_applicable": not required_accounts,
-            **(policy or {}),
+            **policy_override,
         }
         approval_mode = merged_policy.get("journal_approval_mode")
         if approval_mode not in {"REQUESTED_ONLY", "ALL_PERIOD_TRANSACTIONS"}:
@@ -407,6 +446,15 @@ class CloseService:
         merged_policy["required_reconciliation_account_ids"] = sorted(set(requested_scope))
         if not isinstance(merged_policy.get("variance_review_required"), bool):
             raise CloseValidationError("variance_review_required must be a boolean")
+        not_applicable = merged_policy.get("reconciliation_scope_not_applicable")
+        if not isinstance(not_applicable, bool):
+            raise CloseValidationError("reconciliation_scope_not_applicable must be a boolean")
+        if not_applicable and merged_policy["required_reconciliation_account_ids"]:
+            raise CloseValidationError("A not-applicable reconciliation policy cannot also require accounts")
+        if not not_applicable and not merged_policy["required_reconciliation_account_ids"]:
+            raise CloseValidationError("An empty reconciliation scope requires a not-applicable policy")
+        merged_policy["overridden_by_user_id"] = self.actor_user_id if policy_override else None
+        merged_policy = safe_close_policy(merged_policy)
         now = self._now()
         cycle = CloseCycle(
             organization_id=self.organization_id,
@@ -613,10 +661,13 @@ class CloseService:
         return cycle
 
     def reopen(self, cycle_id: int, version: int, reason: str) -> CloseCycle:
+        from .period_lock import acquire_period_write_gate
+
         normalized = reason.strip()
         if not normalized:
             raise CloseValidationError("A nonempty reopen reason is required")
         self.require_admin_actor()
+        acquire_period_write_gate(self.s, self.organization_id)
         cycle = self.require_cycle(cycle_id)
         period = self.require_period(cycle.period_id)
         overlap = self.s.exec(
@@ -961,8 +1012,18 @@ class CloseService:
             int(account_id) for account_id in cycle.policy.get("required_reconciliation_account_ids", [])
         }
         approved_account_ids = {
-            item.account_id for item in reconciliations if item.status == ReconciliationStatus.APPROVED
+            item.account_id
+            for item in reconciliations
+            if item.status == ReconciliationStatus.APPROVED
+            and item.ledger_activity_revision == period.ledger_activity_revision
         }
+        stale_required_reconciliations = [
+            item
+            for item in reconciliations
+            if item.account_id in required_account_ids
+            and item.status == ReconciliationStatus.APPROVED
+            and item.ledger_activity_revision != period.ledger_activity_revision
+        ]
         missing_required_accounts = sorted(required_account_ids - approved_account_ids)
         if not required_account_ids and not cycle.policy.get("reconciliation_scope_not_applicable", False):
             blockers.append(
@@ -973,6 +1034,20 @@ class CloseService:
                     "close_cycle",
                     str(cycle_id),
                     "Define required balance-sheet accounts or record an audited not-applicable policy.",
+                )
+            )
+        elif stale_required_reconciliations:
+            blockers.append(
+                ReadinessBlocker(
+                    "RECONCILIATIONS_STALE",
+                    "reconciliations",
+                    (
+                        f"{len(stale_required_reconciliations)} required reconciliation(s) "
+                        "predate current ledger activity."
+                    ),
+                    "account_reconciliation",
+                    str(stale_required_reconciliations[0].id),
+                    "Re-prepare and independently approve reconciliations against the current ledger revision.",
                 )
             )
         elif missing_required_accounts:
@@ -997,17 +1072,25 @@ class CloseService:
             )
             .order_by(cast(Any, VarianceReviewRun.id).desc())
         ).first()
-        unresolved_variances = list(
-            self.s.exec(
-                select(VarianceReview).where(
-                    VarianceReview.organization_id == self.organization_id,
-                    VarianceReview.cycle_id == cycle_id,
-                    cast(Any, VarianceReview.is_material).is_(True),
-                    VarianceReview.disposition == VarianceDisposition.UNRESOLVED,
+        unresolved_variances = (
+            list(
+                self.s.exec(
+                    select(VarianceReview).where(
+                        VarianceReview.organization_id == self.organization_id,
+                        VarianceReview.cycle_id == cycle_id,
+                        VarianceReview.run_id == variance_run.id,
+                        cast(Any, VarianceReview.is_material).is_(True),
+                        VarianceReview.disposition == VarianceDisposition.UNRESOLVED,
+                    )
                 )
             )
+            if variance_run is not None
+            else []
         )
-        if cycle.policy.get("variance_review_required", True) and variance_run is None:
+        variance_required = bool(cycle.policy.get("variance_review_required", True))
+        if not variance_required:
+            completed_system_keys.add("material_variances_reviewed")
+        elif variance_run is None:
             blockers.append(
                 ReadinessBlocker(
                     "VARIANCE_REVIEW_NOT_RUN",
@@ -1016,6 +1099,17 @@ class CloseService:
                     "close_cycle",
                     str(cycle_id),
                     "Run the variance review for this accounting period, even when it produces zero rows.",
+                )
+            )
+        elif variance_run is not None and variance_run.ledger_activity_revision != period.ledger_activity_revision:
+            blockers.append(
+                ReadinessBlocker(
+                    "VARIANCE_REVIEW_STALE",
+                    "variance_review",
+                    "The latest variance review predates current ledger activity.",
+                    "variance_review_run",
+                    str(variance_run.id),
+                    "Run a new period-scoped variance review against the current ledger revision.",
                 )
             )
         elif unresolved_variances:
@@ -1090,7 +1184,11 @@ class CloseService:
             .order_by(cast(Any, CloseEvidence.id).desc())
         ).first()
         evidence_freshness = "MISSING"
-        if evidence is not None and evidence.source_version == cycle.content_revision:
+        if (
+            evidence is not None
+            and evidence.source_version == cycle.content_revision
+            and evidence.source_ledger_activity_revision == period.ledger_activity_revision
+        ):
             evidence_freshness = "CURRENT"
             completed_system_keys.add("close_evidence_generated")
         elif evidence is not None:
@@ -1177,9 +1275,13 @@ class CloseService:
             evidence_freshness=evidence_freshness,
             version=cycle.version,
             content_revision=cycle.content_revision,
+            ledger_activity_revision=period.ledger_activity_revision,
             effective_task_statuses=effective_task_statuses,
             latest_variance_run_id=variance_run.id if variance_run else None,
             latest_variance_run_row_count=variance_run.row_count if variance_run else None,
+            latest_variance_run_ledger_activity_revision=(
+                variance_run.ledger_activity_revision if variance_run else None
+            ),
         )
 
 
@@ -1193,4 +1295,5 @@ __all__ = [
     "DEFAULT_CHECKLIST",
     "DEFAULT_CLOSE_POLICY",
     "ReadinessBlocker",
+    "safe_close_policy",
 ]

@@ -22,7 +22,7 @@ from ..models.models import (
     WorkflowStatus,
 )
 from .ledger_service import LedgerService
-from .period_lock import ClosedPeriodPostingError, ensure_posting_allowed
+from .period_lock import PeriodPostingError, ensure_posting_allowed, record_posting_activity
 
 
 @dataclass(slots=True, frozen=True)
@@ -186,10 +186,11 @@ class WorkflowService:
 
             try:
                 payload, organization_id = self._prepare_postings(postings)
-                ensure_posting_allowed(self.s, organization_id, staged.date)
+                if auto_post:
+                    ensure_posting_allowed(self.s, organization_id, staged.date)
                 ledger = LedgerService(self.s, organization_id=organization_id)
                 normalised = ledger.validate_transaction(staged.date, staged.description, payload)
-            except ClosedPeriodPostingError:
+            except PeriodPostingError:
                 self.s.rollback()
                 raise
             except ValueError as exc:
@@ -267,10 +268,12 @@ class WorkflowService:
                     continue
 
             try:
+                ledger_activity_revision = record_posting_activity(self.s, organization_id, staged.date)
                 transaction = self._stage_transaction(
                     staged,
                     normalised,
                     organization_id=organization_id,
+                    ledger_activity_revision=ledger_activity_revision,
                 )
                 staged.transaction_id = transaction.id
                 staged.status = WorkflowStatus.POSTED
@@ -287,6 +290,9 @@ class WorkflowService:
                     self.s.commit()
                 else:
                     self.s.flush()
+            except PeriodPostingError:
+                self.s.rollback()
+                raise
             except Exception as exc:
                 self.s.rollback()
                 if not commit:
@@ -488,6 +494,7 @@ class WorkflowService:
         normalised: Sequence[dict[str, object]],
         *,
         organization_id: int | None,
+        ledger_activity_revision: int | None,
     ) -> Transaction:
         transaction = Transaction(
             date=staged.date,
@@ -521,6 +528,7 @@ class WorkflowService:
                 "source": staged.source,
                 "source_reference": staged.source_reference,
                 "organization_id": organization_id,
+                "ledger_activity_revision": ledger_activity_revision,
                 "postings": [
                     {
                         "account_id": posting["account_id"],

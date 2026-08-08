@@ -219,29 +219,42 @@ def _render_selection() -> int | None:
             )
             owner_id = st.number_input("Owner user ID", min_value=1, step=1)
             due_date = st.date_input("Due date", value=date.today())
-            variance_required = st.checkbox("Require a period-scoped variance review run", value=True)
-            approval_mode = st.selectbox(
-                "Journal approval scope",
-                ["REQUESTED_ONLY", "ALL_PERIOD_TRANSACTIONS"],
-                help=(
-                    "Requested only requires approval for explicit requests; "
-                    "all period transactions covers every journal."
-                ),
+            policy_override = st.checkbox(
+                "Apply administrator policy override",
+                value=False,
+                help="Ledger managers use server defaults. Overrides require an administrator and an audit reason.",
             )
+            variance_required = True
+            approval_mode = "REQUESTED_ONLY"
+            policy_reason = ""
+            if policy_override:
+                variance_required = st.checkbox("Require a period-scoped variance review run", value=True)
+                approval_mode = st.selectbox(
+                    "Journal approval scope",
+                    ["REQUESTED_ONLY", "ALL_PERIOD_TRANSACTIONS"],
+                    help=(
+                        "Requested only requires approval for explicit requests; "
+                        "all period transactions covers every journal."
+                    ),
+                )
+                policy_reason = st.text_input("Policy override reason")
             create_cycle = st.form_submit_button("Create close cycle", type="primary")
         if create_cycle:
+            create_payload: dict[str, Any] = {
+                "name": cycle_name,
+                "owner_user_id": int(owner_id),
+                "due_date": due_date.isoformat(),
+            }
+            if policy_override:
+                create_payload["policy"] = {
+                    "variance_review_required": variance_required,
+                    "journal_approval_mode": approval_mode,
+                    "reason": policy_reason,
+                }
             created = _mutate(
                 "POST",
                 f"/close/periods/{selected_period}/cycles",
-                {
-                    "name": cycle_name,
-                    "owner_user_id": int(owner_id),
-                    "due_date": due_date.isoformat(),
-                    "policy": {
-                        "variance_review_required": variance_required,
-                        "journal_approval_mode": approval_mode,
-                    },
-                },
+                create_payload,
                 success="Close cycle created with the standard eight-control checklist.",
             )
             if isinstance(created, Mapping):

@@ -12,16 +12,18 @@ from io import BytesIO, StringIO
 from typing import Any, cast
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, update
 from sqlmodel import Session, select
 
 from ..limits import MAX_EVIDENCE_ARCHIVE_BYTES, MAX_EVIDENCE_ROWS
 from ..models.models import (
     Account,
+    AccountingPeriod,
     AccountReconciliation,
     AuditAction,
     AuditLog,
     CloseChecklistTask,
+    CloseCycle,
     CloseCycleStatus,
     CloseEvidence,
     CloseTaskStatus,
@@ -31,7 +33,7 @@ from ..models.models import (
     VarianceReviewRun,
 )
 from ..utils.csv_safety import safe_csv_text
-from .close_service import CloseService, CloseValidationError
+from .close_service import CloseConflictError, CloseService, CloseValidationError, safe_close_policy
 from .ledger_service import LedgerService, TrialBalanceRow
 
 
@@ -49,6 +51,8 @@ class EvidenceBundle:
     filename: str
     files: tuple[EvidenceFile, ...]
     source_version: int
+    source_ledger_activity_revision: int
+    source_status: CloseCycleStatus
 
 
 def _json_default(value: Any) -> Any:
@@ -150,9 +154,14 @@ class CloseEvidenceService:
             used,
         )
         used += len(variance_runs)
+        current_variance_run = variance_runs[-1] if variance_runs else None
         variances = self._bounded(
             select(VarianceReview)
-            .where(VarianceReview.organization_id == self.organization_id, VarianceReview.cycle_id == cycle_id)
+            .where(
+                VarianceReview.organization_id == self.organization_id,
+                VarianceReview.cycle_id == cycle_id,
+                VarianceReview.run_id == (current_variance_run.id if current_variance_run else None),
+            )
             .order_by(cast(Any, VarianceReview.period_start), cast(Any, VarianceReview.account_id)),
             used,
         )
@@ -192,14 +201,6 @@ class CloseEvidenceService:
             used,
         )
         used += len(checklist)
-        evidence_records = self._bounded(
-            select(CloseEvidence)
-            .where(CloseEvidence.organization_id == self.organization_id, CloseEvidence.cycle_id == cycle_id)
-            .order_by(cast(Any, CloseEvidence.id)),
-            used,
-        )
-        used += len(evidence_records)
-
         entity_scope: dict[str, list[str]] = {
             "AccountingPeriod": [str(period.id)],
             "CloseCycle": [str(cycle.id)],
@@ -208,7 +209,6 @@ class CloseEvidenceService:
             "VarianceReview": [str(item.id) for item in variances if item.id is not None],
             "VarianceReviewRun": [str(item.id) for item in variance_runs if item.id is not None],
             "JournalApproval": [str(item.id) for item in approvals if item.id is not None],
-            "CloseEvidence": [str(item.id) for item in evidence_records if item.id is not None],
             "Transaction": [str(item.transaction_id) for item in approvals if item.transaction_id is not None],
             "StagedTransaction": [
                 str(item.staged_transaction_id) for item in approvals if item.staged_transaction_id is not None
@@ -243,7 +243,7 @@ class CloseEvidenceService:
                         "status": cycle.status,
                         "owner_user_id": cycle.owner_user_id,
                         "due_date": cycle.due_date,
-                        "policy": cycle.policy,
+                        "policy": safe_close_policy(cycle.policy),
                         "version": cycle.version,
                         "content_revision": cycle.content_revision,
                         "started_at": cycle.started_at,
@@ -260,6 +260,7 @@ class CloseEvidenceService:
                         "end_date": period.end_date,
                         "status": period.status,
                         "version": period.version,
+                        "ledger_activity_revision": period.ledger_activity_revision,
                     },
                 }
             ),
@@ -300,6 +301,7 @@ class CloseEvidenceService:
             "variance-reviews.csv": _csv_bytes(
                 [
                     "id",
+                    "run_id",
                     "budget_id",
                     "account_id",
                     "period_start",
@@ -315,6 +317,7 @@ class CloseEvidenceService:
                 [
                     {
                         "id": row.id,
+                        "run_id": row.run_id,
                         "budget_id": row.budget_id,
                         "account_id": row.account_id,
                         "period_start": row.period_start.isoformat(),
@@ -341,6 +344,7 @@ class CloseEvidenceService:
                     "generated_by_id",
                     "row_count",
                     "content_revision",
+                    "ledger_activity_revision",
                 ],
                 [
                     {
@@ -355,6 +359,7 @@ class CloseEvidenceService:
                         "generated_by_id": row.generated_by_id,
                         "row_count": row.row_count,
                         "content_revision": row.content_revision,
+                        "ledger_activity_revision": row.ledger_activity_revision,
                     }
                     for row in variance_runs
                 ],
@@ -465,6 +470,7 @@ class CloseEvidenceService:
                     "cycle_id": cycle_id,
                     "source_version": cycle.content_revision,
                     "source_revision": cycle.content_revision,
+                    "source_ledger_activity_revision": period.ledger_activity_revision,
                     "evidence_kind": "FINAL" if cycle.status == CloseCycleStatus.CLOSED else "DRAFT",
                     "period_end": period.end_date,
                     "calculation_policy": {
@@ -488,6 +494,7 @@ class CloseEvidenceService:
                 "cycle_id": cycle_id,
                 "source_version": cycle.content_revision,
                 "source_revision": cycle.content_revision,
+                "source_ledger_activity_revision": period.ledger_activity_revision,
                 "evidence_kind": "FINAL" if cycle.status == CloseCycleStatus.CLOSED else "DRAFT",
                 "files": [asdict(entry) for entry in file_entries],
             }
@@ -509,6 +516,8 @@ class CloseEvidenceService:
             filename=f"close-evidence-{safe_label}-cycle-{cycle_id}.zip",
             files=file_entries,
             source_version=cycle.content_revision,
+            source_ledger_activity_revision=period.ledger_activity_revision,
+            source_status=cycle.status,
         )
 
     @staticmethod
@@ -528,6 +537,7 @@ class CloseEvidenceService:
                 "status",
                 "prepared_by_id",
                 "approved_by_id",
+                "ledger_activity_revision",
                 "notes",
                 "version",
             ],
@@ -544,6 +554,7 @@ class CloseEvidenceService:
                     "status": row.status.value,
                     "prepared_by_id": row.prepared_by_id,
                     "approved_by_id": row.approved_by_id,
+                    "ledger_activity_revision": row.ledger_activity_revision,
                     "notes": row.notes,
                     "version": row.version,
                 }
@@ -572,14 +583,46 @@ class CloseEvidenceService:
                 },
                 operation="Draft evidence generation",
             )
+        period = self.close.require_period(cycle.period_id)
         if bundle.source_version != cycle.content_revision:
             raise CloseValidationError("Evidence source version/revision no longer matches the close cycle")
+        if bundle.source_ledger_activity_revision != period.ledger_activity_revision:
+            raise CloseValidationError("Evidence ledger activity revision no longer matches the accounting period")
+        if bundle.source_status != cycle.status:
+            raise CloseValidationError("Evidence source status no longer matches the close cycle")
+        period_lock = self.s.exec(
+            update(AccountingPeriod)
+            .where(
+                cast(Any, AccountingPeriod.id) == period.id,
+                cast(Any, AccountingPeriod.organization_id) == self.organization_id,
+                cast(Any, AccountingPeriod.ledger_activity_revision) == bundle.source_ledger_activity_revision,
+            )
+            .values(updated_at=AccountingPeriod.updated_at)
+            .execution_options(synchronize_session=False)
+        )
+        cycle_lock = self.s.exec(
+            update(CloseCycle)
+            .where(
+                cast(Any, CloseCycle.id) == cycle_id,
+                cast(Any, CloseCycle.organization_id) == self.organization_id,
+                cast(Any, CloseCycle.status) == bundle.source_status,
+                cast(Any, CloseCycle.content_revision) == bundle.source_version,
+            )
+            .values(updated_at=CloseCycle.updated_at)
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(period_lock, "rowcount", 0) != 1 or getattr(cycle_lock, "rowcount", 0) != 1:
+            self.s.rollback()
+            raise CloseConflictError("Evidence source changed while the snapshot was being recorded")
+        self.s.expire(cycle)
+        self.s.refresh(cycle)
         record = CloseEvidence(
             organization_id=self.organization_id,
             cycle_id=cycle_id,
             generated_by_id=self.actor_user_id,
             manifest_sha256=bundle.manifest_sha256,
             source_version=bundle.source_version,
+            source_ledger_activity_revision=bundle.source_ledger_activity_revision,
             is_final=cycle.status == CloseCycleStatus.CLOSED,
             summary=summary.strip() if summary else None,
         )
@@ -593,16 +636,12 @@ class CloseEvidenceService:
                 "cycle_id": cycle_id,
                 "manifest_sha256": bundle.manifest_sha256,
                 "source_version": bundle.source_version,
+                "source_ledger_activity_revision": bundle.source_ledger_activity_revision,
                 "archive_bytes": len(bundle.content),
             },
             event="close_evidence_generated",
         )
         self.s.flush()
-        # Include the evidence record and its audit reference in the canonical
-        # post-generation snapshot. Rebuilding again produces identical bytes.
-        authoritative_bundle = self.build_bundle(cycle_id)
-        record.manifest_sha256 = authoritative_bundle.manifest_sha256
-        self.s.add(record)
         if commit:
             self.s.commit()
             self.s.refresh(record)
@@ -621,6 +660,7 @@ class CloseEvidenceService:
             "cycle_id": cycle_id,
             "source_version": cycle.content_revision,
             "source_revision": cycle.content_revision,
+            "source_ledger_activity_revision": self.close.require_period(cycle.period_id).ledger_activity_revision,
             "deterministic_files": [
                 "manifest.json",
                 "close-cycle.json",
@@ -639,7 +679,10 @@ class CloseEvidenceService:
             "latest_manifest_sha256": latest.manifest_sha256 if latest else None,
             "freshness": (
                 "CURRENT"
-                if latest and latest.source_version == cycle.content_revision
+                if latest
+                and latest.source_version == cycle.content_revision
+                and latest.source_ledger_activity_revision
+                == self.close.require_period(cycle.period_id).ledger_activity_revision
                 else ("STALE" if latest else "MISSING")
             ),
             "maximum_archive_bytes": MAX_EVIDENCE_ARCHIVE_BYTES,
