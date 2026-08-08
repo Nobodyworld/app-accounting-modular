@@ -8,15 +8,18 @@ from decimal import Decimal
 from typing import Any, cast
 from uuid import uuid4
 
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..audit import get_current_actor
 from ..limits import MAX_CUSTOM_CLOSE_TASKS
 from ..models.models import (
+    Account,
     AccountingPeriod,
     AccountingPeriodStatus,
     AccountReconciliation,
+    AccountType,
     AuditAction,
     AuditLog,
     CloseChecklistTask,
@@ -27,11 +30,16 @@ from ..models.models import (
     CloseTaskStatus,
     JournalApproval,
     JournalApprovalStatus,
+    Membership,
+    Organization,
+    ReconciliationStatus,
     StagedPosting,
     StagedTransaction,
     Transaction,
+    User,
     VarianceDisposition,
     VarianceReview,
+    VarianceReviewRun,
     WorkflowStatus,
 )
 from .ledger_service import LedgerService
@@ -78,6 +86,10 @@ class CloseReadiness:
     warnings: tuple[ReadinessBlocker, ...]
     evidence_freshness: str
     version: int
+    content_revision: int
+    effective_task_statuses: dict[str, CloseTaskStatus]
+    latest_variance_run_id: int | None
+    latest_variance_run_row_count: int | None
 
 
 DEFAULT_CLOSE_POLICY: dict[str, Any] = {
@@ -87,7 +99,13 @@ DEFAULT_CLOSE_POLICY: dict[str, Any] = {
     "second_person_reconciliation_review": True,
     "journal_approval_required_when_requested": True,
     "approval_before_posting": False,
+    "required_reconciliation_account_ids": [],
+    "reconciliation_scope_not_applicable": False,
+    "variance_review_required": True,
+    "journal_approval_mode": "REQUESTED_ONLY",
 }
+
+OPERATIONAL_CYCLE_STATES = {CloseCycleStatus.IN_PROGRESS, CloseCycleStatus.BLOCKED}
 
 DEFAULT_CHECKLIST: tuple[tuple[str, str, str, CloseTaskControlType], ...] = (
     (
@@ -207,6 +225,79 @@ class CloseService:
             raise CloseNotFoundError("Close cycle not found")
         return cycle
 
+    def require_cycle_mutation(
+        self,
+        cycle_id: int,
+        *,
+        allowed: set[CloseCycleStatus],
+        operation: str,
+    ) -> CloseCycle:
+        """Enforce the lifecycle write policy at the shared service boundary."""
+
+        cycle = self.require_cycle(cycle_id)
+        if cycle.status not in allowed:
+            raise CloseConflictError(f"{operation} is not allowed while the close cycle is {cycle.status.value}")
+        return cycle
+
+    def validate_owner(self, user_id: int | None) -> int | None:
+        """Resolve an active same-tenant assignee without disclosing foreign identities."""
+
+        if user_id is None:
+            return None
+        user = self.s.exec(select(User).where(User.id == user_id, cast(Any, User.is_active).is_(True))).first()
+        organization = self.s.exec(
+            select(Organization).where(
+                Organization.id == self.organization_id,
+                cast(Any, Organization.is_active).is_(True),
+            )
+        ).first()
+        membership = self.s.exec(
+            select(Membership).where(
+                Membership.user_id == user_id,
+                Membership.organization_id == self.organization_id,
+            )
+        ).first()
+        if user is None or organization is None or membership is None:
+            raise CloseNotFoundError("Close assignment user not found")
+        return user_id
+
+    def require_admin_actor(self) -> None:
+        membership = self.s.exec(
+            select(Membership).where(
+                Membership.user_id == self.actor_user_id,
+                Membership.organization_id == self.organization_id,
+                cast(Any, Membership.is_admin).is_(True),
+            )
+        ).first()
+        if membership is None:
+            raise CloseConflictError("Organization administrator access is required for this transition")
+
+    def bump_content_revision(self, cycle: CloseCycle) -> int:
+        """Atomically invalidate evidence for a successful in-transaction mutation."""
+
+        cycle_id = self._id(cycle.id, "close cycle")
+        expected = cycle.content_revision
+        result = self.s.exec(
+            update(CloseCycle)
+            .where(
+                cast(Any, CloseCycle.id) == cycle_id,
+                cast(Any, CloseCycle.organization_id) == self.organization_id,
+                cast(Any, CloseCycle.content_revision) == expected,
+            )
+            .values(
+                content_revision=expected + 1,
+                updated_at=self._now(),
+                updated_by_id=self.actor_user_id,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            self.s.rollback()
+            raise CloseConflictError("Close cycle content revision is stale")
+        self.s.expire(cycle)
+        self.s.refresh(cycle)
+        return cycle.content_revision
+
     def create_period(self, label: str, start_date: date, end_date: date) -> AccountingPeriod:
         normalized = label.strip()
         if not normalized:
@@ -281,13 +372,47 @@ class CloseService:
         normalized_name = name.strip()
         if not normalized_name:
             raise CloseValidationError("Close cycle name is required")
-        merged_policy = {**DEFAULT_CLOSE_POLICY, **(policy or {})}
+        requested_owner = owner_user_id or self.actor_user_id
+        self.validate_owner(requested_owner)
+        required_accounts = list(
+            self.s.exec(
+                select(Account.id)
+                .where(
+                    Account.organization_id == self.organization_id,
+                    cast(Any, Account.type).in_([AccountType.ASSET, AccountType.LIABILITY, AccountType.EQUITY]),
+                )
+                .order_by(cast(Any, Account.id))
+            )
+        )
+        merged_policy = {
+            **DEFAULT_CLOSE_POLICY,
+            "required_reconciliation_account_ids": [
+                int(account_id) for account_id in required_accounts if account_id is not None
+            ],
+            "reconciliation_scope_not_applicable": not required_accounts,
+            **(policy or {}),
+        }
+        approval_mode = merged_policy.get("journal_approval_mode")
+        if approval_mode not in {"REQUESTED_ONLY", "ALL_PERIOD_TRANSACTIONS"}:
+            raise CloseValidationError("journal_approval_mode must be REQUESTED_ONLY or ALL_PERIOD_TRANSACTIONS")
+        requested_scope = merged_policy.get("required_reconciliation_account_ids", [])
+        if not isinstance(requested_scope, list) or any(
+            not isinstance(account_id, int) or isinstance(account_id, bool) or account_id < 1
+            for account_id in requested_scope
+        ):
+            raise CloseValidationError("required_reconciliation_account_ids must contain positive account IDs")
+        allowed_scope = {int(account_id) for account_id in required_accounts if account_id is not None}
+        if not set(requested_scope).issubset(allowed_scope):
+            raise CloseNotFoundError("Required reconciliation account not found")
+        merged_policy["required_reconciliation_account_ids"] = sorted(set(requested_scope))
+        if not isinstance(merged_policy.get("variance_review_required"), bool):
+            raise CloseValidationError("variance_review_required must be a boolean")
         now = self._now()
         cycle = CloseCycle(
             organization_id=self.organization_id,
             period_id=period_id,
             name=normalized_name,
-            owner_user_id=owner_user_id or self.actor_user_id,
+            owner_user_id=requested_owner,
             due_date=due_date,
             policy=merged_policy,
             notes=notes.strip() if notes else None,
@@ -361,18 +486,40 @@ class CloseService:
             raise CloseConflictError(f"Cannot transition close cycle from {cycle.status.value} to {target.value}")
         before = {"status": cycle.status.value, "version": cycle.version}
         now = self._now()
-        cycle.status = target
-        cycle.version += 1
-        cycle.updated_at = now
-        cycle.updated_by_id = self.actor_user_id
-        cycle.last_reason = reason
-        self.s.add(cycle)
+        result = self.s.exec(
+            update(CloseCycle)
+            .where(
+                cast(Any, CloseCycle.id) == cycle.id,
+                cast(Any, CloseCycle.organization_id) == self.organization_id,
+                cast(Any, CloseCycle.version) == version,
+                cast(Any, CloseCycle.content_revision) == cycle.content_revision,
+            )
+            .values(
+                status=target,
+                version=version + 1,
+                content_revision=cycle.content_revision + 1,
+                updated_at=now,
+                updated_by_id=self.actor_user_id,
+                last_reason=reason,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            self.s.rollback()
+            raise CloseConflictError("Close cycle version is stale")
+        self.s.expire(cycle)
+        self.s.refresh(cycle)
         self._audit(
             AuditAction.UPDATE,
             "CloseCycle",
             cycle.id,
             before=before,
-            after={"status": target.value, "version": cycle.version, "reason": reason},
+            after={
+                "status": target.value,
+                "version": cycle.version,
+                "content_revision": cycle.content_revision,
+                "reason": reason,
+            },
             event=event,
         )
         return cycle
@@ -404,12 +551,16 @@ class CloseService:
             event="cycle_marked_ready",
         )
         cycle.readiness_at = self._now()
-        cycle.approved_at = cycle.readiness_at
         self.s.commit()
         self.s.refresh(cycle)
         return cycle
 
     def close(self, cycle_id: int, version: int) -> CloseCycle:
+        from .close_evidence_service import CloseEvidenceService
+        from .period_lock import acquire_period_write_gate
+
+        self.require_admin_actor()
+        acquire_period_write_gate(self.s, self.organization_id)
         cycle = self.require_cycle(cycle_id)
         if cycle.status != CloseCycleStatus.READY_FOR_APPROVAL:
             raise CloseConflictError("Close cycle must be ready for approval before final close")
@@ -417,31 +568,47 @@ class CloseService:
         if readiness.blocker_count:
             raise CloseConflictError("Close cycle readiness changed and final close is blocked")
         period = self.require_period(cycle.period_id)
-        self._transition(
-            cycle,
-            expected={CloseCycleStatus.READY_FOR_APPROVAL},
-            target=CloseCycleStatus.CLOSED,
-            version=version,
-            event="cycle_closed",
-        )
-        now = self._now()
-        cycle.closed_at = now
-        period.status = AccountingPeriodStatus.CLOSED
-        period.version += 1
-        period.updated_at = now
-        period.updated_by_id = self.actor_user_id
-        period.closed_at = now
-        period.closed_by_id = self.actor_user_id
-        self.s.add(period)
-        self._audit(
-            AuditAction.UPDATE,
-            "AccountingPeriod",
-            period.id,
-            before={"status": AccountingPeriodStatus.OPEN.value},
-            after={"status": AccountingPeriodStatus.CLOSED.value, "cycle_id": cycle.id},
-            event="period_closed",
-        )
-        self.s.commit()
+        try:
+            self._transition(
+                cycle,
+                expected={CloseCycleStatus.READY_FOR_APPROVAL},
+                target=CloseCycleStatus.CLOSED,
+                version=version,
+                event="cycle_closed",
+            )
+            now = self._now()
+            cycle.closed_at = now
+            cycle.approved_at = now
+            period.status = AccountingPeriodStatus.CLOSED
+            period.version += 1
+            period.updated_at = now
+            period.updated_by_id = self.actor_user_id
+            period.closed_at = now
+            period.closed_by_id = self.actor_user_id
+            self.s.add(cycle)
+            self.s.add(period)
+            self._audit(
+                AuditAction.UPDATE,
+                "AccountingPeriod",
+                period.id,
+                before={"status": AccountingPeriodStatus.OPEN.value},
+                after={"status": AccountingPeriodStatus.CLOSED.value, "cycle_id": cycle.id},
+                event="period_closed",
+            )
+            self.s.flush()
+            evidence_service = CloseEvidenceService(self.s, self.organization_id, self.actor_user_id)
+            bundle = evidence_service.build_bundle(cycle_id)
+            evidence_service.record_generation(
+                cycle_id,
+                bundle,
+                summary="Final closed-period evidence",
+                commit=False,
+                allow_closed=True,
+            )
+            self.s.commit()
+        except Exception:
+            self.s.rollback()
+            raise
         self.s.refresh(cycle)
         return cycle
 
@@ -449,8 +616,20 @@ class CloseService:
         normalized = reason.strip()
         if not normalized:
             raise CloseValidationError("A nonempty reopen reason is required")
+        self.require_admin_actor()
         cycle = self.require_cycle(cycle_id)
         period = self.require_period(cycle.period_id)
+        overlap = self.s.exec(
+            select(AccountingPeriod).where(
+                AccountingPeriod.organization_id == self.organization_id,
+                AccountingPeriod.id != period.id,
+                AccountingPeriod.status == AccountingPeriodStatus.OPEN,
+                cast(Any, AccountingPeriod.start_date) <= period.end_date,
+                cast(Any, AccountingPeriod.end_date) >= period.start_date,
+            )
+        ).first()
+        if overlap is not None:
+            raise CloseConflictError("Accounting period overlaps an active period")
         self._transition(
             cycle,
             expected={CloseCycleStatus.CLOSED},
@@ -483,10 +662,31 @@ class CloseService:
         self.s.refresh(cycle)
         return cycle
 
+    def return_to_work(self, cycle_id: int, version: int, reason: str) -> CloseCycle:
+        normalized = reason.strip()
+        if not normalized:
+            raise CloseValidationError("A nonempty return-to-work reason is required")
+        self.require_admin_actor()
+        cycle = self.require_cycle(cycle_id)
+        self._transition(
+            cycle,
+            expected={CloseCycleStatus.READY_FOR_APPROVAL},
+            target=CloseCycleStatus.IN_PROGRESS,
+            version=version,
+            event="cycle_returned_to_work",
+            reason=normalized,
+        )
+        cycle.readiness_at = None
+        cycle.approved_at = None
+        self.s.commit()
+        self.s.refresh(cycle)
+        return cycle
+
     def cancel(self, cycle_id: int, version: int, reason: str) -> CloseCycle:
         normalized = reason.strip()
         if not normalized:
             raise CloseValidationError("A nonempty cancellation reason is required")
+        self.require_admin_actor()
         cycle = self.require_cycle(cycle_id)
         self._transition(
             cycle,
@@ -497,6 +697,29 @@ class CloseService:
             reason=normalized,
         )
         cycle.cancelled_at = self._now()
+        self.s.commit()
+        self.s.refresh(cycle)
+        return cycle
+
+    def restart(self, cycle_id: int, version: int, reason: str) -> CloseCycle:
+        normalized = reason.strip()
+        if not normalized:
+            raise CloseValidationError("A nonempty restart reason is required")
+        self.require_admin_actor()
+        cycle = self.require_cycle(cycle_id)
+        period = self.require_period(cycle.period_id)
+        if period.status != AccountingPeriodStatus.OPEN:
+            raise CloseConflictError("A cancelled close cycle can restart only while its period is open")
+        self._transition(
+            cycle,
+            expected={CloseCycleStatus.CANCELLED},
+            target=CloseCycleStatus.IN_PROGRESS,
+            version=version,
+            event="cycle_restarted",
+            reason=normalized,
+        )
+        cycle.cancelled_at = None
+        cycle.started_at = cycle.started_at or self._now()
         self.s.commit()
         self.s.refresh(cycle)
         return cycle
@@ -526,7 +749,12 @@ class CloseService:
         due_date: date | None = None,
         notes: str | None = None,
     ) -> CloseChecklistTask:
-        self.require_cycle(cycle_id)
+        cycle = self.require_cycle_mutation(
+            cycle_id,
+            allowed={CloseCycleStatus.DRAFT, *OPERATIONAL_CYCLE_STATES},
+            operation="Checklist configuration",
+        )
+        self.validate_owner(owner_user_id)
         existing = self.list_checklist(cycle_id)
         custom_count = sum(task.control_type == CloseTaskControlType.CUSTOM for task in existing)
         if custom_count >= MAX_CUSTOM_CLOSE_TASKS:
@@ -551,6 +779,7 @@ class CloseService:
         )
         self.s.add(task)
         self.s.flush()
+        self.bump_content_revision(cycle)
         self._audit(
             AuditAction.CREATE,
             "CloseChecklistTask",
@@ -574,6 +803,12 @@ class CloseService:
         due_date: date | None = None,
         is_admin: bool = False,
     ) -> CloseChecklistTask:
+        cycle = self.require_cycle_mutation(
+            cycle_id,
+            allowed=OPERATIONAL_CYCLE_STATES,
+            operation="Checklist update",
+        )
+        self.validate_owner(owner_user_id)
         task = self.s.exec(
             select(CloseChecklistTask).where(
                 CloseChecklistTask.organization_id == self.organization_id,
@@ -585,21 +820,38 @@ class CloseService:
             raise CloseNotFoundError("Checklist task not found")
         if task.control_type == CloseTaskControlType.SYSTEM:
             raise CloseConflictError("System-derived checklist tasks cannot be completed manually")
+        if task.task_key == "final_close_approved":
+            raise CloseConflictError("Final close approval is completed only by the administrator final-close action")
         if task.control_type == CloseTaskControlType.ADMIN_APPROVAL and not is_admin:
             raise CloseConflictError("Administrator approval is required for this task")
-        if task.version != version:
-            raise CloseConflictError("Checklist task version is stale")
         before = {"status": task.status.value, "version": task.version}
         now = self._now()
-        task.status = CloseTaskStatus.COMPLETE if complete else CloseTaskStatus.PENDING
-        task.completed_by_id = self.actor_user_id if complete else None
-        task.completed_at = now if complete else None
-        task.notes = notes.strip() if notes else None
-        task.owner_user_id = owner_user_id
-        task.due_date = due_date
-        task.version += 1
-        task.updated_at = now
-        self.s.add(task)
+        result = self.s.exec(
+            update(CloseChecklistTask)
+            .where(
+                cast(Any, CloseChecklistTask.id) == task_id,
+                cast(Any, CloseChecklistTask.organization_id) == self.organization_id,
+                cast(Any, CloseChecklistTask.cycle_id) == cycle_id,
+                cast(Any, CloseChecklistTask.version) == version,
+            )
+            .values(
+                status=CloseTaskStatus.COMPLETE if complete else CloseTaskStatus.PENDING,
+                completed_by_id=self.actor_user_id if complete else None,
+                completed_at=now if complete else None,
+                notes=notes.strip() if notes else None,
+                owner_user_id=owner_user_id,
+                due_date=due_date,
+                version=version + 1,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            self.s.rollback()
+            raise CloseConflictError("Checklist task version is stale")
+        self.bump_content_revision(cycle)
+        self.s.expire(task)
+        self.s.refresh(task)
         self._audit(
             AuditAction.UPDATE,
             "CloseChecklistTask",
@@ -705,32 +957,46 @@ class CloseService:
                 )
             )
         )
-        incomplete_reconciliations = [item for item in reconciliations if item.status != "APPROVED"]
-        if not reconciliations:
+        required_account_ids = {
+            int(account_id) for account_id in cycle.policy.get("required_reconciliation_account_ids", [])
+        }
+        approved_account_ids = {
+            item.account_id for item in reconciliations if item.status == ReconciliationStatus.APPROVED
+        }
+        missing_required_accounts = sorted(required_account_ids - approved_account_ids)
+        if not required_account_ids and not cycle.policy.get("reconciliation_scope_not_applicable", False):
             blockers.append(
                 ReadinessBlocker(
-                    "RECONCILIATIONS_MISSING",
+                    "RECONCILIATION_SCOPE_UNDEFINED",
                     "reconciliations",
-                    "No account reconciliations have been prepared.",
+                    "The required reconciliation account scope is empty without an explicit not-applicable policy.",
                     "close_cycle",
                     str(cycle_id),
-                    "Prepare and independently approve required account reconciliations.",
+                    "Define required balance-sheet accounts or record an audited not-applicable policy.",
                 )
             )
-        elif incomplete_reconciliations:
+        elif missing_required_accounts:
             blockers.append(
                 ReadinessBlocker(
                     "RECONCILIATIONS_INCOMPLETE",
                     "reconciliations",
-                    f"{len(incomplete_reconciliations)} reconciliation(s) require approval.",
-                    "account_reconciliation",
-                    str(incomplete_reconciliations[0].id),
+                    f"{len(missing_required_accounts)} required account reconciliation(s) require approval.",
+                    "account",
+                    str(missing_required_accounts[0]),
                     "Resolve differences and obtain independent approval.",
                 )
             )
         else:
             completed_system_keys.add("required_reconciliations_complete")
 
+        variance_run = self.s.exec(
+            select(VarianceReviewRun)
+            .where(
+                VarianceReviewRun.organization_id == self.organization_id,
+                VarianceReviewRun.cycle_id == cycle_id,
+            )
+            .order_by(cast(Any, VarianceReviewRun.id).desc())
+        ).first()
         unresolved_variances = list(
             self.s.exec(
                 select(VarianceReview).where(
@@ -741,7 +1007,18 @@ class CloseService:
                 )
             )
         )
-        if unresolved_variances:
+        if cycle.policy.get("variance_review_required", True) and variance_run is None:
+            blockers.append(
+                ReadinessBlocker(
+                    "VARIANCE_REVIEW_NOT_RUN",
+                    "variance_review",
+                    "The required period-scoped variance review has not been run.",
+                    "close_cycle",
+                    str(cycle_id),
+                    "Run the variance review for this accounting period, even when it produces zero rows.",
+                )
+            )
+        elif unresolved_variances:
             blockers.append(
                 ReadinessBlocker(
                     "MATERIAL_VARIANCES_UNRESOLVED",
@@ -763,7 +1040,36 @@ class CloseService:
                 )
             )
         )
+        approval_mode = str(cycle.policy.get("journal_approval_mode", "REQUESTED_ONLY"))
         incomplete_approvals = [approval for approval in approvals if approval.status != JournalApprovalStatus.APPROVED]
+        if approval_mode == "ALL_PERIOD_TRANSACTIONS":
+            period_transaction_ids = {
+                transaction_id
+                for transaction_id in self.s.exec(
+                    select(Transaction.id).where(
+                        Transaction.organization_id == self.organization_id,
+                        cast(Any, Transaction.date) >= period.start_date,
+                        cast(Any, Transaction.date) <= period.end_date,
+                    )
+                )
+                if transaction_id is not None
+            }
+            approved_transaction_ids = {
+                approval.transaction_id
+                for approval in approvals
+                if approval.transaction_id is not None and approval.status == JournalApprovalStatus.APPROVED
+            }
+            missing_transaction_ids = sorted(period_transaction_ids - approved_transaction_ids)
+            if missing_transaction_ids:
+                incomplete_approvals.append(
+                    JournalApproval(
+                        organization_id=self.organization_id,
+                        cycle_id=cycle_id,
+                        reference_key=f"transaction:{missing_transaction_ids[0]}",
+                        transaction_id=missing_transaction_ids[0],
+                        requestor_user_id=self.actor_user_id,
+                    )
+                )
         if incomplete_approvals:
             blockers.append(
                 ReadinessBlocker(
@@ -784,7 +1090,7 @@ class CloseService:
             .order_by(cast(Any, CloseEvidence.id).desc())
         ).first()
         evidence_freshness = "MISSING"
-        if evidence is not None and evidence.source_version == cycle.version:
+        if evidence is not None and evidence.source_version == cycle.content_revision:
             evidence_freshness = "CURRENT"
             completed_system_keys.add("close_evidence_generated")
         elif evidence is not None:
@@ -825,13 +1131,24 @@ class CloseService:
                     "Complete the required accountant attestations.",
                 )
             )
-        if cycle.status in {CloseCycleStatus.READY_FOR_APPROVAL, CloseCycleStatus.CLOSED}:
+        if cycle.status == CloseCycleStatus.CLOSED:
             completed_system_keys.add("final_close_approved")
 
         required = [task for task in tasks if task.required]
-        completed_count = sum(
-            task.status == CloseTaskStatus.COMPLETE or task.task_key in completed_system_keys for task in required
-        )
+        effective_task_statuses = {
+            task.task_key: (
+                CloseTaskStatus.COMPLETE
+                if task.task_key in completed_system_keys
+                else (
+                    CloseTaskStatus.PENDING
+                    if task.control_type == CloseTaskControlType.SYSTEM
+                    or task.control_type == CloseTaskControlType.ADMIN_APPROVAL
+                    else task.status
+                )
+            )
+            for task in tasks
+        }
+        completed_count = sum(effective_task_statuses[task.task_key] == CloseTaskStatus.COMPLETE for task in required)
         ratio = Decimal(completed_count) / Decimal(len(required)) if required else Decimal("1")
         blockers.sort(key=lambda item: (item.category, item.code, item.source_entity_id or ""))
         warnings.sort(key=lambda item: (item.category, item.code, item.source_entity_id or ""))
@@ -859,6 +1176,10 @@ class CloseService:
             warnings=tuple(warnings),
             evidence_freshness=evidence_freshness,
             version=cycle.version,
+            content_revision=cycle.content_revision,
+            effective_task_statuses=effective_task_statuses,
+            latest_variance_run_id=variance_run.id if variance_run else None,
+            latest_variance_run_row_count=variance_run.row_count if variance_run else None,
         )
 
 

@@ -355,6 +355,20 @@ POLICIES.update(
             "tests/test_close_api.py; tests/test_close_service.py",
             "none identified",
         ),
+        "POST /close/cycles/{cycle_id}/restart": Policy(
+            "tenant administrator",
+            "organization_id, cycle_id, version",
+            "reasoned cancelled-cycle restart with retained evidence and audit history (update)",
+            "tests/test_close_service.py; tests/test_close_api.py; tests/test_close_workspace.py",
+            "none identified",
+        ),
+        "POST /close/cycles/{cycle_id}/return-to-work": Policy(
+            "tenant administrator",
+            "organization_id, cycle_id, version",
+            "reasoned ready-cycle return to operational work and evidence invalidation (update)",
+            "tests/test_close_service.py; tests/test_close_api.py; tests/test_close_workspace.py",
+            "none identified",
+        ),
         "GET /close/cycles/{cycle_id}/readiness": Policy(
             "tenant member",
             "organization_id, cycle_id",

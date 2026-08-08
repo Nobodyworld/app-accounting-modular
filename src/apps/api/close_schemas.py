@@ -87,6 +87,7 @@ class CycleRead(OrmSchema):
     policy: dict[str, Any]
     notes: str | None
     version: int
+    content_revision: int
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None
@@ -130,6 +131,9 @@ class ReadinessResponse(BaseModel):
     blockers_by_category: dict[str, list[ReadinessBlockerSchema]]
     evidence_freshness: str
     version: int
+    content_revision: int
+    latest_variance_run_id: int | None
+    latest_variance_run_row_count: int | None
 
     @classmethod
     def from_domain(cls, readiness: CloseReadiness) -> ReadinessResponse:
@@ -153,6 +157,9 @@ class ReadinessResponse(BaseModel):
             blockers_by_category=grouped,
             evidence_freshness=readiness.evidence_freshness,
             version=readiness.version,
+            content_revision=readiness.content_revision,
+            latest_variance_run_id=readiness.latest_variance_run_id,
+            latest_variance_run_row_count=readiness.latest_variance_run_row_count,
         )
 
 
@@ -312,6 +319,7 @@ class JournalApprovalRead(OrmSchema):
     cycle_id: int
     transaction_id: int | None
     staged_transaction_id: int | None
+    reference_key: str
     requestor_user_id: int
     status: JournalApprovalStatus
     requested_at: datetime
@@ -332,6 +340,7 @@ class EvidenceGenerateResponse(BaseModel):
     cycle_id: int
     manifest_sha256: str
     source_version: int
+    source_revision: int
     archive_bytes: int
     filename: str
     files: list[EvidenceFileRead]
@@ -342,6 +351,7 @@ class EvidenceGenerateResponse(BaseModel):
             cycle_id=cycle_id,
             manifest_sha256=bundle.manifest_sha256,
             source_version=bundle.source_version,
+            source_revision=bundle.source_version,
             archive_bytes=len(bundle.content),
             filename=bundle.filename,
             files=[EvidenceFileRead.model_validate(item, from_attributes=True) for item in bundle.files],
@@ -351,6 +361,7 @@ class EvidenceGenerateResponse(BaseModel):
 class EvidencePreviewResponse(BaseModel):
     cycle_id: int
     source_version: int
+    source_revision: int
     deterministic_files: list[str]
     latest_manifest_sha256: str | None
     freshness: str

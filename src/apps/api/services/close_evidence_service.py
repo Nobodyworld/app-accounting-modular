@@ -12,6 +12,7 @@ from io import BytesIO, StringIO
 from typing import Any, cast
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
+from sqlalchemy import and_, or_
 from sqlmodel import Session, select
 
 from ..limits import MAX_EVIDENCE_ARCHIVE_BYTES, MAX_EVIDENCE_ROWS
@@ -20,9 +21,14 @@ from ..models.models import (
     AccountReconciliation,
     AuditAction,
     AuditLog,
+    CloseChecklistTask,
+    CloseCycleStatus,
     CloseEvidence,
+    CloseTaskStatus,
     JournalApproval,
+    JournalApprovalDecision,
     VarianceReview,
+    VarianceReviewRun,
 )
 from ..utils.csv_safety import safe_csv_text
 from .close_service import CloseService, CloseValidationError
@@ -92,6 +98,15 @@ class CloseEvidenceService:
         self.actor_user_id = actor_user_id
         self.close = CloseService(session, organization_id, actor_user_id)
 
+    def _bounded(self, statement: Any, used: int) -> list[Any]:
+        remaining = MAX_EVIDENCE_ROWS - used
+        if remaining < 0:
+            raise CloseValidationError("Close evidence exceeds the maximum row count")
+        rows = list(self.s.exec(statement.limit(remaining + 1)))
+        if len(rows) > remaining:
+            raise CloseValidationError("Close evidence exceeds the maximum row count")
+        return rows
+
     def build_bundle(self, cycle_id: int) -> EvidenceBundle:
         cycle = self.close.require_cycle(cycle_id)
         period = self.close.require_period(cycle.period_id)
@@ -112,55 +127,108 @@ class CloseEvidenceService:
         )
         trial_balance = LedgerService(self.s, self.organization_id).trial_balance(end_date=period.end_date)
         trial_rows = cast(list[TrialBalanceRow], trial_balance["rows"])
-        reconciliations = list(
-            self.s.exec(
-                select(AccountReconciliation)
-                .where(
-                    AccountReconciliation.organization_id == self.organization_id,
-                    AccountReconciliation.cycle_id == cycle_id,
-                )
-                .order_by(cast(Any, AccountReconciliation.account_id))
-            )
-        )
-        variances = list(
-            self.s.exec(
-                select(VarianceReview)
-                .where(VarianceReview.organization_id == self.organization_id, VarianceReview.cycle_id == cycle_id)
-                .order_by(cast(Any, VarianceReview.period_start), cast(Any, VarianceReview.account_id))
-            )
-        )
-        approvals = list(
-            self.s.exec(
-                select(JournalApproval)
-                .where(JournalApproval.organization_id == self.organization_id, JournalApproval.cycle_id == cycle_id)
-                .order_by(cast(Any, JournalApproval.id))
-            )
-        )
-        checklist = self.close.list_checklist(cycle_id)
-        audit_entries = list(
-            self.s.exec(
-                select(AuditLog)
-                .where(
-                    AuditLog.actor_org_id == self.organization_id,
-                    cast(Any, AuditLog.entity_name).in_(
-                        [
-                            "AccountingPeriod",
-                            "CloseCycle",
-                            "CloseChecklistTask",
-                            "AccountReconciliation",
-                            "VarianceReview",
-                            "JournalApproval",
-                            "StagedTransaction",
-                            "Transaction",
-                        ]
-                    ),
-                )
-                .order_by(cast(Any, AuditLog.id))
-            )
-        )
-        row_count = len(trial_rows) + len(reconciliations) + len(variances) + len(approvals) + len(checklist)
-        if row_count > MAX_EVIDENCE_ROWS:
+        used = len(trial_rows)
+        if used > MAX_EVIDENCE_ROWS:
             raise CloseValidationError("Close evidence exceeds the maximum row count")
+        reconciliations = self._bounded(
+            select(AccountReconciliation)
+            .where(
+                AccountReconciliation.organization_id == self.organization_id,
+                AccountReconciliation.cycle_id == cycle_id,
+            )
+            .order_by(cast(Any, AccountReconciliation.account_id)),
+            used,
+        )
+        used += len(reconciliations)
+        variance_runs = self._bounded(
+            select(VarianceReviewRun)
+            .where(
+                VarianceReviewRun.organization_id == self.organization_id,
+                VarianceReviewRun.cycle_id == cycle_id,
+            )
+            .order_by(cast(Any, VarianceReviewRun.id)),
+            used,
+        )
+        used += len(variance_runs)
+        variances = self._bounded(
+            select(VarianceReview)
+            .where(VarianceReview.organization_id == self.organization_id, VarianceReview.cycle_id == cycle_id)
+            .order_by(cast(Any, VarianceReview.period_start), cast(Any, VarianceReview.account_id)),
+            used,
+        )
+        used += len(variances)
+        approvals = self._bounded(
+            select(JournalApproval)
+            .where(JournalApproval.organization_id == self.organization_id, JournalApproval.cycle_id == cycle_id)
+            .order_by(cast(Any, JournalApproval.id)),
+            used,
+        )
+        used += len(approvals)
+        approval_ids = [item.id for item in approvals if item.id is not None]
+        decisions = (
+            self._bounded(
+                select(JournalApprovalDecision)
+                .where(
+                    JournalApprovalDecision.organization_id == self.organization_id,
+                    cast(Any, JournalApprovalDecision.approval_id).in_(approval_ids),
+                )
+                .order_by(cast(Any, JournalApprovalDecision.approval_id), cast(Any, JournalApprovalDecision.id)),
+                used,
+            )
+            if approval_ids
+            else []
+        )
+        used += len(decisions)
+        checklist = self._bounded(
+            select(CloseChecklistTask)
+            .where(
+                CloseChecklistTask.organization_id == self.organization_id,
+                CloseChecklistTask.cycle_id == cycle_id,
+            )
+            .order_by(
+                cast(Any, CloseChecklistTask.sort_order),
+                cast(Any, CloseChecklistTask.id),
+            ),
+            used,
+        )
+        used += len(checklist)
+        evidence_records = self._bounded(
+            select(CloseEvidence)
+            .where(CloseEvidence.organization_id == self.organization_id, CloseEvidence.cycle_id == cycle_id)
+            .order_by(cast(Any, CloseEvidence.id)),
+            used,
+        )
+        used += len(evidence_records)
+
+        entity_scope: dict[str, list[str]] = {
+            "AccountingPeriod": [str(period.id)],
+            "CloseCycle": [str(cycle.id)],
+            "CloseChecklistTask": [str(item.id) for item in checklist if item.id is not None],
+            "AccountReconciliation": [str(item.id) for item in reconciliations if item.id is not None],
+            "VarianceReview": [str(item.id) for item in variances if item.id is not None],
+            "VarianceReviewRun": [str(item.id) for item in variance_runs if item.id is not None],
+            "JournalApproval": [str(item.id) for item in approvals if item.id is not None],
+            "CloseEvidence": [str(item.id) for item in evidence_records if item.id is not None],
+            "Transaction": [str(item.transaction_id) for item in approvals if item.transaction_id is not None],
+            "StagedTransaction": [
+                str(item.staged_transaction_id) for item in approvals if item.staged_transaction_id is not None
+            ],
+        }
+        audit_predicates = [
+            and_(cast(Any, AuditLog.entity_name) == entity_name, cast(Any, AuditLog.entity_id).in_(entity_ids))
+            for entity_name, entity_ids in entity_scope.items()
+            if entity_ids
+        ]
+        audit_entries = (
+            self._bounded(
+                select(AuditLog)
+                .where(AuditLog.actor_org_id == self.organization_id, or_(*audit_predicates))
+                .order_by(cast(Any, AuditLog.id)),
+                used,
+            )
+            if audit_predicates
+            else []
+        )
 
         account_names = {
             account.id: {"code": account.code, "name": account.name}
@@ -177,6 +245,7 @@ class CloseEvidenceService:
                         "due_date": cycle.due_date,
                         "policy": cycle.policy,
                         "version": cycle.version,
+                        "content_revision": cycle.content_revision,
                         "started_at": cycle.started_at,
                         "readiness_at": cycle.readiness_at,
                         "approved_at": cycle.approved_at,
@@ -202,6 +271,10 @@ class CloseEvidenceService:
                     "blocker_count": len(evidence_blockers),
                     "blockers": [asdict(blocker) for blocker in evidence_blockers],
                     "evidence_freshness": "CURRENT",
+                    "effective_task_statuses": {
+                        **readiness.effective_task_statuses,
+                        "close_evidence_generated": CloseTaskStatus.COMPLETE,
+                    },
                 }
             ),
             "trial-balance.csv": _csv_bytes(
@@ -257,6 +330,35 @@ class CloseEvidenceService:
                     for row in variances
                 ],
             ),
+            "variance-review-runs.csv": _csv_bytes(
+                [
+                    "id",
+                    "budget_id",
+                    "horizon",
+                    "absolute_threshold",
+                    "percentage_threshold",
+                    "generated_at",
+                    "generated_by_id",
+                    "row_count",
+                    "content_revision",
+                ],
+                [
+                    {
+                        "id": row.id,
+                        "budget_id": row.budget_id,
+                        "horizon": row.horizon,
+                        "absolute_threshold": str(row.absolute_threshold),
+                        "percentage_threshold": (
+                            str(row.percentage_threshold) if row.percentage_threshold is not None else None
+                        ),
+                        "generated_at": row.generated_at.isoformat(),
+                        "generated_by_id": row.generated_by_id,
+                        "row_count": row.row_count,
+                        "content_revision": row.content_revision,
+                    }
+                    for row in variance_runs
+                ],
+            ),
             "journal-approvals.csv": _csv_bytes(
                 [
                     "id",
@@ -286,6 +388,20 @@ class CloseEvidenceService:
                     for row in approvals
                 ],
             ),
+            "journal-approval-decisions.csv": _csv_bytes(
+                ["approval_id", "from_status", "to_status", "decided_by_id", "decided_at", "reason"],
+                [
+                    {
+                        "approval_id": row.approval_id,
+                        "from_status": row.from_status.value,
+                        "to_status": row.to_status.value,
+                        "decided_by_id": row.decided_by_id,
+                        "decided_at": row.decided_at.isoformat(),
+                        "reason": row.reason,
+                    }
+                    for row in decisions
+                ],
+            ),
             "checklist.csv": _csv_bytes(
                 [
                     "id",
@@ -310,7 +426,11 @@ class CloseEvidenceService:
                         "category": row.category,
                         "required": row.required,
                         "control_type": row.control_type.value,
-                        "status": row.status.value,
+                        "status": (
+                            CloseTaskStatus.COMPLETE.value
+                            if row.task_key == "close_evidence_generated"
+                            else readiness.effective_task_statuses[row.task_key].value
+                        ),
                         "owner_user_id": row.owner_user_id,
                         "due_date": row.due_date.isoformat() if row.due_date else None,
                         "completed_by_id": row.completed_by_id,
@@ -343,7 +463,9 @@ class CloseEvidenceService:
                     "feature": "v0.2 accountant close workspace",
                     "organization_id": self.organization_id,
                     "cycle_id": cycle_id,
-                    "source_version": cycle.version,
+                    "source_version": cycle.content_revision,
+                    "source_revision": cycle.content_revision,
+                    "evidence_kind": "FINAL" if cycle.status == CloseCycleStatus.CLOSED else "DRAFT",
                     "period_end": period.end_date,
                     "calculation_policy": {
                         "reconciliation_difference": "control_balance - ledger_ending_balance",
@@ -364,7 +486,9 @@ class CloseEvidenceService:
         manifest_bytes = _canonical_json(
             {
                 "cycle_id": cycle_id,
-                "source_version": cycle.version,
+                "source_version": cycle.content_revision,
+                "source_revision": cycle.content_revision,
+                "evidence_kind": "FINAL" if cycle.status == CloseCycleStatus.CLOSED else "DRAFT",
                 "files": [asdict(entry) for entry in file_entries],
             }
         )
@@ -384,7 +508,7 @@ class CloseEvidenceService:
             manifest_sha256=manifest_sha,
             filename=f"close-evidence-{safe_label}-cycle-{cycle_id}.zip",
             files=file_entries,
-            source_version=cycle.version,
+            source_version=cycle.content_revision,
         )
 
     @staticmethod
@@ -427,41 +551,63 @@ class CloseEvidenceService:
             ],
         )
 
-    def record_generation(self, cycle_id: int, bundle: EvidenceBundle, *, summary: str | None = None) -> CloseEvidence:
+    def record_generation(
+        self,
+        cycle_id: int,
+        bundle: EvidenceBundle,
+        *,
+        summary: str | None = None,
+        commit: bool = True,
+        allow_closed: bool = False,
+    ) -> CloseEvidence:
         cycle = self.close.require_cycle(cycle_id)
-        if bundle.source_version != cycle.version:
-            raise CloseValidationError("Evidence source version no longer matches the close cycle")
+        if not allow_closed:
+            self.close.require_cycle_mutation(
+                cycle_id,
+                allowed={
+                    CloseCycleStatus.DRAFT,
+                    CloseCycleStatus.IN_PROGRESS,
+                    CloseCycleStatus.BLOCKED,
+                    CloseCycleStatus.READY_FOR_APPROVAL,
+                },
+                operation="Draft evidence generation",
+            )
+        if bundle.source_version != cycle.content_revision:
+            raise CloseValidationError("Evidence source version/revision no longer matches the close cycle")
         record = CloseEvidence(
             organization_id=self.organization_id,
             cycle_id=cycle_id,
             generated_by_id=self.actor_user_id,
             manifest_sha256=bundle.manifest_sha256,
             source_version=bundle.source_version,
+            is_final=cycle.status == CloseCycleStatus.CLOSED,
             summary=summary.strip() if summary else None,
         )
         self.s.add(record)
         self.s.flush()
-        # The evidence row itself changes readiness freshness from MISSING to
-        # CURRENT. Rebuild inside the same transaction so the persisted
-        # manifest describes the canonical post-generation snapshot that the
-        # download endpoint will reproduce.
-        authoritative_bundle = self.build_bundle(cycle_id)
-        record.manifest_sha256 = authoritative_bundle.manifest_sha256
-        self.s.add(record)
         self.close._audit(
             AuditAction.CREATE,
             "CloseEvidence",
             record.id,
             after={
                 "cycle_id": cycle_id,
-                "manifest_sha256": authoritative_bundle.manifest_sha256,
+                "manifest_sha256": bundle.manifest_sha256,
                 "source_version": bundle.source_version,
-                "archive_bytes": len(authoritative_bundle.content),
+                "archive_bytes": len(bundle.content),
             },
             event="close_evidence_generated",
         )
-        self.s.commit()
-        self.s.refresh(record)
+        self.s.flush()
+        # Include the evidence record and its audit reference in the canonical
+        # post-generation snapshot. Rebuilding again produces identical bytes.
+        authoritative_bundle = self.build_bundle(cycle_id)
+        record.manifest_sha256 = authoritative_bundle.manifest_sha256
+        self.s.add(record)
+        if commit:
+            self.s.commit()
+            self.s.refresh(record)
+        else:
+            self.s.flush()
         return record
 
     def preview(self, cycle_id: int) -> dict[str, Any]:
@@ -473,7 +619,8 @@ class CloseEvidenceService:
         ).first()
         return {
             "cycle_id": cycle_id,
-            "source_version": cycle.version,
+            "source_version": cycle.content_revision,
+            "source_revision": cycle.content_revision,
             "deterministic_files": [
                 "manifest.json",
                 "close-cycle.json",
@@ -482,14 +629,18 @@ class CloseEvidenceService:
                 "reconciliations.csv",
                 "reconciliation-exceptions.csv",
                 "variance-reviews.csv",
+                "variance-review-runs.csv",
                 "journal-approvals.csv",
+                "journal-approval-decisions.csv",
                 "checklist.csv",
                 "audit-references.csv",
                 "provenance.json",
             ],
             "latest_manifest_sha256": latest.manifest_sha256 if latest else None,
             "freshness": (
-                "CURRENT" if latest and latest.source_version == cycle.version else ("STALE" if latest else "MISSING")
+                "CURRENT"
+                if latest and latest.source_version == cycle.content_revision
+                else ("STALE" if latest else "MISSING")
             ),
             "maximum_archive_bytes": MAX_EVIDENCE_ARCHIVE_BYTES,
             "maximum_rows": MAX_EVIDENCE_ROWS,

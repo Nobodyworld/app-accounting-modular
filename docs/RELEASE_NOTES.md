@@ -9,7 +9,7 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 
 ## Highlights
 
-- Authenticated Accountant Close Workspace for period administration, server-derived readiness, reconciliations, variance dispositions, journal approvals, checklist controls, evidence generation, final close, posting-lock verification, and explicit reopen.
+- Authenticated Accountant Close Workspace with immutable lifecycle states, reasoned restart/return-to-work/reopen, required reconciliation scope, durable period variance runs, explicit journal-approval policy, revision-bound draft evidence, and atomic final `CLOSED` evidence.
 - Deterministic evidence ZIP with canonical JSON, LF spreadsheet-safe CSV, normalized entry timestamps, per-file SHA-256 values, and a manifest SHA-256.
 - Critical-module coverage policy with independent line and branch floors so aggregate coverage cannot mask close, ledger, workflow, or session-control regressions.
 

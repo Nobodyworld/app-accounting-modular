@@ -103,14 +103,14 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 
 The v0.2 close tranche follows the existing service-first architecture rather than placing accounting decisions in FastAPI or Streamlit:
 
-- `close_service.py` owns period/cycle transitions, deterministic checklist seeding, and the single readiness calculation used by both final close and the UI.
-- `period_lock.py` is the centralized service guard called by direct `LedgerService` posting and every `WorkflowService` posting, auto-post, and retry path before transaction, staged-status, or audit mutation.
-- `reconciliation_service.py` derives account balances from journal entries, reuses `BudgetService.budget_vs_actual`, and owns independent reconciliation and journal-approval decisions.
-- `close_evidence_service.py` builds bounded deterministic ZIP bytes in memory and persists only safe manifest metadata.
+- `close_service.py` owns lifecycle guards, atomic version/content-revision compare-and-swap updates, required control scope, effective checklist status, readiness, and finalization.
+- `period_lock.py` acquires a SQLite writer gate before either close or direct/workflow posting evaluates period state. `auto_process=true` stages and posts in one request transaction.
+- `reconciliation_service.py` derives account balances, creates durable period-scoped variance-run proof, and owns one current approval per durable journal reference plus append-only decisions.
+- `close_evidence_service.py` builds cycle-scoped, row-bounded deterministic ZIP bytes, including approval decisions and variance runs, and persists safe manifest metadata.
 - `routers/close.py` performs persisted-session authentication, tenant/role authorization, response-schema translation, and deliberate `400`/`403`/`404`/`409` mapping.
 - `close_workspace.py` uses the existing one-refresh Streamlit API session and renders the API's readiness result rather than recalculating accounting controls.
 
-`AccountingPeriod.status` is the authoritative posting lock. `CloseCycle.status` represents the workflow around that period: `DRAFT → IN_PROGRESS → READY_FOR_APPROVAL → CLOSED`; cancellation is terminal before close, and reopen explicitly moves a closed cycle back to `IN_PROGRESS` while unlocking the period and making prior evidence stale. The final close transition recalculates readiness and updates the cycle and period in one database transaction.
+`AccountingPeriod.status` is authoritative. The lifecycle is `DRAFT → IN_PROGRESS/BLOCKED → READY_FOR_APPROVAL → CLOSED`. Ready freezes operational rows and can return to work only with an administrator reason. Cancellation preserves the durable cycle and can restart with a reason. Reopen is overlap-safe. Final close recalculates readiness, establishes the final content revision, closes cycle and period, and records deterministic `CLOSED` evidence in one transaction. SQLite's single-writer gate is the validated backend strategy; a multi-writer deployment must replace it with database-native row locking or an equivalent posting gate.
 5. **Observability** collects metrics, traces, and health reports. Metrics are
    exposed through `/health/metrics` while `/health/telemetry` and
    `apps.observability.diagnostics.collect_observability_snapshot` aggregate the

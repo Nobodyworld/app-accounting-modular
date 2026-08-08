@@ -33,7 +33,7 @@ from ..close_schemas import (
 )
 from ..db import get_session
 from ..limits import MAX_CLOSE_LIST_PAGE
-from ..models.models import CloseCycleStatus, CloseTaskStatus, Membership, User
+from ..models.models import Membership, User
 from ..security import get_current_organization, get_current_user
 from ..services.close_evidence_service import CloseEvidenceService
 from ..services.close_service import (
@@ -201,7 +201,7 @@ def _transition(
     session: Session,
     current_user: User,
 ) -> CycleRead:
-    admin = action in {"close", "reopen", "cancel"}
+    admin = action in {"close", "reopen", "cancel", "restart", "return-to-work"}
     service, _ = _service(organization_id, session, current_user, manager=not admin, admin=admin)
     try:
         if action == "start":
@@ -214,6 +214,10 @@ def _transition(
             cycle = service.reopen(cycle_id, payload.version, payload.reason)
         elif action == "cancel" and isinstance(payload, ReasonedTransitionRequest):
             cycle = service.cancel(cycle_id, payload.version, payload.reason)
+        elif action == "restart" and isinstance(payload, ReasonedTransitionRequest):
+            cycle = service.restart(cycle_id, payload.version, payload.reason)
+        elif action == "return-to-work" and isinstance(payload, ReasonedTransitionRequest):
+            cycle = service.return_to_work(cycle_id, payload.version, payload.reason)
         else:  # pragma: no cover - fixed route dispatch
             raise CloseValidationError("Invalid close transition")
         return CycleRead.model_validate(cycle)
@@ -276,6 +280,28 @@ def cancel_cycle(
     return _transition("cancel", cycle_id, payload, organization_id, session, current_user)
 
 
+@router.post("/cycles/{cycle_id}/restart", response_model=CycleRead)
+def restart_cycle(
+    cycle_id: int,
+    payload: ReasonedTransitionRequest,
+    organization_id: int = Query(ge=1),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> CycleRead:
+    return _transition("restart", cycle_id, payload, organization_id, session, current_user)
+
+
+@router.post("/cycles/{cycle_id}/return-to-work", response_model=CycleRead)
+def return_cycle_to_work(
+    cycle_id: int,
+    payload: ReasonedTransitionRequest,
+    organization_id: int = Query(ge=1),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> CycleRead:
+    return _transition("return-to-work", cycle_id, payload, organization_id, session, current_user)
+
+
 @router.get("/cycles/{cycle_id}/readiness", response_model=ReadinessResponse)
 def get_readiness(
     cycle_id: int,
@@ -300,30 +326,10 @@ def list_checklist(
     service, _ = _service(organization_id, session, current_user)
     try:
         readiness = service.readiness(cycle_id)
-        blockers = {item.code for item in readiness.blockers}
-        blocker_by_key = {
-            "staged_journal_exceptions_resolved": "STAGED_ITEMS_UNRESOLVED",
-            "trial_balance_balanced": "TRIAL_BALANCE_UNBALANCED",
-            "required_reconciliations_complete": "RECONCILIATIONS_INCOMPLETE",
-            "material_variances_reviewed": "MATERIAL_VARIANCES_UNRESOLVED",
-            "required_journal_approvals_complete": "JOURNAL_APPROVALS_INCOMPLETE",
-            "close_evidence_generated": "CLOSE_EVIDENCE_NOT_CURRENT",
-        }
         output: list[ChecklistTaskRead] = []
         for task in service.list_checklist(cycle_id):
             payload = ChecklistTaskRead.model_validate(task).model_dump()
-            blocker = blocker_by_key.get(task.task_key)
-            if blocker is not None:
-                if task.task_key == "required_reconciliations_complete" and "RECONCILIATIONS_MISSING" in blockers:
-                    payload["status"] = CloseTaskStatus.PENDING
-                else:
-                    payload["status"] = CloseTaskStatus.PENDING if blocker in blockers else CloseTaskStatus.COMPLETE
-            if task.task_key == "final_close_approved":
-                payload["status"] = (
-                    CloseTaskStatus.COMPLETE
-                    if readiness.cycle_status in {CloseCycleStatus.READY_FOR_APPROVAL, CloseCycleStatus.CLOSED}
-                    else CloseTaskStatus.PENDING
-                )
+            payload["status"] = readiness.effective_task_statuses[task.task_key]
             output.append(ChecklistTaskRead.model_validate(payload))
         return output
     except CloseDomainError as exc:
@@ -378,21 +384,36 @@ def list_reconciliations(
 
 
 @router.post("/cycles/{cycle_id}/reconciliations", response_model=ReconciliationRead, status_code=201)
-@router.patch("/cycles/{cycle_id}/reconciliations/{reconciliation_id}", response_model=ReconciliationRead)
-def upsert_reconciliation(
+def create_reconciliation(
     cycle_id: int,
     payload: ReconciliationUpsert,
     organization_id: int = Query(ge=1),
-    reconciliation_id: int | None = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> ReconciliationRead:
     service, _ = _reconciliation_service(organization_id, session, current_user, manager=True)
     try:
-        item = service.prepare_reconciliation(cycle_id, **payload.model_dump())
-        if reconciliation_id is not None and item.id != reconciliation_id:
-            raise CloseNotFoundError("Reconciliation not found")
-        return ReconciliationRead.model_validate(item)
+        return ReconciliationRead.model_validate(service.prepare_reconciliation(cycle_id, **payload.model_dump()))
+    except CloseDomainError as exc:
+        _raise_domain(exc)
+
+
+@router.patch("/cycles/{cycle_id}/reconciliations/{reconciliation_id}", response_model=ReconciliationRead)
+def update_reconciliation(
+    cycle_id: int,
+    reconciliation_id: int,
+    payload: ReconciliationUpsert,
+    organization_id: int = Query(ge=1),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> ReconciliationRead:
+    service, _ = _reconciliation_service(organization_id, session, current_user, manager=True)
+    try:
+        if payload.version is None:
+            raise CloseValidationError("Reconciliation version is required for an update")
+        return ReconciliationRead.model_validate(
+            service.update_reconciliation(cycle_id, reconciliation_id, **payload.model_dump())
+        )
     except CloseDomainError as exc:
         _raise_domain(exc)
 

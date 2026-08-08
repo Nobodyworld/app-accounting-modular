@@ -196,33 +196,33 @@ class LedgerService:
                     currency=str(currency_value),
                 )
                 self.s.add(je)
-            self.s.commit()
+            # AuditLogger's synchronous path commits the mutation and audit row
+            # together; a logger failure therefore cannot leave an unaudited journal.
+            self.audit.log(
+                AuditAction.CREATE,
+                "Transaction",
+                txn.id,
+                after={
+                    "date": txn.date.isoformat(),
+                    "description": txn.description,
+                    "source": source,
+                    "source_reference": source_reference,
+                    "postings": [
+                        {
+                            "account_id": posting["account_id"],
+                            "debit": float(cast(Any, posting["debit"])),
+                            "credit": float(cast(Any, posting["credit"])),
+                            "currency": posting["currency"],
+                        }
+                        for posting in normalised
+                    ],
+                    "organization_id": txn.organization_id,
+                },
+            )
             self.s.refresh(txn)
         except Exception:
             self.s.rollback()
             raise
-
-        self.audit.log(
-            AuditAction.CREATE,
-            "Transaction",
-            txn.id,
-            after={
-                "date": txn.date.isoformat(),
-                "description": txn.description,
-                "source": source,
-                "source_reference": source_reference,
-                "postings": [
-                    {
-                        "account_id": posting["account_id"],
-                        "debit": float(cast(Any, posting["debit"])),
-                        "credit": float(cast(Any, posting["credit"])),
-                        "currency": posting["currency"],
-                    }
-                    for posting in normalised
-                ],
-                "organization_id": txn.organization_id,
-            },
-        )
         return txn
 
     # ------------------------------------------------------------------

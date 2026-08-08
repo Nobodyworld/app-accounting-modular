@@ -246,6 +246,7 @@ def ingest_transactions(
             source=_storage_source(payload.source, org_id),
             source_reference=payload.source_reference,
             metadata={**payload.metadata, **internal_metadata},
+            commit=not payload.auto_process,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -254,9 +255,14 @@ def ingest_transactions(
     if payload.auto_process:
         staged_ids = [_require_id(item.id, label="staged transaction") for item in staged]
         try:
-            results = svc.process_transactions(staged_ids)
+            results = svc.process_transactions(staged_ids, commit=False)
+            s.commit()
         except ClosedPeriodPostingError as exc:
+            s.rollback()
             raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+        except Exception:
+            s.rollback()
+            raise
 
     return WorkflowIngestResponse(
         staged_ids=[_require_id(item.id, label="staged transaction") for item in staged],

@@ -41,7 +41,8 @@ def test_recorded_evidence_download_remains_deterministic() -> None:
         generated = evidence.build_bundle(cycle.id)
         evidence.record_generation(cycle.id, generated)
         downloaded = evidence.build_bundle(cycle.id)
-        assert generated.content == downloaded.content
+        repeated = evidence.build_bundle(cycle.id)
+        assert downloaded.content == repeated.content
         assert evidence.preview(cycle.id)["freshness"] == "CURRENT"
 
 

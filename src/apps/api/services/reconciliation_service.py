@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, cast
 
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..metadata_limits import validate_metadata
@@ -25,9 +27,16 @@ from ..models.models import (
     Transaction,
     VarianceDisposition,
     VarianceReview,
+    VarianceReviewRun,
 )
 from .budget_service import BudgetService
-from .close_service import CloseConflictError, CloseNotFoundError, CloseService, CloseValidationError
+from .close_service import (
+    OPERATIONAL_CYCLE_STATES,
+    CloseConflictError,
+    CloseNotFoundError,
+    CloseService,
+    CloseValidationError,
+)
 
 
 class ReconciliationService:
@@ -43,8 +52,12 @@ class ReconciliationService:
     def _now() -> datetime:
         return datetime.now(UTC)
 
-    def _cycle_and_period(self, cycle_id: int) -> tuple[CloseCycle, Any]:
-        cycle = self.close.require_cycle(cycle_id)
+    def _cycle_and_period(self, cycle_id: int, *, mutation: str | None = None) -> tuple[CloseCycle, Any]:
+        cycle = (
+            self.close.require_cycle_mutation(cycle_id, allowed=OPERATIONAL_CYCLE_STATES, operation=mutation)
+            if mutation
+            else self.close.require_cycle(cycle_id)
+        )
         return cycle, self.close.require_period(cycle.period_id)
 
     def _account(self, account_id: int) -> Account:
@@ -99,8 +112,10 @@ class ReconciliationService:
         owner_user_id: int | None = None,
         version: int | None = None,
     ) -> AccountReconciliation:
-        self._cycle_and_period(cycle_id)
+        cycle, _ = self._cycle_and_period(cycle_id, mutation="Reconciliation preparation")
         self._account(account_id)
+        owner = owner_user_id or self.actor_user_id
+        self.close.validate_owner(owner)
         tolerance = Decimal(str(tolerance))
         if tolerance < 0:
             raise CloseValidationError("Reconciliation tolerance must be nonnegative")
@@ -128,7 +143,7 @@ class ReconciliationService:
                 difference=difference,
                 tolerance=tolerance,
                 status=status,
-                owner_user_id=owner_user_id or self.actor_user_id,
+                owner_user_id=owner,
                 prepared_by_id=self.actor_user_id,
                 prepared_at=now,
                 notes=normalized_notes,
@@ -139,29 +154,22 @@ class ReconciliationService:
             before = None
             event = "reconciliation_prepared"
         else:
-            reconciliation = existing
-            if version is None or reconciliation.version != version:
-                raise CloseConflictError("Reconciliation version is stale")
-            before = {"status": reconciliation.status.value, "version": reconciliation.version}
-            reconciliation.ledger_ending_balance = ledger_balance
-            reconciliation.control_balance = normalized_control
-            reconciliation.difference = difference
-            reconciliation.tolerance = tolerance
-            reconciliation.status = status
-            reconciliation.owner_user_id = owner_user_id or reconciliation.owner_user_id
-            reconciliation.prepared_by_id = self.actor_user_id
-            reconciliation.prepared_at = now
-            reconciliation.reviewer_user_id = None
-            reconciliation.approved_by_id = None
-            reconciliation.reviewed_at = None
-            reconciliation.approved_at = None
-            reconciliation.notes = normalized_notes
-            reconciliation.evidence_metadata = metadata
-            reconciliation.version += 1
-            reconciliation.updated_at = now
-            event = "reconciliation_updated"
+            if version is None:
+                raise CloseConflictError("A reconciliation already exists for this account")
+            return self.update_reconciliation(
+                cycle_id,
+                self.close._id(existing.id, "reconciliation"),
+                account_id=account_id,
+                control_balance=control_balance,
+                tolerance=tolerance,
+                notes=notes,
+                evidence_metadata=evidence_metadata,
+                owner_user_id=owner_user_id,
+                version=version,
+            )
         self.s.add(reconciliation)
         self.s.flush()
+        self.close.bump_content_revision(cycle)
         self.close._audit(
             AuditAction.CREATE if before is None else AuditAction.UPDATE,
             "AccountReconciliation",
@@ -179,7 +187,102 @@ class ReconciliationService:
         self.s.refresh(reconciliation)
         return reconciliation
 
+    def update_reconciliation(
+        self,
+        cycle_id: int,
+        reconciliation_id: int,
+        *,
+        account_id: int,
+        control_balance: Decimal | None,
+        tolerance: Decimal,
+        version: int,
+        notes: str | None = None,
+        evidence_metadata: dict[str, Any] | None = None,
+        owner_user_id: int | None = None,
+    ) -> AccountReconciliation:
+        cycle, _ = self._cycle_and_period(cycle_id, mutation="Reconciliation update")
+        reconciliation = self.s.exec(
+            select(AccountReconciliation).where(
+                AccountReconciliation.organization_id == self.organization_id,
+                AccountReconciliation.cycle_id == cycle_id,
+                AccountReconciliation.id == reconciliation_id,
+            )
+        ).first()
+        if reconciliation is None or reconciliation.account_id != account_id:
+            raise CloseNotFoundError("Reconciliation not found")
+        self._account(account_id)
+        owner = owner_user_id or reconciliation.owner_user_id
+        self.close.validate_owner(owner)
+        normalized_tolerance = Decimal(str(tolerance))
+        if normalized_tolerance < 0:
+            raise CloseValidationError("Reconciliation tolerance must be nonnegative")
+        ledger_balance = self.ledger_ending_balance(cycle_id, account_id)
+        normalized_control = Decimal(str(control_balance)) if control_balance is not None else None
+        difference = normalized_control - ledger_balance if normalized_control is not None else None
+        normalized_notes = notes.strip() if notes else None
+        status = self._derive_reconciliation_status(
+            normalized_control,
+            difference,
+            normalized_tolerance,
+            normalized_notes,
+        )
+        metadata = cast(dict[str, Any], validate_metadata(evidence_metadata or {}))
+        before = {"status": reconciliation.status.value, "version": reconciliation.version}
+        now = self._now()
+        self.close.bump_content_revision(cycle)
+        result = self.s.exec(
+            update(AccountReconciliation)
+            .where(
+                cast(Any, AccountReconciliation.id) == reconciliation_id,
+                cast(Any, AccountReconciliation.organization_id) == self.organization_id,
+                cast(Any, AccountReconciliation.cycle_id) == cycle_id,
+                cast(Any, AccountReconciliation.account_id) == account_id,
+                cast(Any, AccountReconciliation.version) == version,
+            )
+            .values(
+                ledger_ending_balance=ledger_balance,
+                control_balance=normalized_control,
+                difference=difference,
+                tolerance=normalized_tolerance,
+                status=status,
+                owner_user_id=owner,
+                prepared_by_id=self.actor_user_id,
+                prepared_at=now,
+                reviewer_user_id=None,
+                approved_by_id=None,
+                reviewed_at=None,
+                approved_at=None,
+                notes=normalized_notes,
+                evidence_metadata=metadata,
+                version=version + 1,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            self.s.rollback()
+            raise CloseConflictError("Reconciliation version is stale")
+        self.s.expire(reconciliation)
+        self.s.refresh(reconciliation)
+        self.close._audit(
+            AuditAction.UPDATE,
+            "AccountReconciliation",
+            reconciliation.id,
+            before=before,
+            after={
+                "status": reconciliation.status.value,
+                "version": reconciliation.version,
+                "account_id": account_id,
+                "difference": str(difference) if difference is not None else None,
+            },
+            event="reconciliation_updated",
+        )
+        self.s.commit()
+        self.s.refresh(reconciliation)
+        return reconciliation
+
     def approve_reconciliation(self, cycle_id: int, reconciliation_id: int, *, version: int) -> AccountReconciliation:
+        cycle, _ = self._cycle_and_period(cycle_id, mutation="Reconciliation approval")
         reconciliation = self.s.exec(
             select(AccountReconciliation).where(
                 AccountReconciliation.organization_id == self.organization_id,
@@ -197,14 +300,31 @@ class ReconciliationService:
             raise CloseConflictError("Only matched or documented reconciliations can be approved")
         before = {"status": reconciliation.status.value, "version": reconciliation.version}
         now = self._now()
-        reconciliation.status = ReconciliationStatus.APPROVED
-        reconciliation.reviewer_user_id = self.actor_user_id
-        reconciliation.approved_by_id = self.actor_user_id
-        reconciliation.reviewed_at = now
-        reconciliation.approved_at = now
-        reconciliation.version += 1
-        reconciliation.updated_at = now
-        self.s.add(reconciliation)
+        self.close.bump_content_revision(cycle)
+        result = self.s.exec(
+            update(AccountReconciliation)
+            .where(
+                cast(Any, AccountReconciliation.id) == reconciliation_id,
+                cast(Any, AccountReconciliation.organization_id) == self.organization_id,
+                cast(Any, AccountReconciliation.cycle_id) == cycle_id,
+                cast(Any, AccountReconciliation.version) == version,
+            )
+            .values(
+                status=ReconciliationStatus.APPROVED,
+                reviewer_user_id=self.actor_user_id,
+                approved_by_id=self.actor_user_id,
+                reviewed_at=now,
+                approved_at=now,
+                version=version + 1,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            self.s.rollback()
+            raise CloseConflictError("Reconciliation version is stale")
+        self.s.expire(reconciliation)
+        self.s.refresh(reconciliation)
         self.close._audit(
             AuditAction.UPDATE,
             "AccountReconciliation",
@@ -240,7 +360,7 @@ class ReconciliationService:
         percentage_threshold: Decimal | None,
         refresh: bool = True,
     ) -> list[VarianceReview]:
-        self._cycle_and_period(cycle_id)
+        cycle, period = self._cycle_and_period(cycle_id, mutation="Variance review run")
         budget = self.s.exec(
             select(Budget).where(Budget.organization_id == self.organization_id, Budget.id == budget_id)
         ).first()
@@ -251,10 +371,11 @@ class ReconciliationService:
         if absolute < 0 or (percentage is not None and percentage < 0):
             raise CloseValidationError("Materiality thresholds must be nonnegative")
         report = BudgetService(self.s).budget_vs_actual(budget_id, horizon=horizon, refresh=refresh)
-        if len(report.lines) > 5_000:
+        period_lines = [line for line in report.lines if period.start_date <= line.period_start <= period.end_date]
+        if len(period_lines) > 5_000:
             raise CloseValidationError("Budget report exceeds the maximum variance review rows")
         created: list[VarianceReview] = []
-        for line in report.lines:
+        for line in period_lines:
             budget_amount = Decimal(str(line.budget_amount))
             actual_amount = Decimal(str(line.actual_amount))
             variance = Decimal(str(line.variance))
@@ -297,12 +418,42 @@ class ReconciliationService:
             )
             self.s.add(review)
             created.append(review)
+        new_revision = self.close.bump_content_revision(cycle)
+        run = VarianceReviewRun(
+            organization_id=self.organization_id,
+            cycle_id=cycle_id,
+            budget_id=budget_id,
+            horizon=horizon,
+            absolute_threshold=absolute,
+            percentage_threshold=percentage,
+            report_parameters={
+                "refresh": refresh,
+                "period_start": str(period.start_date),
+                "period_end": str(period.end_date),
+            },
+            report_provenance={
+                "plan_id": report.metadata.get("plan_id"),
+                "plan_revision": str(report.metadata.get("plan_revision") or ""),
+                "generated_at": str(report.metadata.get("generated_at") or ""),
+                "reporting_currency": report.metadata.get("reporting_currency"),
+            },
+            generated_by_id=self.actor_user_id,
+            row_count=len(period_lines),
+            content_revision=new_revision,
+        )
+        self.s.add(run)
         self.s.flush()
         self.close._audit(
             AuditAction.CREATE,
-            "VarianceReview",
-            None,
-            after={"cycle_id": cycle_id, "budget_id": budget_id, "rows_created": len(created)},
+            "VarianceReviewRun",
+            run.id,
+            after={
+                "cycle_id": cycle_id,
+                "budget_id": budget_id,
+                "rows_created": len(created),
+                "period_rows": len(period_lines),
+                "content_revision": new_revision,
+            },
             event="variance_reviews_materialized",
         )
         self.s.commit()
@@ -330,6 +481,7 @@ class ReconciliationService:
         note: str | None,
         owner_user_id: int | None = None,
     ) -> VarianceReview:
+        cycle, _ = self._cycle_and_period(cycle_id, mutation="Variance disposition update")
         review = self.s.exec(
             select(VarianceReview).where(
                 VarianceReview.organization_id == self.organization_id,
@@ -339,19 +491,37 @@ class ReconciliationService:
         ).first()
         if review is None:
             raise CloseNotFoundError("Variance review not found")
-        if review.version != version:
-            raise CloseConflictError("Variance review version is stale")
+        owner = owner_user_id or review.owner_user_id
+        self.close.validate_owner(owner)
         if review.is_material and disposition != VarianceDisposition.UNRESOLVED and not (note or "").strip():
             raise CloseValidationError("A reviewer note is required for a material variance disposition")
         before = {"disposition": review.disposition.value, "version": review.version}
-        review.disposition = disposition
-        review.note = note.strip() if note else None
-        review.owner_user_id = owner_user_id or review.owner_user_id
-        review.reviewer_user_id = self.actor_user_id
-        review.reviewed_at = self._now() if disposition != VarianceDisposition.UNRESOLVED else None
-        review.version += 1
-        review.updated_at = self._now()
-        self.s.add(review)
+        now = self._now()
+        self.close.bump_content_revision(cycle)
+        result = self.s.exec(
+            update(VarianceReview)
+            .where(
+                cast(Any, VarianceReview.id) == review_id,
+                cast(Any, VarianceReview.organization_id) == self.organization_id,
+                cast(Any, VarianceReview.cycle_id) == cycle_id,
+                cast(Any, VarianceReview.version) == version,
+            )
+            .values(
+                disposition=disposition,
+                note=note.strip() if note else None,
+                owner_user_id=owner,
+                reviewer_user_id=self.actor_user_id,
+                reviewed_at=now if disposition != VarianceDisposition.UNRESOLVED else None,
+                version=version + 1,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            self.s.rollback()
+            raise CloseConflictError("Variance review version is stale")
+        self.s.expire(review)
+        self.s.refresh(review)
         self.close._audit(
             AuditAction.UPDATE,
             "VarianceReview",
@@ -410,29 +580,90 @@ class ReconciliationService:
         staged_transaction_id: int | None = None,
         reason: str | None = None,
     ) -> JournalApproval:
+        cycle, _ = self._cycle_and_period(cycle_id, mutation="Journal approval request")
         self._validate_journal_reference(cycle_id, transaction_id, staged_transaction_id)
+        reference_key = (
+            f"transaction:{transaction_id}" if transaction_id is not None else f"staged:{staged_transaction_id}"
+        )
         stmt = select(JournalApproval).where(
             JournalApproval.organization_id == self.organization_id,
             JournalApproval.cycle_id == cycle_id,
-            JournalApproval.transaction_id == transaction_id,
-            JournalApproval.staged_transaction_id == staged_transaction_id,
+            JournalApproval.reference_key == reference_key,
         )
-        existing = self.s.exec(stmt.order_by(cast(Any, JournalApproval.id).desc())).first()
+        existing = self.s.exec(stmt).first()
         if existing is not None and existing.status in {
             JournalApprovalStatus.REQUESTED,
             JournalApprovalStatus.APPROVED,
         }:
             return existing
+        now = self._now()
+        if existing is not None:
+            before_status = existing.status
+            old_version = existing.version
+            self.close.bump_content_revision(cycle)
+            result = self.s.exec(
+                update(JournalApproval)
+                .where(
+                    cast(Any, JournalApproval.id) == existing.id,
+                    cast(Any, JournalApproval.organization_id) == self.organization_id,
+                    cast(Any, JournalApproval.cycle_id) == cycle_id,
+                    cast(Any, JournalApproval.version) == old_version,
+                )
+                .values(
+                    status=JournalApprovalStatus.REQUESTED,
+                    requestor_user_id=self.actor_user_id,
+                    requested_at=now,
+                    decided_by_id=None,
+                    decided_at=None,
+                    reason=reason.strip() if reason else None,
+                    version=old_version + 1,
+                    updated_at=now,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            if getattr(result, "rowcount", 0) != 1:
+                self.s.rollback()
+                raise CloseConflictError("Journal approval version is stale")
+            self.s.add(
+                JournalApprovalDecision(
+                    organization_id=self.organization_id,
+                    approval_id=cast(int, existing.id),
+                    from_status=before_status,
+                    to_status=JournalApprovalStatus.REQUESTED,
+                    decided_by_id=self.actor_user_id,
+                    decided_at=now,
+                    reason=reason.strip() if reason else None,
+                )
+            )
+            self.s.expire(existing)
+            self.s.refresh(existing)
+            self.close._audit(
+                AuditAction.UPDATE,
+                "JournalApproval",
+                existing.id,
+                before={"status": before_status.value, "version": old_version},
+                after={"status": existing.status.value, "version": existing.version},
+                event="journal_approval_rerequested",
+            )
+            self.s.commit()
+            self.s.refresh(existing)
+            return existing
         approval = JournalApproval(
             organization_id=self.organization_id,
             cycle_id=cycle_id,
+            reference_key=reference_key,
             transaction_id=transaction_id,
             staged_transaction_id=staged_transaction_id,
             requestor_user_id=self.actor_user_id,
             reason=reason.strip() if reason else None,
         )
         self.s.add(approval)
-        self.s.flush()
+        try:
+            self.s.flush()
+            self.close.bump_content_revision(cycle)
+        except IntegrityError as exc:
+            self.s.rollback()
+            raise CloseConflictError("A current approval already exists for this journal") from exc
         self.close._audit(
             AuditAction.CREATE,
             "JournalApproval",
@@ -459,6 +690,7 @@ class ReconciliationService:
         reason: str | None,
         is_admin: bool = False,
     ) -> JournalApproval:
+        cycle, _ = self._cycle_and_period(cycle_id, mutation="Journal approval decision")
         approval = self.s.exec(
             select(JournalApproval).where(
                 JournalApproval.organization_id == self.organization_id,
@@ -482,6 +714,9 @@ class ReconciliationService:
             raise CloseConflictError(f"Cannot change approval from {approval.status.value} to {decision.value}")
         if decision == JournalApprovalStatus.REVOKED and not is_admin:
             raise CloseConflictError("Administrator access is required to revoke an approval")
+        normalized_reason = reason.strip() if reason else None
+        if decision in {JournalApprovalStatus.REJECTED, JournalApprovalStatus.REVOKED} and not normalized_reason:
+            raise CloseValidationError("A reason is required to reject or revoke a journal approval")
         before_status = approval.status
         now = self._now()
         history = JournalApprovalDecision(
@@ -491,16 +726,34 @@ class ReconciliationService:
             to_status=decision,
             decided_by_id=self.actor_user_id,
             decided_at=now,
-            reason=reason.strip() if reason else None,
+            reason=normalized_reason,
         )
-        approval.status = decision
-        approval.decided_by_id = self.actor_user_id
-        approval.decided_at = now
-        approval.reason = reason.strip() if reason else None
-        approval.version += 1
-        approval.updated_at = now
+        self.close.bump_content_revision(cycle)
+        result = self.s.exec(
+            update(JournalApproval)
+            .where(
+                cast(Any, JournalApproval.id) == approval_id,
+                cast(Any, JournalApproval.organization_id) == self.organization_id,
+                cast(Any, JournalApproval.cycle_id) == cycle_id,
+                cast(Any, JournalApproval.version) == version,
+                cast(Any, JournalApproval.status) == before_status,
+            )
+            .values(
+                status=decision,
+                decided_by_id=self.actor_user_id,
+                decided_at=now,
+                reason=normalized_reason,
+                version=version + 1,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            self.s.rollback()
+            raise CloseConflictError("Journal approval version is stale")
         self.s.add(history)
-        self.s.add(approval)
+        self.s.expire(approval)
+        self.s.refresh(approval)
         self.close._audit(
             AuditAction.UPDATE,
             "JournalApproval",

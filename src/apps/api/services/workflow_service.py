@@ -58,6 +58,7 @@ class WorkflowService:
         source_reference: str | None = None,
         metadata: Mapping[str, object] | None = None,
         chunk_size: int = 500,
+        commit: bool = True,
     ) -> list[StagedTransaction]:
         """Persist raw transaction payloads into the staging tables atomically."""
 
@@ -136,7 +137,10 @@ class WorkflowService:
                 if chunk_size > 0 and len(staged_records) % chunk_size == 0:
                     self.s.flush()
 
-            self.s.commit()
+            if commit:
+                self.s.commit()
+            else:
+                self.s.flush()
         except Exception:
             self.s.rollback()
             raise
@@ -151,6 +155,7 @@ class WorkflowService:
         staged_ids: Sequence[int] | None = None,
         *,
         auto_post: bool = True,
+        commit: bool = True,
     ) -> list[WorkflowResult]:
         """Validate and optionally post staged transactions independently."""
 
@@ -204,7 +209,10 @@ class WorkflowService:
                     event="rejected",
                     organization_id=None,
                 )
-                self.s.commit()
+                if commit:
+                    self.s.commit()
+                else:
+                    self.s.flush()
                 results.append(self._result_from_staged(staged))
                 continue
 
@@ -230,7 +238,10 @@ class WorkflowService:
                     event=event,
                     organization_id=organization_id,
                 )
-                self.s.commit()
+                if commit:
+                    self.s.commit()
+                else:
+                    self.s.flush()
                 results.append(self._result_from_staged(staged))
                 continue
 
@@ -248,7 +259,10 @@ class WorkflowService:
                         event=event,
                         organization_id=organization_id,
                     )
-                    self.s.commit()
+                    if commit:
+                        self.s.commit()
+                    else:
+                        self.s.flush()
                     results.append(self._result_from_staged(staged))
                     continue
 
@@ -269,9 +283,14 @@ class WorkflowService:
                     event=event,
                     organization_id=organization_id,
                 )
-                self.s.commit()
+                if commit:
+                    self.s.commit()
+                else:
+                    self.s.flush()
             except Exception as exc:
                 self.s.rollback()
+                if not commit:
+                    raise
                 failed = self.s.get(StagedTransaction, staged_id)
                 if failed is None:
                     raise

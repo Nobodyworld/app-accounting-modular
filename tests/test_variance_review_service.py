@@ -17,6 +17,7 @@ def test_budget_report_is_reused_for_decimal_materiality_and_disposition() -> No
         close = CloseService(session, actors.organization.id, actors.preparer.id)
         period = close.create_period("January 2027", date(2027, 1, 1), date(2027, 1, 31))
         cycle = close.create_cycle(period.id, "January close")
+        cycle = close.start(cycle.id, cycle.version)
         ledger = LedgerService(session, actors.organization.id)
         expense = ledger.create_account("Payroll expense", "EXPENSE", code="6000")
         cash = ledger.create_account("Cash", "ASSET", code="1000")

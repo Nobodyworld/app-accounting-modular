@@ -59,11 +59,11 @@ Access and refresh credentials are not interchangeable. Refresh reuse revokes th
 
 ### Accountant close workspace
 
-Every route below requires a persisted access-token session and `organization_id`. Reads require tenant membership. Operational mutations require ledger-manager or administrator membership. Final close, reopen, cancellation, final checklist approval, and approval revocation require an administrator. Scoped objects from another tenant return a nondisclosing `404` after organization authorization.
+Every route below requires a persisted access-token session and `organization_id`. Reads require tenant membership. Operational mutations require ledger-manager or administrator membership. Final close, reopen, cancellation, restart, return-to-work, and approval revocation require an administrator. The final checklist approval is never manually writable. Scoped objects and assignment users from another tenant return a nondisclosing `404` after organization authorization.
 
 - `POST|GET /close/periods` and `GET /close/periods/{period_id}`
 - `POST|GET /close/periods/{period_id}/cycles` and `GET /close/cycles/{cycle_id}`
-- `POST /close/cycles/{cycle_id}/{start|ready|close|reopen|cancel}`
+- `POST /close/cycles/{cycle_id}/{start|ready|return-to-work|close|reopen|cancel|restart}`
 - `GET /close/cycles/{cycle_id}/readiness`
 - `GET|POST /close/cycles/{cycle_id}/checklist`
 - `PATCH /close/cycles/{cycle_id}/checklist/{task_id}`
@@ -79,7 +79,9 @@ Every route below requires a persisted access-token session and `organization_id
 - `POST /close/cycles/{cycle_id}/evidence`
 - `GET /close/cycles/{cycle_id}/evidence/download`
 
-Reconciliation uses the explicit sign convention `difference = control_balance - ledger_ending_balance`. The ledger balance is server-derived from persisted journal entries through the inclusive period end. Evidence ZIPs contain canonical JSON and LF-terminated spreadsheet-safe CSV with deterministic filenames, row ordering, ZIP timestamps, per-file SHA-256 values, and a returned manifest SHA-256.
+Reconciliation uses the explicit sign convention `difference = control_balance - ledger_ending_balance`. Cycle creation snapshots required `ASSET`, `LIABILITY`, and `EQUITY` account IDs unless an explicit not-applicable policy is stored. Variance readiness requires a durable in-period run when enabled, including a zero-row run. Journal policy is explicit: `REQUESTED_ONLY` or `ALL_PERIOD_TRANSACTIONS`.
+
+Operational writes are allowed only in `IN_PROGRESS`/`BLOCKED`; `READY_FOR_APPROVAL` is frozen except finalization or reasoned return-to-work; `CLOSED` and `CANCELLED` are read-only except administrator reopen/restart. `CloseCycle.content_revision` is atomically incremented for every evidence-relevant mutation. Evidence is current only when its source revision matches. Final close creates current `CLOSED` evidence in the same transaction. ZIPs also contain variance-run proof and immutable journal approval decision history.
 
 ## Request/Response Format
 

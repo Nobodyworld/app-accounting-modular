@@ -1,11 +1,11 @@
 # FastAPI route and authorization inventory
 
-- Tested commit: `bab98ca037c71f1eb50cccea0e6981266dac3bf5`
+- Tested commit: `faa8d508b07823469d93b598766d53b02dc61056`
 - Operating system: `Windows-11-10.0.26200-SP0`
 - Python: `3.14.0`
 - Generator: `scripts/security/inventory_routes.py`
 - Procedure: `python scripts/security/inventory_routes.py --output docs/security/evidence/route-inventory.md`
-- Result: **PASS** — 68 method/path entries mapped; no unmapped application routes
+- Result: **PASS** — 70 method/path entries mapped; no unmapped application routes
 
 ## Authorization totals
 
@@ -15,9 +15,9 @@
 | authenticated only | 4 |
 | tenant member | 16 |
 | tenant manager | 11 |
-| tenant administrator | 5 |
+| tenant administrator | 7 |
 
-The totals include 8 method/path entries across 4 FastAPI documentation/schema paths. The application itself exposes 60 method/path entries. “Tenant manager” means an active member with the route-specific management flag or `is_admin`; the API has no single generic manager role. UI gating is not counted as authorization evidence.
+The totals include 8 method/path entries across 4 FastAPI documentation/schema paths. The application itself exposes 62 method/path entries. “Tenant manager” means an active member with the route-specific management flag or `is_admin`; the API has no single generic manager role. UI gating is not counted as authorization evidence.
 
 ## Complete inventory
 
@@ -43,10 +43,12 @@ The totals include 8 method/path entries across 4 FastAPI documentation/schema p
 | GET | /close/cycles/{cycle_id}/readiness | apps.api.routers.close.get_readiness | tenant member | organization_id, cycle_id | server-derived checklist, workflow, reconciliation, variance, approval, and evidence blockers (read) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_close_readiness.py; tests/test_close_api.py | none identified |
 | POST | /close/cycles/{cycle_id}/ready | apps.api.routers.close.mark_cycle_ready | tenant ledger manager | organization_id, cycle_id, version | server-derived readiness transition and audit state (update) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_close_readiness.py; tests/test_close_api.py | none identified |
 | GET | /close/cycles/{cycle_id}/reconciliations | apps.api.routers.close.list_reconciliations | tenant member | organization_id, cycle_id | tenant account reconciliations and server-derived balances (read) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_reconciliation_service.py; tests/test_close_workspace.py | none identified |
-| POST | /close/cycles/{cycle_id}/reconciliations | apps.api.routers.close.upsert_reconciliation | tenant ledger manager | organization_id, cycle_id, account_id | account reconciliation with server-derived ledger balance (create) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_reconciliation_service.py | none identified |
-| PATCH | /close/cycles/{cycle_id}/reconciliations/{reconciliation_id} | apps.api.routers.close.upsert_reconciliation | tenant ledger manager | organization_id, cycle_id, reconciliation_id, version | account reconciliation preparation and exception evidence (update) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_reconciliation_service.py | none identified |
+| POST | /close/cycles/{cycle_id}/reconciliations | apps.api.routers.close.create_reconciliation | tenant ledger manager | organization_id, cycle_id, account_id | account reconciliation with server-derived ledger balance (create) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_reconciliation_service.py | none identified |
+| PATCH | /close/cycles/{cycle_id}/reconciliations/{reconciliation_id} | apps.api.routers.close.update_reconciliation | tenant ledger manager | organization_id, cycle_id, reconciliation_id, version | account reconciliation preparation and exception evidence (update) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_reconciliation_service.py | none identified |
 | POST | /close/cycles/{cycle_id}/reconciliations/{reconciliation_id}/approve | apps.api.routers.close.approve_reconciliation | tenant ledger manager; independent actor | organization_id, cycle_id, reconciliation_id, version | independent reconciliation approval evidence (update) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_reconciliation_service.py | none identified |
 | POST | /close/cycles/{cycle_id}/reopen | apps.api.routers.close.reopen_cycle | tenant administrator | organization_id, cycle_id, version | explicit period reopen, reason, and evidence staleness (update) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_close_readiness.py; tests/test_close_service.py | none identified |
+| POST | /close/cycles/{cycle_id}/restart | apps.api.routers.close.restart_cycle | tenant administrator | organization_id, cycle_id, version | reasoned cancelled-cycle restart with retained evidence and audit history (update) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_close_service.py; tests/test_close_api.py; tests/test_close_workspace.py | none identified |
+| POST | /close/cycles/{cycle_id}/return-to-work | apps.api.routers.close.return_cycle_to_work | tenant administrator | organization_id, cycle_id, version | reasoned ready-cycle return to operational work and evidence invalidation (update) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_close_service.py; tests/test_close_api.py; tests/test_close_workspace.py | none identified |
 | POST | /close/cycles/{cycle_id}/start | apps.api.routers.close.start_cycle | tenant ledger manager | organization_id, cycle_id, version | close-cycle lifecycle and audit state (update) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_close_api.py; tests/test_close_service.py | none identified |
 | GET | /close/cycles/{cycle_id}/variance-reviews | apps.api.routers.close.list_variances | tenant member | organization_id, cycle_id | tenant variance review rows and dispositions (read) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_variance_review_service.py; tests/test_close_workspace.py | none identified |
 | POST | /close/cycles/{cycle_id}/variance-reviews/from-budget | apps.api.routers.close.materialize_variances | tenant ledger manager | organization_id, cycle_id, budget_id | bounded materialized BudgetService report rows and provenance (create) | apps.api.db.get_session<br>apps.api.security.get_current_user<br>fastapi.security.oauth2.OAuth2PasswordBearer<br>apps.api.dependencies.authenticated_audit_context | tests/test_variance_review_service.py | none identified |

@@ -10,6 +10,8 @@ from apps.web.api_session import (
     store_api_session,
 )
 
+from tests.streamlit_helpers import streamlit_app_path
+
 pytest.importorskip("streamlit", reason="streamlit dependencies not available")
 from streamlit.testing.v1 import AppTest  # type: ignore[import-not-found]
 
@@ -129,7 +131,7 @@ def test_close_workspace_renders_blocked_authenticated_structure(monkeypatch: py
     monkeypatch.setenv("API_BASE", "http://close.test")
     monkeypatch.setenv("STREAMLIT_TESTING", "1")
     st.cache_data.clear()
-    app = AppTest.from_file("apps/web/app.py")
+    app = AppTest.from_file(streamlit_app_path())
     app.run(timeout=20)
     app.text_input(key="api_login_email").set_value("accountant@example.test")
     app.text_input(key="api_login_password").set_value("password")

@@ -219,6 +219,15 @@ def _render_selection() -> int | None:
             )
             owner_id = st.number_input("Owner user ID", min_value=1, step=1)
             due_date = st.date_input("Due date", value=date.today())
+            variance_required = st.checkbox("Require a period-scoped variance review run", value=True)
+            approval_mode = st.selectbox(
+                "Journal approval scope",
+                ["REQUESTED_ONLY", "ALL_PERIOD_TRANSACTIONS"],
+                help=(
+                    "Requested only requires approval for explicit requests; "
+                    "all period transactions covers every journal."
+                ),
+            )
             create_cycle = st.form_submit_button("Create close cycle", type="primary")
         if create_cycle:
             created = _mutate(
@@ -228,7 +237,10 @@ def _render_selection() -> int | None:
                     "name": cycle_name,
                     "owner_user_id": int(owner_id),
                     "due_date": due_date.isoformat(),
-                    "policy": {},
+                    "policy": {
+                        "variance_review_required": variance_required,
+                        "journal_approval_mode": approval_mode,
+                    },
                 },
                 success="Close cycle created with the standard eight-control checklist.",
             )
@@ -269,6 +281,18 @@ def _render_overview(cycle_id: int) -> None:
     st.markdown(f"### {title}")
     controls = st.columns([2, 1, 1])
     controls[0].caption(f"Owner user {cycle.get('owner_user_id', '—')} · Due {cycle.get('due_date') or 'not set'}")
+    policy = cycle.get("policy", {}) if isinstance(cycle.get("policy"), Mapping) else {}
+    required_accounts = policy.get("required_reconciliation_account_ids", [])
+    st.caption(
+        f"Required reconciliation accounts: {len(required_accounts) if isinstance(required_accounts, list) else 0} · "
+        f"Variance review: {'required' if policy.get('variance_review_required', True) else 'not required'} · "
+        f"Journal approval mode: {policy.get('journal_approval_mode', 'REQUESTED_ONLY')}"
+    )
+    if readiness.get("latest_variance_run_id") is not None:
+        st.caption(
+            f"Latest variance run {readiness.get('latest_variance_run_id')} · "
+            f"{readiness.get('latest_variance_run_row_count', 0)} in-period row(s)"
+        )
     if controls[1].button("Refresh readiness", key="close_refresh_readiness"):
         _refresh_cycle_data(cycle_id)
         readiness = st.session_state.get("close_readiness", {})
@@ -340,9 +364,49 @@ def _render_overview(cycle_id: int) -> None:
             )
             if updated:
                 _refresh_cycle_data(cycle_id)
+    elif status_now == "READY_FOR_APPROVAL":
+        with st.form("close_return_to_work_form"):
+            reason = st.text_area("Return-to-work reason", max_chars=1000)
+            return_to_work = st.form_submit_button("Return cycle to work")
+        if return_to_work:
+            updated = _mutate(
+                "POST",
+                f"/close/cycles/{cycle_id}/return-to-work",
+                {"version": version, "reason": reason},
+                success="Cycle returned to work; prior evidence is stale.",
+            )
+            if updated:
+                _refresh_cycle_data(cycle_id)
+    elif status_now == "CANCELLED":
+        st.info("This cancelled cycle is read-only until an administrator restarts it.")
+        with st.form("close_restart_form"):
+            reason = st.text_area("Restart reason", max_chars=1000)
+            restart = st.form_submit_button("Restart cancelled cycle", type="primary")
+        if restart:
+            updated = _mutate(
+                "POST",
+                f"/close/cycles/{cycle_id}/restart",
+                {"version": version, "reason": reason},
+                success="Cancelled cycle restarted with its prior audit history intact.",
+            )
+            if updated:
+                _refresh_cycle_data(cycle_id)
+    if status_now in {"DRAFT", "IN_PROGRESS", "BLOCKED"}:
+        with st.form("close_cancel_form"):
+            reason = st.text_area("Cancellation reason", max_chars=1000)
+            cancel = st.form_submit_button("Cancel close cycle")
+        if cancel:
+            updated = _mutate(
+                "POST",
+                f"/close/cycles/{cycle_id}/cancel",
+                {"version": version, "reason": reason},
+                success="Close cycle cancelled; the accounting period remains open.",
+            )
+            if updated:
+                _refresh_cycle_data(cycle_id)
 
 
-def _render_reconciliations(cycle_id: int) -> None:
+def _render_reconciliations(cycle_id: int, *, mutable: bool) -> None:
     st.markdown("#### Account reconciliations")
     st.caption("Difference = control balance − ledger ending balance. Ledger balance is calculated by the API.")
     rows = _load_json("close_reconciliations", f"/close/cycles/{cycle_id}/reconciliations") or []
@@ -352,15 +416,19 @@ def _render_reconciliations(cycle_id: int) -> None:
         control_balance = columns[1].text_input("Control or statement balance", value="0.00")
         tolerance = columns[0].text_input("Tolerance", value="0.00")
         notes = columns[1].text_area("Notes or exception explanation", max_chars=4096)
-        prepare = st.form_submit_button("Prepare reconciliation", type="primary")
+        prepare = st.form_submit_button("Prepare reconciliation", type="primary", disabled=not mutable)
     if prepare:
         existing = next(
             (row for row in rows if isinstance(row, Mapping) and int(row.get("account_id", 0) or 0) == int(account_id)),
             None,
         )
         prepared = _mutate(
-            "POST",
-            f"/close/cycles/{cycle_id}/reconciliations",
+            "PATCH" if isinstance(existing, Mapping) else "POST",
+            (
+                f"/close/cycles/{cycle_id}/reconciliations/{existing['id']}"
+                if isinstance(existing, Mapping)
+                else f"/close/cycles/{cycle_id}/reconciliations"
+            ),
             {
                 "account_id": int(account_id),
                 "control_balance": control_balance,
@@ -399,7 +467,7 @@ def _render_reconciliations(cycle_id: int) -> None:
                 [int(row["id"]) for row in rows if isinstance(row, Mapping) and row.get("id")],
             )
             selected = next(row for row in rows if int(row["id"]) == approval_id)
-            approve = st.form_submit_button("Approve independently")
+            approve = st.form_submit_button("Approve independently", disabled=not mutable)
         if approve:
             result = _mutate(
                 "POST",
@@ -414,7 +482,7 @@ def _render_reconciliations(cycle_id: int) -> None:
         st.info("No reconciliations have been prepared for this cycle.")
 
 
-def _render_variances(cycle_id: int) -> None:
+def _render_variances(cycle_id: int, *, mutable: bool) -> None:
     st.markdown("#### Budget variance review")
     st.caption("Rows are materialized from the existing BudgetService report; the UI does not recalculate actuals.")
     with st.form("close_variance_generate_form"):
@@ -423,7 +491,7 @@ def _render_variances(cycle_id: int) -> None:
         horizon = columns[1].number_input("Forecast horizon", min_value=1, max_value=365, value=30)
         absolute = columns[0].text_input("Absolute materiality threshold", value="1000.00")
         percentage = columns[1].text_input("Percentage threshold", value="0.10")
-        generate = st.form_submit_button("Generate variance reviews", type="primary")
+        generate = st.form_submit_button("Generate variance reviews", type="primary", disabled=not mutable)
     if generate:
         result = _mutate(
             "POST",
@@ -472,7 +540,7 @@ def _render_variances(cycle_id: int) -> None:
                 "Disposition", ["EXPLAINED", "TIMING", "PERMANENT", "CORRECTION_REQUIRED", "ACCEPTED"]
             )
             note = st.text_area("Reviewer note", max_chars=4096)
-            update = st.form_submit_button("Record disposition")
+            update = st.form_submit_button("Record disposition", disabled=not mutable)
         if update:
             selected = next(row for row in visible if int(row["id"]) == review_id)
             result = _mutate(
@@ -488,7 +556,7 @@ def _render_variances(cycle_id: int) -> None:
         st.info("No variance review rows match the current filter.")
 
 
-def _render_approvals(cycle_id: int) -> None:
+def _render_approvals(cycle_id: int, *, mutable: bool) -> None:
     st.markdown("#### Journal approvals")
     st.caption("Requestors cannot approve their own requests. A second authenticated user must decide them.")
     with st.form("close_approval_request_form"):
@@ -497,7 +565,7 @@ def _render_approvals(cycle_id: int) -> None:
         )
         reference_id = st.number_input("Journal reference ID", min_value=1, step=1)
         reason = st.text_area("Request comment", max_chars=2000)
-        request_approval = st.form_submit_button("Request approval", type="primary")
+        request_approval = st.form_submit_button("Request approval", type="primary", disabled=not mutable)
     if request_approval:
         body = {
             "transaction_id": int(reference_id) if reference_type == "Posted transaction" else None,
@@ -537,7 +605,7 @@ def _render_approvals(cycle_id: int) -> None:
             approval_id = st.selectbox("Approval request", [int(row["id"]) for row in rows])
             decision = st.selectbox("Decision", ["APPROVED", "REJECTED", "REVOKED"])
             comment = st.text_area("Decision comment", max_chars=2000)
-            decide = st.form_submit_button("Record independent decision")
+            decide = st.form_submit_button("Record independent decision", disabled=not mutable)
         if decide:
             selected = next(row for row in rows if int(row["id"]) == approval_id)
             result = _mutate(
@@ -553,7 +621,7 @@ def _render_approvals(cycle_id: int) -> None:
         st.info("No journal approval requests exist for this cycle.")
 
 
-def _render_checklist(cycle_id: int) -> None:
+def _render_checklist(cycle_id: int, *, operational: bool, configurable: bool) -> None:
     st.markdown("#### Close checklist")
     rows = _load_json("close_checklist", f"/close/cycles/{cycle_id}/checklist") or []
     if isinstance(rows, list):
@@ -582,7 +650,7 @@ def _render_checklist(cycle_id: int) -> None:
         owner = columns[1].number_input("Owner user ID", min_value=1, step=1)
         required = columns[0].checkbox("Required task")
         due = columns[1].date_input("Task due date", value=date.today())
-        create = st.form_submit_button("Add custom task")
+        create = st.form_submit_button("Add custom task", disabled=not configurable)
     if create:
         result = _mutate(
             "POST",
@@ -600,13 +668,17 @@ def _render_checklist(cycle_id: int) -> None:
         if result:
             _load_json("close_checklist", f"/close/cycles/{cycle_id}/checklist")
             _refresh_cycle_data(cycle_id)
-    manual = [row for row in rows if row.get("control_type") != "SYSTEM"] if isinstance(rows, list) else []
+    manual = (
+        [row for row in rows if row.get("control_type") != "SYSTEM" and row.get("task_key") != "final_close_approved"]
+        if isinstance(rows, list)
+        else []
+    )
     if manual:
         with st.form("close_task_update_form"):
             task_id = st.selectbox("Manual task", [int(row["id"]) for row in manual])
             complete = st.checkbox("Mark complete")
             notes = st.text_area("Completion note", max_chars=2000)
-            update = st.form_submit_button("Update task")
+            update = st.form_submit_button("Update task", disabled=not operational)
         if update:
             selected = next(row for row in manual if int(row["id"]) == task_id)
             result = _mutate(
@@ -633,17 +705,27 @@ def _render_evidence_and_close(cycle_id: int) -> None:
         "public-hosting approval, or regulatory compliance statement."
     )
     preview = _load_json("close_evidence_preview", f"/close/cycles/{cycle_id}/evidence/preview") or {}
+    cycle = st.session_state.get("close_cycle_payload", {})
+    readiness = st.session_state.get("close_readiness", {})
+    status_value = str(cycle.get("status") or "")
+    version = int(cycle.get("version", 1) or 1)
     columns = st.columns(2)
     columns[0].metric("Evidence freshness", preview.get("freshness", "MISSING"))
-    columns[1].metric("Source version", preview.get("source_version", "—"))
+    columns[1].metric("Source revision", preview.get("source_revision", preview.get("source_version", "—")))
     if preview.get("latest_manifest_sha256"):
         st.code(str(preview["latest_manifest_sha256"]), language=None)
-    if st.button("Generate deterministic evidence", type="primary", key="close_generate_evidence"):
+    evidence_mutable = status_value not in {"CLOSED", "CANCELLED"}
+    if st.button(
+        "Generate draft evidence",
+        type="primary",
+        key="close_generate_evidence",
+        disabled=not evidence_mutable,
+    ):
         result = _mutate(
             "POST",
             f"/close/cycles/{cycle_id}/evidence",
             None,
-            success="Deterministic close evidence generated and audited.",
+            success="Deterministic draft close evidence generated and audited.",
             timeout=60,
         )
         if isinstance(result, Mapping):
@@ -675,10 +757,6 @@ def _render_evidence_and_close(cycle_id: int) -> None:
             )
     else:
         st.caption("Generate current evidence before downloading the ZIP.")
-    cycle = st.session_state.get("close_cycle_payload", {})
-    readiness = st.session_state.get("close_readiness", {})
-    status_value = str(cycle.get("status") or "")
-    version = int(cycle.get("version", 1) or 1)
     if status_value == "READY_FOR_APPROVAL":
         if st.button("Close accounting period", type="primary", key="close_final_action"):
             updated = _mutate(
@@ -761,19 +839,28 @@ def render_close_workspace(*, access_token: str | None, organization_id: int | N
     cycle_id = _render_selection()
     if cycle_id is None:
         return
+    cycle = st.session_state.get("close_cycle_payload", {})
+    cycle_status = str(cycle.get("status") or "") if isinstance(cycle, Mapping) else ""
+    operational = cycle_status in {"IN_PROGRESS", "BLOCKED"}
+    configurable = cycle_status in {"DRAFT", "IN_PROGRESS", "BLOCKED"}
+    if cycle_status in {"READY_FOR_APPROVAL", "CLOSED", "CANCELLED"}:
+        st.info(
+            f"{cycle_status.replace('_', ' ').title()} is read-only for operational records. "
+            "Use the explicit lifecycle action in Overview or Evidence & close."
+        )
     tabs = st.tabs(
         ["Overview", "Reconciliations", "Variance review", "Journal approvals", "Checklist", "Evidence & close"]
     )
     with tabs[0]:
         _render_overview(cycle_id)
     with tabs[1]:
-        _render_reconciliations(cycle_id)
+        _render_reconciliations(cycle_id, mutable=operational)
     with tabs[2]:
-        _render_variances(cycle_id)
+        _render_variances(cycle_id, mutable=operational)
     with tabs[3]:
-        _render_approvals(cycle_id)
+        _render_approvals(cycle_id, mutable=operational)
     with tabs[4]:
-        _render_checklist(cycle_id)
+        _render_checklist(cycle_id, operational=operational, configurable=configurable)
     with tabs[5]:
         _render_evidence_and_close(cycle_id)
 

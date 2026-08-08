@@ -9,7 +9,7 @@ A modular accounting-control toolkit for validating financial snapshots, provide
 
 The project demonstrates how accounting workflows can be broken into auditable modules: period close, account reconciliation, budget variance review, journal approvals, FX rates, commodity pricing, tax rules, ledger controls, provider health, cache diagnostics, and scenario plans. It is intentionally smaller than an ERP and focused on transparent controls, reproducible evidence, and clean integration boundaries.
 
-Version 0.2 adds an authenticated Accountant Close Workspace. A controlled close cycle now coordinates inclusive accounting periods, posting locks, server-derived readiness, independent reconciliation and journal approvals, material variance dispositions, a deterministic eight-control checklist, and a reproducible evidence ZIP. These controls remain an Early Beta demonstration; they are not automatic bank reconciliation, production close certification, or regulatory compliance.
+Version 0.2 adds an authenticated Accountant Close Workspace. A controlled close cycle coordinates inclusive accounting periods, serialized posting gates, required balance-sheet reconciliation scope, period-scoped variance runs, explicit journal-approval modes, one effective checklist, and revision-bound evidence. Final close and a deterministic `CLOSED` evidence record commit atomically. These controls remain an Early Beta demonstration; they are not automatic bank reconciliation, production close certification, or regulatory compliance.
 
 ## Streamlit demonstration interface using controlled sample data
 

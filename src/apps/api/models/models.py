@@ -433,6 +433,7 @@ class CloseCycle(SQLModel, table=True):
     policy: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     notes: str | None = Field(default=None, max_length=4096)
     version: int = Field(default=1, ge=1, le=2_147_483_647)
+    content_revision: int = Field(default=1, ge=1, le=2_147_483_647)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     created_by_id: int | None = Field(default=None, foreign_key="user.id")
@@ -448,6 +449,7 @@ class CloseCycle(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("period_id", name="uq_close_cycle_period"),
         CheckConstraint("version >= 1", name="ck_close_cycle_version"),
+        CheckConstraint("content_revision >= 1", name="ck_close_cycle_content_revision"),
         Index("ix_close_cycle_org_period", "organization_id", "period_id"),
         TABLE_KWARGS,
     )
@@ -551,12 +553,36 @@ class VarianceReview(SQLModel, table=True):
     )
 
 
+class VarianceReviewRun(SQLModel, table=True):
+    """Durable proof that the cycle's period-scoped variance control was executed."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organization.id", index=True)
+    cycle_id: int = Field(foreign_key="closecycle.id")
+    budget_id: int = Field(foreign_key="budget.id")
+    horizon: int = Field(ge=1)
+    absolute_threshold: Decimal = Field(default=Decimal("0"), ge=0, max_digits=20, decimal_places=4)
+    percentage_threshold: Decimal | None = Field(default=None, ge=0, max_digits=20, decimal_places=6)
+    report_parameters: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    report_provenance: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    generated_by_id: int = Field(foreign_key="user.id")
+    row_count: int = Field(default=0, ge=0)
+    content_revision: int = Field(ge=1)
+
+    __table_args__ = (
+        Index("ix_variance_review_run_org_cycle", "organization_id", "cycle_id"),
+        TABLE_KWARGS,
+    )
+
+
 class JournalApproval(SQLModel, table=True):
     """Current approval state for one posted or staged journal reference."""
 
     id: int | None = Field(default=None, primary_key=True)
     organization_id: int = Field(foreign_key="organization.id", index=True)
     cycle_id: int = Field(foreign_key="closecycle.id")
+    reference_key: str = Field(max_length=80)
     transaction_id: int | None = Field(default=None, foreign_key="transaction.id")
     staged_transaction_id: int | None = Field(default=None, foreign_key="stagedtransaction.id")
     requestor_user_id: int = Field(foreign_key="user.id")
@@ -576,6 +602,7 @@ class JournalApproval(SQLModel, table=True):
             name="ck_journal_approval_one_reference",
         ),
         Index("ix_journal_approval_org_cycle", "organization_id", "cycle_id"),
+        UniqueConstraint("cycle_id", "reference_key", name="uq_journal_approval_cycle_reference"),
         TABLE_KWARGS,
     )
 
@@ -604,7 +631,10 @@ class CloseEvidence(SQLModel, table=True):
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     generated_by_id: int = Field(foreign_key="user.id")
     manifest_sha256: str = Field(max_length=64)
+    # Kept as ``source_version`` for API compatibility. It stores the cycle's
+    # authoritative content revision, not its lifecycle compare-and-swap version.
     source_version: int = Field(ge=1)
+    is_final: bool = False
     summary: str | None = Field(default=None, max_length=1000)
 
     __table_args__ = (Index("ix_close_evidence_org_cycle", "organization_id", "cycle_id"), TABLE_KWARGS)

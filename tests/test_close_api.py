@@ -178,6 +178,22 @@ def test_admin_only_transition_and_nondisclosing_object_scope(close_api) -> None
         json={"version": cycle["version"], "reason": "Controlled cancellation"},
     )
     assert cancelled.status_code == 200
+    cancelled_payload = cancelled.json()
+    denied_restart = client.post(
+        f"/close/cycles/{cycle['id']}/restart",
+        params={"organization_id": context["org1"]},
+        headers=_headers(context["manager"]),
+        json={"version": cancelled_payload["version"], "reason": "Manager cannot restart"},
+    )
+    assert denied_restart.status_code == 403
+    restarted = client.post(
+        f"/close/cycles/{cycle['id']}/restart",
+        params={"organization_id": context["org1"]},
+        headers=_headers(context["admin"]),
+        json={"version": cancelled_payload["version"], "reason": "Controlled restart"},
+    )
+    assert restarted.status_code == 200
+    assert restarted.json()["status"] == "IN_PROGRESS"
     missing = client.get(
         "/close/periods/999999",
         params={"organization_id": context["org1"]},
@@ -379,6 +395,23 @@ def test_complete_close_control_surface_and_evidence_download(close_api) -> None
         headers=manager_headers,
         json={"version": readiness["version"]},
     ).json()
+    returned = client.post(
+        f"/close/cycles/{cycle['id']}/return-to-work",
+        params=params,
+        headers=admin_headers,
+        json={"version": cycle["version"], "reason": "One final evidence correction"},
+    )
+    assert returned.status_code == 200
+    returned_readiness = client.get(
+        f"/close/cycles/{cycle['id']}/readiness", params=params, headers=manager_headers
+    ).json()
+    assert returned_readiness["blocker_count"] == 0
+    cycle = client.post(
+        f"/close/cycles/{cycle['id']}/ready",
+        params=params,
+        headers=manager_headers,
+        json={"version": returned_readiness["version"]},
+    ).json()
     preview = client.get(f"/close/cycles/{cycle['id']}/evidence/preview", params=params, headers=manager_headers)
     assert preview.status_code == 200 and preview.json()["freshness"] == "MISSING"
     generated = client.post(f"/close/cycles/{cycle['id']}/evidence", params=params, headers=manager_headers)
@@ -393,6 +426,11 @@ def test_complete_close_control_surface_and_evidence_download(close_api) -> None
         headers=admin_headers,
         json={"version": cycle["version"]},
     ).json()
+    final_preview = client.get(
+        f"/close/cycles/{cycle['id']}/evidence/preview", params=params, headers=manager_headers
+    ).json()
+    assert final_preview["freshness"] == "CURRENT"
+    assert final_preview["source_revision"] == cycle["content_revision"]
     reopened = client.post(
         f"/close/cycles/{cycle['id']}/reopen",
         params=params,

@@ -24,14 +24,14 @@ The command creates one organization, a preparer, an independent reviewer, an ad
 6. In **Variance review**, filter material rows, select the unresolved revenue variance, record a disposition, and add the required reviewer note. The row came from the existing BudgetService report and retains its budget, horizon, plan, revision, currency, and generation provenance.
 7. Review the already approved posted-journal request and its append-only decision history. A requestor cannot approve their own request.
 8. In **Checklist**, complete the provider/report freshness attestation. System-derived tasks cannot be manually overridden.
-9. When readiness has no blockers, mark the cycle **Ready for approval**. Then generate evidence so its source version includes the ready state. Download the deterministic ZIP and retain the displayed manifest SHA-256.
-10. Log out and sign in as `close-admin@example.test`. Close the accounting period. Final close recalculates readiness and atomically closes the cycle and period.
+9. When readiness has no blockers, mark the cycle **Ready for approval**. Ready is operationally frozen. Generate explicitly labeled draft evidence; if a correction is needed, an administrator can return the cycle to work with a reason, which makes that evidence stale.
+10. Log out and sign in as `close-admin@example.test`. Close the accounting period. Final close recalculates readiness and atomically closes the cycle and period while generating current final evidence from the `CLOSED` state. `approved_at` and the final checklist task are set only here.
 11. In **Evidence & close**, use the posting-lock verification form with the printed cash and revenue account IDs and a March 2026 date. The API must return `409` with `ACCOUNTING_PERIOD_CLOSED`, and no journal or audit mutation remains.
-12. Enter a nonempty reason and explicitly reopen the period. Prior evidence becomes stale and ordinary posting is permitted again.
+12. Enter a nonempty reason and explicitly reopen the period. Reopen is rejected if another same-tenant open period overlaps any inclusive boundary. Prior evidence becomes stale and ordinary posting is permitted again. A cancelled cycle remains durable and read-only until an administrator restarts it with a reason.
 
 ## Evidence contents
 
-The ZIP contains `manifest.json`, `close-cycle.json`, `readiness.json`, `trial-balance.csv`, `reconciliations.csv`, `reconciliation-exceptions.csv`, `variance-reviews.csv`, `journal-approvals.csv`, `checklist.csv`, `audit-references.csv`, and `provenance.json`. Files have deterministic ordering, canonical JSON, LF line endings, normalized ZIP timestamps, and spreadsheet-safe text.
+The ZIP contains `manifest.json`, `close-cycle.json`, `readiness.json`, `trial-balance.csv`, `reconciliations.csv`, `reconciliation-exceptions.csv`, `variance-reviews.csv`, `variance-review-runs.csv`, `journal-approvals.csv`, `journal-approval-decisions.csv`, `checklist.csv`, `audit-references.csv`, and `provenance.json`. Audit references are limited to the selected period/cycle and its exact child/reference IDs. Every exported row type counts toward the cap. Files have deterministic ordering, canonical JSON, LF line endings, normalized ZIP timestamps, and spreadsheet-safe text.
 
 ## Reproducible control tests
 

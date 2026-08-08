@@ -18,6 +18,7 @@ def test_approval_is_idempotent_append_only_and_does_not_mutate_journal() -> Non
         close = CloseService(session, actors.organization.id, actors.preparer.id)
         period = close.create_period("October 2026", date(2026, 10, 1), date(2026, 10, 31))
         cycle = close.create_cycle(period.id, "October close")
+        cycle = close.start(cycle.id, cycle.version)
         ledger = LedgerService(session, actors.organization.id)
         cash = ledger.create_account("Cash", "ASSET", code="1000")
         revenue = ledger.create_account("Revenue", "REVENUE", code="4000")

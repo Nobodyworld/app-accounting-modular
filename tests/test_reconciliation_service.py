@@ -54,6 +54,7 @@ def test_exception_becomes_in_progress_only_with_documented_note() -> None:
         close = CloseService(session, actors.organization.id, actors.preparer.id)
         period = close.create_period("September 2026", date(2026, 9, 1), date(2026, 9, 30))
         cycle = close.create_cycle(period.id, "September close")
+        cycle = close.start(cycle.id, cycle.version)
         account = LedgerService(session, actors.organization.id).create_account("Cash", "ASSET", code="1000")
         service = ReconciliationService(session, actors.organization.id, actors.preparer.id)
         exception = service.prepare_reconciliation(
@@ -77,6 +78,7 @@ def test_reconciliation_validation_and_missing_reference_paths() -> None:
         close = CloseService(session, actors.organization.id, actors.preparer.id)
         period = close.create_period("October 2026", date(2026, 10, 1), date(2026, 10, 31))
         cycle = close.create_cycle(period.id, "October close")
+        cycle = close.start(cycle.id, cycle.version)
         account = LedgerService(session, actors.organization.id).create_account("Cash", "ASSET", code="1000")
         service = ReconciliationService(session, actors.organization.id, actors.preparer.id)
 

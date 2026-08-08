@@ -19,7 +19,7 @@ def test_complete_controlled_close_blocks_then_closes_and_reopens() -> None:
         assert actors.organization.id and actors.preparer.id and actors.reviewer.id and actors.administrator.id
         preparer = CloseService(session, actors.organization.id, actors.preparer.id)
         period = preparer.create_period("February 2027", date(2027, 2, 1), date(2027, 2, 28))
-        cycle = preparer.create_cycle(period.id, "February close")
+        cycle = preparer.create_cycle(period.id, "February close", policy={"variance_review_required": False})
         cycle = preparer.start(cycle.id, cycle.version)
         with pytest.raises(CloseConflictError, match="blockers"):
             preparer.mark_ready(cycle.id, cycle.version)
@@ -56,7 +56,10 @@ def test_complete_controlled_close_blocks_then_closes_and_reopens() -> None:
         evidence_service.record_generation(cycle.id, bundle)
         administrator = CloseService(session, actors.organization.id, actors.administrator.id)
         cycle = administrator.close(cycle.id, cycle.version)
-        assert administrator.readiness(cycle.id).state == "CLOSED"
+        closed_readiness = administrator.readiness(cycle.id)
+        assert closed_readiness.state == "CLOSED"
+        assert closed_readiness.evidence_freshness == "CURRENT"
+        assert cycle.approved_at == cycle.closed_at
         with pytest.raises(ClosedPeriodPostingError):
             ledger.post_transaction(date(2027, 2, 14), "Blocked after close", [])
         reopened = administrator.reopen(cycle.id, cycle.version, "Approved post-close adjustment")
