@@ -223,6 +223,81 @@ def test_evidence_post_uses_one_snapshot_for_response_record_and_audit(close_api
     assert stale_download.status_code == 409
 
 
+def test_each_close_control_mutation_invalidates_recorded_download(close_api) -> None:
+    client, context = close_api
+    params = {"organization_id": context["org1"]}
+    headers = _headers(context["manager"])
+    period = client.post(
+        "/close/periods",
+        params=params,
+        headers=headers,
+        json={"label": "Mutation evidence", "start_date": "2027-09-01", "end_date": "2027-09-30"},
+    ).json()
+    cycle = client.post(
+        f"/close/periods/{period['id']}/cycles",
+        params=params,
+        headers=headers,
+        json={"name": "Mutation evidence close"},
+    ).json()
+    cycle = client.post(
+        f"/close/cycles/{cycle['id']}/start",
+        params=params,
+        headers=headers,
+        json={"version": cycle["version"]},
+    ).json()
+    evidence_path = f"/close/cycles/{cycle['id']}/evidence"
+    download_path = f"{evidence_path}/download"
+
+    def assert_current_then_stale(mutation_response) -> None:
+        assert mutation_response.status_code in {200, 201}, mutation_response.text
+        stale = client.get(download_path, params=params, headers=headers)
+        assert stale.status_code == 409
+        assert stale.json()["detail"]["code"] == "CLOSE_EVIDENCE_NOT_CURRENT"
+
+    assert client.post(evidence_path, params=params, headers=headers).status_code == 200
+    assert_current_then_stale(
+        client.post(
+            f"/close/cycles/{cycle['id']}/checklist",
+            params=params,
+            headers=headers,
+            json={"title": "Evidence invalidating checklist task", "required": False},
+        )
+    )
+    assert client.post(evidence_path, params=params, headers=headers).status_code == 200
+    assert_current_then_stale(
+        client.post(
+            f"/close/cycles/{cycle['id']}/reconciliations",
+            params=params,
+            headers=headers,
+            json={"account_id": context["cash"], "control_balance": "200.00", "tolerance": "0.00"},
+        )
+    )
+    assert client.post(evidence_path, params=params, headers=headers).status_code == 200
+    assert_current_then_stale(
+        client.post(
+            f"/close/cycles/{cycle['id']}/variance-reviews/from-budget",
+            params=params,
+            headers=headers,
+            json={
+                "budget_id": context["budget"],
+                "horizon": 30,
+                "absolute_threshold": "0.00",
+                "percentage_threshold": None,
+                "refresh": True,
+            },
+        )
+    )
+    assert client.post(evidence_path, params=params, headers=headers).status_code == 200
+    assert_current_then_stale(
+        client.post(
+            f"/close/cycles/{cycle['id']}/journal-approvals",
+            params=params,
+            headers=headers,
+            json={"transaction_id": context["transaction"], "reason": "Evidence invalidation proof"},
+        )
+    )
+
+
 def test_close_api_authentication_lifecycle_and_readiness(close_api) -> None:
     client, context = close_api
     assert client.get("/close/periods", params={"organization_id": context["org1"]}).status_code == 401
