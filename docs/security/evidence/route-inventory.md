@@ -1,6 +1,6 @@
 # FastAPI route and authorization inventory
 
-- Tested commit: `2e49fec2db31590205c1f587e50ad24ff79d8d43`
+- Tested commit: `96a282e2424f665643585331edb8780b0e910fbd`
 - Operating system: `Windows-11-10.0.26200-SP0`
 - Python: `3.14.0`
 - Generator: `scripts/security/inventory_routes.py`

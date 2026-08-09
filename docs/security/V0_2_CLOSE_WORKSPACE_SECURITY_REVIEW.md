@@ -4,7 +4,7 @@
 
 - Required main baseline: `483e56675a2ce0b40747974edffd95b976af322c`.
 - Required final-review starting head: `8515585dccc943e09641579493e245d8c505ff6e`.
-- Validated implementation, regression, and restored-lock head before this documentation commit: `2e49fec2db31590205c1f587e50ad24ff79d8d43`.
+- Validated implementation, regression, and restored-lock head before this documentation refresh: `96a282e2424f665643585331edb8780b0e910fbd`.
 - This document intentionally does not rewrite the historical post-UX audit as if v0.2 were included in that baseline.
 - Trust-boundary assets are accounting periods and ledger-activity revisions, close cycles and typed policy, checklist tasks, reconciliations, variance runs/current rows, journal approvals/decisions, evidence metadata, `/close` routes, the protected Streamlit workspace, and the critical-module coverage policy.
 
@@ -66,7 +66,7 @@ Literal Microsoft Edge acceptance on the final correction remains the sole manua
 
 ## Release security evidence
 
-- The complete pytest suite passed 638 tests. Release-authoritative line coverage is 87.96% (9,118/10,366); branch evidence is 71.37% (1,827/2,560). All nine configured critical-module line/branch floors passed.
+- The complete pytest suite passed 639 tests. Release-authoritative line coverage is 87.96% (9,118/10,366); branch evidence is 71.37% (1,827/2,560). All nine configured critical-module line/branch floors passed.
 - The accounting-controls subset passed 52 tests. Ruff, format check, mypy, `pip check`, the development dependency audit, and the current-tree secret scan passed.
 - The restored runtime lock verifies at SHA-256 `990aa39c04686870f6907074b32d01eff81f69f84f9281d98aefa91fb72163d9`, but its required audit now reports five GitPython 3.1.57 advisories, all fixed in 3.1.58. The final-review instruction requires the runtime lock to remain byte-for-byte equal to `origin/main`, so the lock was not changed and the aggregate quality gate remains failed solely on this runtime audit command.
 - Gitleaks 8.30.1 scanned all refs with `gitleaks git --redact --no-banner --log-opts="--all"`: 278 commits, approximately 3.77 MB, no leaks.
