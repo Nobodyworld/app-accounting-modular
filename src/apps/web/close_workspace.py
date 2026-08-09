@@ -12,6 +12,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from apps.api.limits import DEFAULT_CLOSE_LIST_PAGE
 from apps.web.api_session import (
     ORGANIZATION_ID_KEY,
     api_error_detail,
@@ -34,6 +35,9 @@ _CYCLE_STATE_KEYS = (
 def _clear_cycle_state() -> None:
     for key in _CYCLE_STATE_KEYS:
         st.session_state.pop(key, None)
+    for key in list(st.session_state):
+        if key.startswith("close_approval_history_"):
+            st.session_state.pop(key, None)
 
 
 def _clear_all_close_state() -> None:
@@ -422,7 +426,8 @@ def _render_overview(cycle_id: int) -> None:
 def _render_reconciliations(cycle_id: int, *, mutable: bool) -> None:
     st.markdown("#### Account reconciliations")
     st.caption("Difference = control balance − ledger ending balance. Ledger balance is calculated by the API.")
-    rows = _load_json("close_reconciliations", f"/close/cycles/{cycle_id}/reconciliations") or []
+    reconciliation_path = f"/close/cycles/{cycle_id}/reconciliations?limit={DEFAULT_CLOSE_LIST_PAGE}&offset=0"
+    rows = _load_json("close_reconciliations", reconciliation_path) or []
     with st.form("close_reconciliation_form"):
         columns = st.columns(2)
         account_id = columns[0].number_input("Account ID", min_value=1, step=1)
@@ -453,7 +458,7 @@ def _render_reconciliations(cycle_id: int, *, mutable: bool) -> None:
             success="Reconciliation prepared with a server-calculated ledger balance.",
         )
         if prepared:
-            rows = _load_json("close_reconciliations", f"/close/cycles/{cycle_id}/reconciliations") or []
+            rows = _load_json("close_reconciliations", reconciliation_path) or []
             _refresh_cycle_data(cycle_id)
     if isinstance(rows, list) and rows:
         display = pd.DataFrame(
@@ -489,7 +494,7 @@ def _render_reconciliations(cycle_id: int, *, mutable: bool) -> None:
                 success="Reconciliation independently approved.",
             )
             if result:
-                _load_json("close_reconciliations", f"/close/cycles/{cycle_id}/reconciliations")
+                _load_json("close_reconciliations", reconciliation_path)
                 _refresh_cycle_data(cycle_id)
     else:
         st.info("No reconciliations have been prepared for this cycle.")
@@ -520,9 +525,10 @@ def _render_variances(cycle_id: int, *, mutable: bool) -> None:
             timeout=60,
         )
         if isinstance(result, list):
-            st.session_state["close_variances"] = result
+            st.session_state.pop("close_variances", None)
             _refresh_cycle_data(cycle_id)
-    rows = _load_json("close_variances", f"/close/cycles/{cycle_id}/variance-reviews") or []
+    variance_path = f"/close/cycles/{cycle_id}/variance-reviews?limit={DEFAULT_CLOSE_LIST_PAGE}&offset=0"
+    rows = _load_json("close_variances", variance_path) or []
     material_only = st.checkbox("Show material variances only", value=True, key="close_material_only")
     visible = (
         [row for row in rows if not material_only or bool(row.get("is_material"))] if isinstance(rows, list) else []
@@ -563,7 +569,7 @@ def _render_variances(cycle_id: int, *, mutable: bool) -> None:
                 success="Variance disposition recorded.",
             )
             if result:
-                _load_json("close_variances", f"/close/cycles/{cycle_id}/variance-reviews")
+                _load_json("close_variances", variance_path)
                 _refresh_cycle_data(cycle_id)
     else:
         st.info("No variance review rows match the current filter.")
@@ -593,7 +599,8 @@ def _render_approvals(cycle_id: int, *, mutable: bool) -> None:
         )
         if result:
             _refresh_cycle_data(cycle_id)
-    rows = _load_json("close_approvals", f"/close/cycles/{cycle_id}/journal-approvals") or []
+    approvals_path = f"/close/cycles/{cycle_id}/journal-approvals?limit={DEFAULT_CLOSE_LIST_PAGE}&offset=0"
+    rows = _load_json("close_approvals", approvals_path) or []
     if isinstance(rows, list) and rows:
         st.dataframe(
             pd.DataFrame(
@@ -605,7 +612,6 @@ def _render_approvals(cycle_id: int, *, mutable: bool) -> None:
                         "Requestor": row.get("requestor_user_id"),
                         "Status": row.get("status"),
                         "Decided by": row.get("decided_by_id"),
-                        "History": len(row.get("history", [])),
                     }
                     for row in rows
                     if isinstance(row, Mapping)
@@ -619,6 +625,35 @@ def _render_approvals(cycle_id: int, *, mutable: bool) -> None:
             decision = st.selectbox("Decision", ["APPROVED", "REJECTED", "REVOKED"])
             comment = st.text_area("Decision comment", max_chars=2000)
             decide = st.form_submit_button("Record independent decision", disabled=not mutable)
+        history = (
+            _load_json(
+                f"close_approval_history_{approval_id}",
+                (
+                    f"/close/cycles/{cycle_id}/journal-approvals/{approval_id}/history"
+                    f"?limit={DEFAULT_CLOSE_LIST_PAGE}&offset=0"
+                ),
+            )
+            or []
+        )
+        if isinstance(history, list) and history:
+            st.caption(f"Showing up to {DEFAULT_CLOSE_LIST_PAGE} immutable decisions for the selected approval.")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "From": item.get("from_status"),
+                            "To": item.get("to_status"),
+                            "Decided by": item.get("decided_by_id"),
+                            "Decided at": item.get("decided_at"),
+                            "Reason": item.get("reason"),
+                        }
+                        for item in history
+                        if isinstance(item, Mapping)
+                    ]
+                ),
+                width="stretch",
+                hide_index=True,
+            )
         if decide:
             selected = next(row for row in rows if int(row["id"]) == approval_id)
             result = _mutate(
@@ -628,7 +663,8 @@ def _render_approvals(cycle_id: int, *, mutable: bool) -> None:
                 success="Journal approval decision recorded.",
             )
             if result:
-                _load_json("close_approvals", f"/close/cycles/{cycle_id}/journal-approvals")
+                _load_json("close_approvals", approvals_path)
+                st.session_state.pop(f"close_approval_history_{approval_id}", None)
                 _refresh_cycle_data(cycle_id)
     else:
         st.info("No journal approval requests exist for this cycle.")

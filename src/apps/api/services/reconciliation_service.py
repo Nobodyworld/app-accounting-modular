@@ -10,7 +10,12 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from ..limits import MAX_RECONCILIATIONS_PER_CYCLE, MAX_VARIANCE_REVIEW_ROWS
+from ..limits import (
+    DEFAULT_CLOSE_LIST_PAGE,
+    MAX_JOURNAL_APPROVALS_PER_CYCLE,
+    MAX_RECONCILIATIONS_PER_CYCLE,
+    MAX_VARIANCE_REVIEW_ROWS,
+)
 from ..metadata_limits import validate_metadata
 from ..models.models import (
     Account,
@@ -354,7 +359,13 @@ class ReconciliationService:
         self.s.refresh(reconciliation)
         return reconciliation
 
-    def list_reconciliations(self, cycle_id: int) -> list[AccountReconciliation]:
+    def list_reconciliations(
+        self,
+        cycle_id: int,
+        *,
+        limit: int = DEFAULT_CLOSE_LIST_PAGE,
+        offset: int = 0,
+    ) -> list[AccountReconciliation]:
         self.close.require_cycle(cycle_id)
         return list(
             self.s.exec(
@@ -363,7 +374,9 @@ class ReconciliationService:
                     AccountReconciliation.organization_id == self.organization_id,
                     AccountReconciliation.cycle_id == cycle_id,
                 )
-                .order_by(cast(Any, AccountReconciliation.account_id))
+                .order_by(cast(Any, AccountReconciliation.account_id), cast(Any, AccountReconciliation.id))
+                .offset(offset)
+                .limit(limit)
             )
         )
 
@@ -470,9 +483,15 @@ class ReconciliationService:
         self.s.commit()
         for review in created:
             self.s.refresh(review)
-        return self.list_variances(cycle_id)
+        return self.list_variances(cycle_id, limit=MAX_VARIANCE_REVIEW_ROWS)
 
-    def list_variances(self, cycle_id: int) -> list[VarianceReview]:
+    def list_variances(
+        self,
+        cycle_id: int,
+        *,
+        limit: int = DEFAULT_CLOSE_LIST_PAGE,
+        offset: int = 0,
+    ) -> list[VarianceReview]:
         self.close.require_cycle(cycle_id)
         latest_run = self.s.exec(
             select(VarianceReviewRun)
@@ -492,7 +511,13 @@ class ReconciliationService:
                     VarianceReview.cycle_id == cycle_id,
                     VarianceReview.run_id == latest_run.id,
                 )
-                .order_by(cast(Any, VarianceReview.period_start), cast(Any, VarianceReview.account_id))
+                .order_by(
+                    cast(Any, VarianceReview.period_start),
+                    cast(Any, VarianceReview.account_id),
+                    cast(Any, VarianceReview.id),
+                )
+                .offset(offset)
+                .limit(limit)
             )
         )
 
@@ -683,6 +708,18 @@ class ReconciliationService:
             self.s.commit()
             self.s.refresh(existing)
             return existing
+        approval_ids = list(
+            self.s.exec(
+                select(JournalApproval.id)
+                .where(
+                    JournalApproval.organization_id == self.organization_id,
+                    JournalApproval.cycle_id == cycle_id,
+                )
+                .limit(MAX_JOURNAL_APPROVALS_PER_CYCLE)
+            )
+        )
+        if len(approval_ids) >= MAX_JOURNAL_APPROVALS_PER_CYCLE:
+            raise CloseValidationError("Maximum journal approvals per close cycle reached")
         approval = JournalApproval(
             organization_id=self.organization_id,
             cycle_id=cycle_id,
@@ -801,17 +838,41 @@ class ReconciliationService:
         self.s.refresh(approval)
         return approval
 
-    def list_approvals(self, cycle_id: int) -> list[JournalApproval]:
+    def list_approvals(
+        self,
+        cycle_id: int,
+        *,
+        limit: int = DEFAULT_CLOSE_LIST_PAGE,
+        offset: int = 0,
+    ) -> list[JournalApproval]:
         self.close.require_cycle(cycle_id)
         return list(
             self.s.exec(
                 select(JournalApproval)
                 .where(JournalApproval.organization_id == self.organization_id, JournalApproval.cycle_id == cycle_id)
                 .order_by(cast(Any, JournalApproval.id))
+                .offset(offset)
+                .limit(limit)
             )
         )
 
-    def approval_history(self, approval_id: int) -> list[JournalApprovalDecision]:
+    def approval_history(
+        self,
+        approval_id: int,
+        *,
+        cycle_id: int | None = None,
+        limit: int = DEFAULT_CLOSE_LIST_PAGE,
+        offset: int = 0,
+    ) -> list[JournalApprovalDecision]:
+        approval_conditions = [
+            JournalApproval.organization_id == self.organization_id,
+            JournalApproval.id == approval_id,
+        ]
+        if cycle_id is not None:
+            approval_conditions.append(JournalApproval.cycle_id == cycle_id)
+        approval = self.s.exec(select(JournalApproval.id).where(*approval_conditions)).first()
+        if approval is None:
+            raise CloseNotFoundError("Journal approval not found")
         return list(
             self.s.exec(
                 select(JournalApprovalDecision)
@@ -820,6 +881,8 @@ class ReconciliationService:
                     JournalApprovalDecision.approval_id == approval_id,
                 )
                 .order_by(cast(Any, JournalApprovalDecision.id))
+                .offset(offset)
+                .limit(limit)
             )
         )
 

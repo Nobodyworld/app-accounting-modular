@@ -367,7 +367,6 @@ class JournalApprovalRead(OrmSchema):
     decided_at: datetime | None
     reason: str | None
     version: int
-    history: list[JournalDecisionRead] = Field(default_factory=list)
 
 
 class EvidenceFileRead(BaseModel):

@@ -32,7 +32,7 @@ from ..close_schemas import (
     VersionRequest,
 )
 from ..db import get_session
-from ..limits import MAX_CLOSE_LIST_PAGE
+from ..limits import DEFAULT_CLOSE_LIST_PAGE, MAX_CLOSE_LIST_PAGE
 from ..models.models import Membership, User
 from ..security import get_current_organization, get_current_user
 from ..services.close_evidence_service import CloseEvidenceService
@@ -382,12 +382,17 @@ def update_checklist_task(
 def list_reconciliations(
     cycle_id: int,
     organization_id: int = Query(ge=1),
+    limit: int = Query(default=DEFAULT_CLOSE_LIST_PAGE, ge=1, le=MAX_CLOSE_LIST_PAGE),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[ReconciliationRead]:
     service, _ = _reconciliation_service(organization_id, session, current_user)
     try:
-        return [ReconciliationRead.model_validate(item) for item in service.list_reconciliations(cycle_id)]
+        return [
+            ReconciliationRead.model_validate(item)
+            for item in service.list_reconciliations(cycle_id, limit=limit, offset=offset)
+        ]
     except CloseDomainError as exc:
         _raise_domain(exc)
 
@@ -469,12 +474,16 @@ def materialize_variances(
 def list_variances(
     cycle_id: int,
     organization_id: int = Query(ge=1),
+    limit: int = Query(default=DEFAULT_CLOSE_LIST_PAGE, ge=1, le=MAX_CLOSE_LIST_PAGE),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[VarianceRead]:
     service, _ = _reconciliation_service(organization_id, session, current_user)
     try:
-        return [VarianceRead.model_validate(item) for item in service.list_variances(cycle_id)]
+        return [
+            VarianceRead.model_validate(item) for item in service.list_variances(cycle_id, limit=limit, offset=offset)
+        ]
     except CloseDomainError as exc:
         _raise_domain(exc)
 
@@ -495,15 +504,6 @@ def update_variance(
         _raise_domain(exc)
 
 
-def _approval_response(service: ReconciliationService, item: object) -> JournalApprovalRead:
-    payload = JournalApprovalRead.model_validate(item).model_dump()
-    approval_id = int(payload["id"])
-    payload["history"] = [
-        JournalDecisionRead.model_validate(decision).model_dump() for decision in service.approval_history(approval_id)
-    ]
-    return JournalApprovalRead.model_validate(payload)
-
-
 @router.post("/cycles/{cycle_id}/journal-approvals", response_model=JournalApprovalRead, status_code=201)
 def request_journal_approval(
     cycle_id: int,
@@ -514,7 +514,7 @@ def request_journal_approval(
 ) -> JournalApprovalRead:
     service, _ = _reconciliation_service(organization_id, session, current_user, manager=True)
     try:
-        return _approval_response(service, service.request_approval(cycle_id, **payload.model_dump()))
+        return JournalApprovalRead.model_validate(service.request_approval(cycle_id, **payload.model_dump()))
     except CloseDomainError as exc:
         _raise_domain(exc)
 
@@ -523,12 +523,45 @@ def request_journal_approval(
 def list_journal_approvals(
     cycle_id: int,
     organization_id: int = Query(ge=1),
+    limit: int = Query(default=DEFAULT_CLOSE_LIST_PAGE, ge=1, le=MAX_CLOSE_LIST_PAGE),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[JournalApprovalRead]:
     service, _ = _reconciliation_service(organization_id, session, current_user)
     try:
-        return [_approval_response(service, item) for item in service.list_approvals(cycle_id)]
+        return [
+            JournalApprovalRead.model_validate(item)
+            for item in service.list_approvals(cycle_id, limit=limit, offset=offset)
+        ]
+    except CloseDomainError as exc:
+        _raise_domain(exc)
+
+
+@router.get(
+    "/cycles/{cycle_id}/journal-approvals/{approval_id}/history",
+    response_model=list[JournalDecisionRead],
+)
+def list_journal_approval_history(
+    cycle_id: int,
+    approval_id: int,
+    organization_id: int = Query(ge=1),
+    limit: int = Query(default=DEFAULT_CLOSE_LIST_PAGE, ge=1, le=MAX_CLOSE_LIST_PAGE),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[JournalDecisionRead]:
+    service, _ = _reconciliation_service(organization_id, session, current_user)
+    try:
+        return [
+            JournalDecisionRead.model_validate(item)
+            for item in service.approval_history(
+                approval_id,
+                cycle_id=cycle_id,
+                limit=limit,
+                offset=offset,
+            )
+        ]
     except CloseDomainError as exc:
         _raise_domain(exc)
 
@@ -545,7 +578,7 @@ def decide_journal_approval(
     service, membership = _reconciliation_service(organization_id, session, current_user, manager=True)
     try:
         item = service.decide_approval(cycle_id, approval_id, is_admin=membership.is_admin, **payload.model_dump())
-        return _approval_response(service, item)
+        return JournalApprovalRead.model_validate(item)
     except CloseDomainError as exc:
         _raise_domain(exc)
 
@@ -576,7 +609,6 @@ def generate_evidence(
     try:
         bundle = service.build_bundle(cycle_id)
         service.record_generation(cycle_id, bundle)
-        bundle = service.build_bundle(cycle_id)
         return EvidenceGenerateResponse.from_bundle(cycle_id, bundle)
     except CloseDomainError as exc:
         _raise_domain(exc)
@@ -591,7 +623,7 @@ def download_evidence(
 ) -> Response:
     org_id, actor_id, _ = _context(organization_id, session, current_user, manager=True)
     try:
-        bundle = CloseEvidenceService(session, org_id, actor_id).build_bundle(cycle_id)
+        bundle = CloseEvidenceService(session, org_id, actor_id).require_current_recorded_bundle(cycle_id)
     except CloseDomainError as exc:
         _raise_domain(exc)
     return Response(

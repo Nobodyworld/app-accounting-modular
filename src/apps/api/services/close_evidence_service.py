@@ -33,7 +33,13 @@ from ..models.models import (
     VarianceReviewRun,
 )
 from ..utils.csv_safety import safe_csv_text
-from .close_service import CloseConflictError, CloseService, CloseValidationError, safe_close_policy
+from .close_service import (
+    CloseConflictError,
+    CloseEvidenceNotCurrentError,
+    CloseService,
+    CloseValidationError,
+    safe_close_policy,
+)
 from .ledger_service import LedgerService, TrialBalanceRow
 
 
@@ -121,6 +127,9 @@ class CloseEvidenceService:
         evidence_blockers = tuple(
             blocker for blocker in readiness.blockers if blocker.code != "CLOSE_EVIDENCE_NOT_CURRENT"
         )
+        evidence_warnings = tuple(
+            warning for warning in readiness.warnings if warning.code != "CLOSE_EVIDENCE_NOT_CURRENT"
+        )
         normalized_completed = readiness.completed_required_count
         if readiness.evidence_freshness != "CURRENT":
             normalized_completed = min(readiness.required_task_count, normalized_completed + 1)
@@ -129,6 +138,16 @@ class CloseEvidenceService:
             if readiness.required_task_count
             else Decimal("1")
         )
+        if cycle.status == CloseCycleStatus.CLOSED:
+            normalized_state = "CLOSED"
+        elif cycle.status == CloseCycleStatus.DRAFT:
+            normalized_state = "NOT_STARTED"
+        elif evidence_blockers:
+            normalized_state = "BLOCKED"
+        elif cycle.status == CloseCycleStatus.READY_FOR_APPROVAL:
+            normalized_state = "READY_FOR_APPROVAL"
+        else:
+            normalized_state = "IN_PROGRESS"
         trial_balance = LedgerService(self.s, self.organization_id).trial_balance(end_date=period.end_date)
         trial_rows = cast(list[TrialBalanceRow], trial_balance["rows"])
         used = len(trial_rows)
@@ -229,11 +248,26 @@ class CloseEvidenceService:
             if audit_predicates
             else []
         )
+        used += len(audit_entries)
 
-        account_names = {
-            account.id: {"code": account.code, "name": account.name}
-            for account in self.s.exec(select(Account).where(Account.organization_id == self.organization_id))
-        }
+        referenced_account_ids = sorted({item.account_id for item in reconciliations})
+        referenced_accounts = (
+            self._bounded(
+                select(Account)
+                .where(
+                    Account.organization_id == self.organization_id,
+                    cast(Any, Account.id).in_(referenced_account_ids),
+                )
+                .order_by(cast(Any, Account.id)),
+                used,
+            )
+            if referenced_account_ids
+            else []
+        )
+        used += len(referenced_accounts)
+        if used > MAX_EVIDENCE_ROWS:  # Defensive: every evidence source collection shares one row budget.
+            raise CloseValidationError("Close evidence exceeds the maximum row count")
+        account_names = {account.id: {"code": account.code, "name": account.name} for account in referenced_accounts}
         files: dict[str, bytes] = {
             "close-cycle.json": _canonical_json(
                 {
@@ -267,10 +301,13 @@ class CloseEvidenceService:
             "readiness.json": _canonical_json(
                 {
                     **asdict(readiness),
+                    "state": normalized_state,
                     "completed_required_count": normalized_completed,
                     "completion_ratio": str(normalized_ratio),
                     "blocker_count": len(evidence_blockers),
+                    "warning_count": len(evidence_warnings),
                     "blockers": [asdict(blocker) for blocker in evidence_blockers],
+                    "warnings": [asdict(warning) for warning in evidence_warnings],
                     "evidence_freshness": "CURRENT",
                     "effective_task_statuses": {
                         **readiness.effective_task_statuses,
@@ -648,6 +685,60 @@ class CloseEvidenceService:
         else:
             self.s.flush()
         return record
+
+    def require_current_recorded_bundle(self, cycle_id: int) -> EvidenceBundle:
+        """Return only evidence matching the latest durable tenant snapshot."""
+
+        cycle = self.close.require_cycle(cycle_id)
+        period = self.close.require_period(cycle.period_id)
+        record = self.s.exec(
+            select(CloseEvidence)
+            .where(
+                CloseEvidence.organization_id == self.organization_id,
+                CloseEvidence.cycle_id == cycle_id,
+            )
+            .order_by(cast(Any, CloseEvidence.id).desc())
+        ).first()
+        expected_final = cycle.status == CloseCycleStatus.CLOSED
+        if (
+            record is None
+            or record.source_version != cycle.content_revision
+            or record.source_ledger_activity_revision != period.ledger_activity_revision
+            or record.is_final != expected_final
+        ):
+            raise CloseEvidenceNotCurrentError("Current recorded close evidence is required for download")
+
+        bundle = self.build_bundle(cycle_id)
+        record_id = record.id
+        self.s.expire_all()
+        current_cycle = self.close.require_cycle(cycle_id)
+        current_period = self.close.require_period(current_cycle.period_id)
+        current_record = self.s.exec(
+            select(CloseEvidence)
+            .where(
+                CloseEvidence.organization_id == self.organization_id,
+                CloseEvidence.cycle_id == cycle_id,
+            )
+            .order_by(cast(Any, CloseEvidence.id).desc())
+        ).first()
+        if current_record is None:
+            raise CloseEvidenceNotCurrentError("Current recorded close evidence is required for download")
+        mismatches = {
+            "latest_record": current_record.id != record_id,
+            "cycle_revision": current_record.source_version != current_cycle.content_revision,
+            "ledger_revision": current_record.source_ledger_activity_revision
+            != current_period.ledger_activity_revision,
+            "classification": current_record.is_final != (current_cycle.status == CloseCycleStatus.CLOSED),
+            "bundle_cycle_revision": bundle.source_version != current_record.source_version,
+            "bundle_ledger_revision": (
+                bundle.source_ledger_activity_revision != current_record.source_ledger_activity_revision
+            ),
+            "bundle_classification": (bundle.source_status == CloseCycleStatus.CLOSED) != current_record.is_final,
+            "manifest": bundle.manifest_sha256 != current_record.manifest_sha256,
+        }
+        if any(mismatches.values()):
+            raise CloseEvidenceNotCurrentError("Current recorded close evidence is required for download")
+        return bundle
 
     def preview(self, cycle_id: int) -> dict[str, Any]:
         cycle = self.close.require_cycle(cycle_id)

@@ -57,6 +57,10 @@ class CloseConflictError(CloseDomainError):
     code = "CLOSE_CONFLICT"
 
 
+class CloseEvidenceNotCurrentError(CloseConflictError):
+    code = "CLOSE_EVIDENCE_NOT_CURRENT"
+
+
 class CloseValidationError(CloseDomainError):
     code = "CLOSE_VALIDATION"
 
@@ -1287,6 +1291,7 @@ class CloseService:
 
 __all__ = [
     "CloseConflictError",
+    "CloseEvidenceNotCurrentError",
     "CloseDomainError",
     "CloseNotFoundError",
     "CloseReadiness",
