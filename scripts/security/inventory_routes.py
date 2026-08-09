@@ -407,8 +407,8 @@ POLICIES.update(
         ),
         "GET /close/cycles/{cycle_id}/reconciliations": Policy(
             "tenant member",
-            "organization_id, cycle_id",
-            "tenant account reconciliations and server-derived balances (read)",
+            "organization_id, cycle_id, limit, offset",
+            "bounded page of tenant account reconciliations and server-derived balances (read)",
             "tests/test_reconciliation_service.py; tests/test_close_workspace.py",
             "none identified",
         ),
@@ -442,8 +442,8 @@ POLICIES.update(
         ),
         "GET /close/cycles/{cycle_id}/variance-reviews": Policy(
             "tenant member",
-            "organization_id, cycle_id",
-            "tenant variance review rows and dispositions (read)",
+            "organization_id, cycle_id, limit, offset",
+            "bounded page of current tenant variance review rows and dispositions (read)",
             "tests/test_variance_review_service.py; tests/test_close_workspace.py",
             "none identified",
         ),
@@ -463,9 +463,16 @@ POLICIES.update(
         ),
         "GET /close/cycles/{cycle_id}/journal-approvals": Policy(
             "tenant member",
-            "organization_id, cycle_id",
-            "tenant journal approval state and immutable decision history (read)",
+            "organization_id, cycle_id, limit, offset",
+            "bounded page of current tenant journal approval summaries (read)",
             "tests/test_journal_approval_service.py; tests/test_close_workspace.py",
+            "none identified",
+        ),
+        "GET /close/cycles/{cycle_id}/journal-approvals/{approval_id}/history": Policy(
+            "tenant member",
+            "organization_id, cycle_id, approval_id, limit, offset",
+            "bounded page of tenant-scoped immutable journal approval decisions (read)",
+            "tests/test_close_api.py; tests/test_journal_approval_service.py; tests/test_close_workspace.py",
             "none identified",
         ),
         "POST /close/cycles/{cycle_id}/journal-approvals/{approval_id}/decide": Policy(
@@ -493,7 +500,7 @@ POLICIES.update(
         "GET /close/cycles/{cycle_id}/evidence/download": Policy(
             "tenant ledger manager",
             "organization_id, cycle_id",
-            "bounded deterministic ZIP assembled in memory (read)",
+            "bounded deterministic ZIP matching the latest current persisted and audited evidence record (read)",
             "tests/test_close_evidence.py; tests/test_close_workspace.py",
             "none identified",
         ),

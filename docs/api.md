@@ -71,9 +71,10 @@ Every route below requires a persisted access-token session and `organization_id
 - `PATCH /close/cycles/{cycle_id}/reconciliations/{reconciliation_id}`
 - `POST /close/cycles/{cycle_id}/reconciliations/{reconciliation_id}/approve`
 - `POST /close/cycles/{cycle_id}/variance-reviews/from-budget`
-- `GET /close/cycles/{cycle_id}/variance-reviews`
+- `GET /close/cycles/{cycle_id}/variance-reviews?limit=&offset=`
 - `PATCH /close/cycles/{cycle_id}/variance-reviews/{review_id}`
-- `GET|POST /close/cycles/{cycle_id}/journal-approvals`
+- `GET /close/cycles/{cycle_id}/journal-approvals?limit=&offset=` and `POST /close/cycles/{cycle_id}/journal-approvals`
+- `GET /close/cycles/{cycle_id}/journal-approvals/{approval_id}/history?limit=&offset=`
 - `POST /close/cycles/{cycle_id}/journal-approvals/{approval_id}/decide`
 - `GET /close/cycles/{cycle_id}/evidence/preview`
 - `POST /close/cycles/{cycle_id}/evidence`
@@ -81,7 +82,9 @@ Every route below requires a persisted access-token session and `organization_id
 
 Reconciliation uses the explicit sign convention `difference = control_balance - ledger_ending_balance`. Cycle creation by a ledger manager uses server defaults. An administrator may supply only the typed policy fields for reconciliation scope/not-applicable status, variance requirement, and journal mode, and every override requires a bounded reason; unknown and inconsistent fields are rejected. Variance readiness requires the latest durable in-period run when enabled, including a zero-row run. Each rerun owns fresh rows, and only its current rows can be updated or affect readiness. Journal policy is explicit: `REQUESTED_ONLY` or `ALL_PERIOD_TRANSACTIONS`.
 
-Operational writes are allowed only in `IN_PROGRESS`/`BLOCKED`; `READY_FOR_APPROVAL` freezes direct and workflow posting as well as close controls until an administrator records a reasoned return-to-work. `CLOSED` and `CANCELLED` are read-only except administrator reopen/restart. Every successful in-period post atomically advances `AccountingPeriod.ledger_activity_revision`. Approved reconciliations, the latest variance run, and evidence must match that revision. `CloseCycle.content_revision` independently tracks close-control mutations. Draft evidence conditionally verifies cycle status, close revision, and ledger revision at persistence time. Final close creates current `CLOSED` evidence in the same transaction. ZIPs contain only the latest variance run's current rows, durable run proof, immutable approval decisions, and a typed safe policy.
+Reconciliation, variance, approval-summary, and decision-history reads use `limit`/`offset`, default to 100 records, and reject limits above 500. Approval summaries do not embed decision history. A separate tenant- and cycle-scoped history route returns the immutable decisions. A cycle may retain at most 500 approval records; an idempotent request for a current reference remains valid at the cap, while a new reference is rejected without partial state.
+
+Operational writes are allowed only in `IN_PROGRESS`/`BLOCKED`; `READY_FOR_APPROVAL` freezes direct and workflow posting as well as close controls until an administrator records a reasoned return-to-work. `CLOSED` and `CANCELLED` are read-only except administrator reopen/restart. Every successful in-period post atomically advances `AccountingPeriod.ledger_activity_revision`. Approved reconciliations, the latest variance run, and evidence must match that revision. `CloseCycle.content_revision` independently tracks close-control mutations. Draft evidence conditionally verifies cycle status, close revision, and ledger revision at persistence time. `POST .../evidence` builds once and uses that one bundle for its response, durable `CloseEvidence` metadata, and generation audit. `GET .../evidence/download` returns `409 CLOSE_EVIDENCE_NOT_CURRENT` unless the latest tenant record matches the current cycle revision, ledger revision, draft/final classification, and recomputed manifest; it never records or silently regenerates evidence. Final close creates current `CLOSED` evidence in the same transaction. ZIPs contain only the latest variance run's current rows, durable run proof, immutable approval decisions, and a typed safe policy.
 
 ## Request/Response Format
 
