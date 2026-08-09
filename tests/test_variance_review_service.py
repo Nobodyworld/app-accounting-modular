@@ -135,3 +135,49 @@ def test_variance_review_row_limit_is_enforced(monkeypatch: pytest.MonkeyPatch) 
                 absolute_threshold=Decimal("0"),
                 percentage_threshold=None,
             )
+
+
+def test_variance_pages_have_stable_order_without_gaps() -> None:
+    with close_session() as (session, actors):
+        assert actors.organization.id and actors.preparer.id
+        close = CloseService(session, actors.organization.id, actors.preparer.id)
+        period = close.create_period("March 2027", date(2027, 3, 1), date(2027, 3, 31))
+        cycle = close.create_cycle(period.id, "March close")
+        close.start(cycle.id, cycle.version)
+        ledger = LedgerService(session, actors.organization.id)
+        accounts = [ledger.create_account(f"Expense {index}", "EXPENSE", code=f"6{index:03d}") for index in range(4)]
+        budget = Budget(
+            organization_id=actors.organization.id,
+            name="March budget",
+            start_date=date(2027, 3, 1),
+            end_date=date(2027, 3, 31),
+        )
+        session.add(budget)
+        session.commit()
+        session.refresh(budget)
+        session.add_all(
+            [
+                BudgetLine(
+                    budget_id=budget.id,
+                    account_id=account.id,
+                    period_start=date(2027, 3, 1),
+                    amount=Decimal(index),
+                )
+                for index, account in enumerate(reversed(accounts), start=1)
+            ]
+        )
+        session.commit()
+        service = ReconciliationService(session, actors.organization.id, actors.preparer.id)
+        service.materialize_variances(
+            cycle.id,
+            budget_id=budget.id,
+            horizon=30,
+            absolute_threshold=Decimal("0"),
+            percentage_threshold=None,
+        )
+
+        first = service.list_variances(cycle.id, limit=2, offset=0)
+        second = service.list_variances(cycle.id, limit=2, offset=2)
+        combined = first + second
+        assert [item.account_id for item in combined] == sorted(account.id for account in accounts)
+        assert len({item.id for item in combined}) == len(accounts)

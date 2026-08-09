@@ -7,14 +7,16 @@ from typing import Any
 import pytest
 from apps.api import db
 from apps.api.db import get_session
+from apps.api.limits import DEFAULT_CLOSE_LIST_PAGE, MAX_CLOSE_LIST_PAGE
 from apps.api.main import create_app
-from apps.api.models.models import Budget, BudgetLine, Membership, Organization, User
+from apps.api.models.models import AuditLog, Budget, BudgetLine, CloseEvidence, Membership, Organization, User
 from apps.api.security import get_password_hash
 from apps.api.services.auth_session_service import AuthSessionService
+from apps.api.services.close_evidence_service import CloseEvidenceService
 from apps.api.services.ledger_service import LedgerService
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 
 @pytest.fixture()
@@ -38,14 +40,17 @@ def close_api() -> Iterator[tuple[TestClient, dict[str, Any]]]:
         session.refresh(org2)
         admin = User(email="close-admin@example.test", password_hash=get_password_hash("secret"))
         manager = User(email="close-manager@example.test", password_hash=get_password_hash("secret"))
-        session.add_all([admin, manager])
+        other = User(email="close-other@example.test", password_hash=get_password_hash("secret"))
+        session.add_all([admin, manager, other])
         session.commit()
         session.refresh(admin)
         session.refresh(manager)
+        session.refresh(other)
         session.add_all(
             [
                 Membership(user_id=admin.id, organization_id=org1.id, is_admin=True, can_manage_ledger=True),
                 Membership(user_id=manager.id, organization_id=org1.id, can_manage_ledger=True),
+                Membership(user_id=other.id, organization_id=org2.id, can_manage_ledger=True),
             ]
         )
         session.commit()
@@ -80,11 +85,15 @@ def close_api() -> Iterator[tuple[TestClient, dict[str, Any]]]:
         session.commit()
         admin_pair = AuthSessionService(session).create_session(admin)
         manager_pair = AuthSessionService(session).create_session(manager)
+        other_pair = AuthSessionService(session).create_session(other)
         context = {
             "org1": org1.id,
             "org2": org2.id,
             "admin": admin_pair.access_token,
             "manager": manager_pair.access_token,
+            "other": other_pair.access_token,
+            "admin_id": admin.id,
+            "manager_id": manager.id,
             "cash": cash.id,
             "revenue": revenue.id,
             "transaction": transaction.id,
@@ -100,6 +109,118 @@ def close_api() -> Iterator[tuple[TestClient, dict[str, Any]]]:
 
 def _headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+def _create_draft_cycle(client: TestClient, context: dict[str, Any], label: str) -> dict[str, Any]:
+    params = {"organization_id": context["org1"]}
+    headers = _headers(context["manager"])
+    period = client.post(
+        "/close/periods",
+        params=params,
+        headers=headers,
+        json={"label": label, "start_date": "2027-01-01", "end_date": "2027-01-31"},
+    )
+    assert period.status_code == 201, period.text
+    cycle = client.post(
+        f"/close/periods/{period.json()['id']}/cycles",
+        params=params,
+        headers=headers,
+        json={"name": f"{label} close"},
+    )
+    assert cycle.status_code == 201, cycle.text
+    return cycle.json()
+
+
+def test_evidence_download_requires_a_current_record_without_failed_side_effects(close_api) -> None:
+    client, context = close_api
+    cycle = _create_draft_cycle(client, context, "Recorded evidence")
+    params = {"organization_id": context["org1"]}
+    headers = _headers(context["manager"])
+    path = f"/close/cycles/{cycle['id']}/evidence/download"
+
+    missing = client.get(path, params=params, headers=headers)
+    assert missing.status_code == 409
+    assert missing.json()["detail"]["code"] == "CLOSE_EVIDENCE_NOT_CURRENT"
+    with Session(db.engine) as session:
+        assert not list(session.exec(select(CloseEvidence)))
+        assert not list(session.exec(select(AuditLog).where(AuditLog.entity_name == "CloseEvidence")))
+
+    generated = client.post(f"/close/cycles/{cycle['id']}/evidence", params=params, headers=headers)
+    assert generated.status_code == 200, generated.text
+    downloaded = client.get(path, params=params, headers=headers)
+    assert downloaded.status_code == 200, downloaded.text
+    assert downloaded.headers["X-Manifest-SHA256"] == generated.json()["manifest_sha256"]
+
+    mutated = client.post(
+        f"/close/cycles/{cycle['id']}/checklist",
+        params=params,
+        headers=headers,
+        json={"title": "Mutation after evidence", "required": False},
+    )
+    assert mutated.status_code == 201, mutated.text
+    stale = client.get(path, params=params, headers=headers)
+    assert stale.status_code == 409
+    with Session(db.engine) as session:
+        assert len(list(session.exec(select(CloseEvidence)))) == 1
+        assert len(list(session.exec(select(AuditLog).where(AuditLog.entity_name == "CloseEvidence")))) == 1
+
+    regenerated = client.post(f"/close/cycles/{cycle['id']}/evidence", params=params, headers=headers)
+    assert regenerated.status_code == 200, regenerated.text
+    assert client.get(path, params=params, headers=headers).status_code == 200
+    cross_tenant = client.get(
+        path,
+        params={"organization_id": context["org2"]},
+        headers=_headers(context["other"]),
+    )
+    assert cross_tenant.status_code == 404
+
+
+def test_evidence_post_uses_one_snapshot_for_response_record_and_audit(close_api, monkeypatch) -> None:
+    client, context = close_api
+    cycle = _create_draft_cycle(client, context, "Single snapshot")
+    params = {"organization_id": context["org1"]}
+    headers = _headers(context["manager"])
+    build_calls = 0
+    original_build = CloseEvidenceService.build_bundle
+    original_record = CloseEvidenceService.record_generation
+
+    def counted_build(service, cycle_id):
+        nonlocal build_calls
+        build_calls += 1
+        return original_build(service, cycle_id)
+
+    def record_then_mutate(service, cycle_id, bundle, *, summary=None, commit=True, allow_closed=False):
+        record = original_record(
+            service,
+            cycle_id,
+            bundle,
+            summary=summary,
+            commit=commit,
+            allow_closed=allow_closed,
+        )
+        service.close.create_custom_task(cycle_id, title="Concurrent post-persistence mutation")
+        return record
+
+    monkeypatch.setattr(CloseEvidenceService, "build_bundle", counted_build)
+    monkeypatch.setattr(CloseEvidenceService, "record_generation", record_then_mutate)
+    generated = client.post(f"/close/cycles/{cycle['id']}/evidence", params=params, headers=headers)
+    assert generated.status_code == 200, generated.text
+    assert build_calls == 1
+    response_manifest = generated.json()["manifest_sha256"]
+
+    with Session(db.engine) as session:
+        record = session.exec(select(CloseEvidence).where(CloseEvidence.cycle_id == cycle["id"])).one()
+        audit = session.exec(
+            select(AuditLog).where(AuditLog.entity_name == "CloseEvidence", AuditLog.entity_id == str(record.id))
+        ).one()
+        assert audit.after_state is not None
+        assert response_manifest == record.manifest_sha256 == audit.after_state["manifest_sha256"]
+    stale_download = client.get(
+        f"/close/cycles/{cycle['id']}/evidence/download",
+        params=params,
+        headers=headers,
+    )
+    assert stale_download.status_code == 409
 
 
 def test_close_api_authentication_lifecycle_and_readiness(close_api) -> None:
@@ -423,10 +544,43 @@ def test_complete_close_control_surface_and_evidence_download(close_api) -> None
         json={"version": approval_payload["version"], "decision": "APPROVED", "reason": "Reviewed"},
     )
     assert decided.status_code == 200
-    assert (
-        len(client.get(f"/close/cycles/{cycle['id']}/journal-approvals", params=params, headers=manager_headers).json())
-        == 1
+    approval_list = client.get(
+        f"/close/cycles/{cycle['id']}/journal-approvals",
+        params=params,
+        headers=manager_headers,
     )
+    assert len(approval_list.json()) == 1
+    assert "history" not in approval_list.json()[0]
+    history_path = f"/close/cycles/{cycle['id']}/journal-approvals/{approval_payload['id']}/history"
+    history = client.get(history_path, params=params, headers=manager_headers)
+    assert history.status_code == 200 and len(history.json()) == 1
+    assert (
+        client.get(
+            history_path,
+            params={"organization_id": context["org2"]},
+            headers=_headers(context["other"]),
+        ).status_code
+        == 404
+    )
+    for collection_path in (
+        f"/close/cycles/{cycle['id']}/reconciliations",
+        f"/close/cycles/{cycle['id']}/variance-reviews",
+        f"/close/cycles/{cycle['id']}/journal-approvals",
+        history_path,
+    ):
+        maximum = client.get(
+            collection_path,
+            params={**params, "limit": MAX_CLOSE_LIST_PAGE, "offset": 0},
+            headers=manager_headers,
+        )
+        assert maximum.status_code == 200, maximum.text
+        too_large = client.get(
+            collection_path,
+            params={**params, "limit": MAX_CLOSE_LIST_PAGE + 1, "offset": 0},
+            headers=manager_headers,
+        )
+        assert too_large.status_code == 422
+    assert DEFAULT_CLOSE_LIST_PAGE < MAX_CLOSE_LIST_PAGE
 
     checklist = client.get(f"/close/cycles/{cycle['id']}/checklist", params=params, headers=manager_headers).json()
     attestation = next(row for row in checklist if row["control_type"] == "ATTESTATION")
@@ -475,8 +629,17 @@ def test_complete_close_control_surface_and_evidence_download(close_api) -> None
     generated = client.post(f"/close/cycles/{cycle['id']}/evidence", params=params, headers=manager_headers)
     assert generated.status_code == 200, generated.text
     manifest = generated.json()["manifest_sha256"]
+    with Session(db.engine, expire_on_commit=False) as evidence_session:
+        rebuilt = CloseEvidenceService(
+            evidence_session,
+            context["org1"],
+            context["manager_id"],
+        ).build_bundle(cycle["id"])
+    response_files = {item["name"]: item["sha256"] for item in generated.json()["files"]}
+    differing_files = [item.name for item in rebuilt.files if response_files[item.name] != item.sha256]
+    assert rebuilt.manifest_sha256 == manifest, differing_files
     downloaded = client.get(f"/close/cycles/{cycle['id']}/evidence/download", params=params, headers=manager_headers)
-    assert downloaded.status_code == 200
+    assert downloaded.status_code == 200, downloaded.text
     assert downloaded.headers["X-Manifest-SHA256"] == manifest
     cycle = client.post(
         f"/close/cycles/{cycle['id']}/close",
@@ -496,6 +659,13 @@ def test_complete_close_control_surface_and_evidence_download(close_api) -> None
         json={"version": cycle["version"], "reason": "Controlled API reopen"},
     )
     assert reopened.status_code == 200
+    reopened_download = client.get(
+        f"/close/cycles/{cycle['id']}/evidence/download",
+        params=params,
+        headers=manager_headers,
+    )
+    assert reopened_download.status_code == 409
+    assert reopened_download.json()["detail"]["code"] == "CLOSE_EVIDENCE_NOT_CURRENT"
 
 
 def test_close_route_errors_are_typed_across_control_surface(close_api) -> None:

@@ -149,3 +149,24 @@ def test_reconciliation_limit_is_enforced(monkeypatch: pytest.MonkeyPatch) -> No
                 control_balance=None,
                 tolerance=Decimal("0"),
             )
+
+
+def test_reconciliation_pages_have_stable_order_without_gaps() -> None:
+    with close_session() as (session, actors):
+        assert actors.organization.id and actors.preparer.id
+        close = CloseService(session, actors.organization.id, actors.preparer.id)
+        period = close.create_period("December 2026", date(2026, 12, 1), date(2026, 12, 31))
+        cycle = close.create_cycle(period.id, "December close")
+        close.start(cycle.id, cycle.version)
+        ledger = LedgerService(session, actors.organization.id)
+        accounts = [ledger.create_account(f"Account {index}", "ASSET", code=f"1{index:03d}") for index in range(5)]
+        service = ReconciliationService(session, actors.organization.id, actors.preparer.id)
+        for account in reversed(accounts):
+            service.prepare_reconciliation(cycle.id, account.id, control_balance=None, tolerance=Decimal("0"))
+
+        first = service.list_reconciliations(cycle.id, limit=2, offset=0)
+        second = service.list_reconciliations(cycle.id, limit=2, offset=2)
+        third = service.list_reconciliations(cycle.id, limit=2, offset=4)
+        combined = first + second + third
+        assert [item.account_id for item in combined] == sorted(account.id for account in accounts)
+        assert len({item.id for item in combined}) == len(accounts)

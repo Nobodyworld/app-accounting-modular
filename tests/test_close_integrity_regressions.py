@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
-from threading import Barrier
+from threading import Barrier, Event, Thread, current_thread
 from zipfile import ZipFile
 
 import pytest
@@ -22,6 +22,7 @@ from apps.api.models.models import (
     CloseTaskControlType,
     JournalApprovalDecision,
     JournalApprovalStatus,
+    JournalEntry,
     Membership,
     Organization,
     StagedPosting,
@@ -33,6 +34,7 @@ from apps.api.models.models import (
     VarianceReviewRun,
     WorkflowStatus,
 )
+from apps.api.services import period_lock
 from apps.api.services.close_evidence_service import CloseEvidenceService
 from apps.api.services.close_service import (
     CloseConflictError,
@@ -424,8 +426,14 @@ def test_overlapping_period_creation_is_serialized_across_sessions(tmp_path) -> 
 
 
 @pytest.mark.parametrize("posting_path", ["direct", "workflow"])
-def test_final_close_serializes_against_direct_and_workflow_posting(tmp_path, posting_path: str) -> None:
-    database = tmp_path / f"close-{posting_path}-race.db"
+@pytest.mark.parametrize("winner", ["close", "posting"])
+def test_final_close_serializes_against_direct_and_workflow_posting(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    posting_path: str,
+    winner: str,
+) -> None:
+    database = tmp_path / f"close-{posting_path}-{winner}-race.db"
     engine = create_engine(
         f"sqlite:///{database}",
         connect_args={"check_same_thread": False, "timeout": 30},
@@ -463,18 +471,51 @@ def test_final_close_serializes_against_direct_and_workflow_posting(tmp_path, po
             },
         )
         cycle = close.start(cycle.id, cycle.version)
-        attestation = next(
-            task for task in close.list_checklist(cycle.id) if task.control_type == CloseTaskControlType.ATTESTATION
-        )
-        close.update_manual_task(
-            cycle.id,
-            attestation.id,
-            version=attestation.version,
-            complete=True,
-            notes="Reviewed",
-        )
-        cycle = close.require_cycle(cycle.id)
-        cycle = close.mark_ready(cycle.id, cycle.version)
+        if winner == "close":
+            attestation = next(
+                task for task in close.list_checklist(cycle.id) if task.control_type == CloseTaskControlType.ATTESTATION
+            )
+            close.update_manual_task(
+                cycle.id,
+                attestation.id,
+                version=attestation.version,
+                complete=True,
+                notes="Reviewed",
+            )
+            cycle = close.require_cycle(cycle.id)
+            cycle = close.mark_ready(cycle.id, cycle.version)
+        else:
+            ReconciliationService(seed, organization.id, administrator.id).prepare_reconciliation(
+                cycle.id,
+                cash.id,
+                control_balance=Decimal("0"),
+                tolerance=Decimal("0"),
+            )
+            budget = Budget(
+                organization_id=organization.id,
+                name="Posting-wins variance state",
+                start_date=date(2028, 11, 1),
+                end_date=date(2028, 11, 30),
+            )
+            seed.add(budget)
+            seed.flush()
+            seed.add(
+                BudgetLine(
+                    budget_id=budget.id,
+                    account_id=revenue.id,
+                    period_start=date(2028, 11, 1),
+                    amount=Decimal("-10"),
+                )
+            )
+            seed.commit()
+            ReconciliationService(seed, organization.id, administrator.id).materialize_variances(
+                cycle.id,
+                budget_id=budget.id,
+                horizon=30,
+                absolute_threshold=Decimal("0"),
+                percentage_threshold=None,
+            )
+            cycle = close.require_cycle(cycle.id)
         evidence = CloseEvidenceService(seed, organization.id, administrator.id)
         evidence.record_generation(cycle.id, evidence.build_bundle(cycle.id))
         staged_id = None
@@ -503,17 +544,37 @@ def test_final_close_serializes_against_direct_and_workflow_posting(tmp_path, po
         revenue_id = revenue.id
         period_id = period.id
 
-    start = Barrier(2)
+    original_gate = period_lock.acquire_period_write_gate
+    winner_has_gate = Event()
+    contender_attempted_gate = Event()
 
-    def run_close() -> str:
-        with Session(engine, expire_on_commit=False) as session:
-            start.wait()
-            closed = CloseService(session, organization_id, administrator_id).close(cycle_id, cycle_version)
-            return closed.status.value
+    def coordinated_gate(session: Session, target_organization_id: int) -> None:
+        writer = current_thread().name
+        is_winner = writer == f"{winner}-writer"
+        if is_winner and not winner_has_gate.is_set():
+            original_gate(session, target_organization_id)
+            winner_has_gate.set()
+            if not contender_attempted_gate.wait(timeout=10):
+                raise AssertionError("Contending writer did not reach the period write gate")
+            return
+        if not is_winner:
+            contender_attempted_gate.set()
+        original_gate(session, target_organization_id)
 
-    def run_post() -> str:
+    monkeypatch.setattr(period_lock, "acquire_period_write_gate", coordinated_gate)
+    outcomes: dict[str, str] = {}
+
+    def run_close() -> None:
         with Session(engine, expire_on_commit=False) as session:
-            start.wait()
+            try:
+                closed = CloseService(session, organization_id, administrator_id).close(cycle_id, cycle_version)
+            except CloseConflictError as exc:
+                outcomes["close"] = str(exc)
+            else:
+                outcomes["close"] = closed.status.value
+
+    def run_post() -> None:
+        with Session(engine, expire_on_commit=False) as session:
             try:
                 if posting_path == "direct":
                     LedgerService(session, organization_id).post_transaction(
@@ -528,18 +589,56 @@ def test_final_close_serializes_against_direct_and_workflow_posting(tmp_path, po
                     assert staged_id is not None
                     WorkflowService(session).process_transactions([staged_id])
             except PeriodPostingError as exc:
-                return exc.code
-            return "posted"
+                outcomes["posting"] = exc.code
+            else:
+                outcomes["posting"] = "posted"
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        closing = pool.submit(run_close)
-        posting = pool.submit(run_post)
-        assert closing.result() == CloseCycleStatus.CLOSED.value
-        assert posting.result() in {"ACCOUNTING_PERIOD_CLOSE_READY", "ACCOUNTING_PERIOD_CLOSED"}
+    close_thread = Thread(target=run_close, name="close-writer")
+    posting_thread = Thread(target=run_post, name="posting-writer")
+    winning_thread = close_thread if winner == "close" else posting_thread
+    losing_thread = posting_thread if winner == "close" else close_thread
+    winning_thread.start()
+    assert winner_has_gate.wait(timeout=10), "Winning writer did not acquire the period write gate"
+    losing_thread.start()
+    winning_thread.join(timeout=20)
+    losing_thread.join(timeout=20)
+    assert not winning_thread.is_alive() and not losing_thread.is_alive()
+
     with Session(engine) as verify:
         persisted_period = verify.get(AccountingPeriod, period_id)
-        assert persisted_period is not None and persisted_period.status == AccountingPeriodStatus.CLOSED
-        assert verify.exec(select(Transaction)).all() == []
+        persisted_cycle = verify.get(CloseCycle, cycle_id)
+        assert persisted_period is not None and persisted_cycle is not None
+        transactions = verify.exec(select(Transaction).order_by(Transaction.id)).all()
+        journals = verify.exec(select(JournalEntry).order_by(JournalEntry.id)).all()
+        if winner == "close":
+            assert outcomes["close"] == CloseCycleStatus.CLOSED.value
+            assert outcomes["posting"] in {"ACCOUNTING_PERIOD_CLOSE_READY", "ACCOUNTING_PERIOD_CLOSED"}
+            assert persisted_cycle.status == CloseCycleStatus.CLOSED
+            assert persisted_period.status == AccountingPeriodStatus.CLOSED
+            assert persisted_period.ledger_activity_revision == 1
+            assert transactions == [] and journals == []
+        else:
+            assert outcomes["posting"] == "posted"
+            assert outcomes["close"] == "Close cycle must be ready for approval before final close"
+            assert persisted_cycle.status == CloseCycleStatus.IN_PROGRESS
+            assert persisted_period.status == AccountingPeriodStatus.OPEN
+            assert persisted_period.ledger_activity_revision == 2
+            assert len(transactions) == 1 and len(journals) == 2
+            assert sum(Decimal(str(row.debit)) for row in journals) == sum(Decimal(str(row.credit)) for row in journals)
+            latest_evidence = verify.exec(
+                select(CloseEvidence).where(CloseEvidence.cycle_id == cycle_id).order_by(CloseEvidence.id.desc())
+            ).first()
+            reconciliation = verify.exec(
+                select(AccountReconciliation).where(AccountReconciliation.cycle_id == cycle_id)
+            ).one()
+            variance_run = verify.exec(select(VarianceReviewRun).where(VarianceReviewRun.cycle_id == cycle_id)).one()
+            assert latest_evidence is not None
+            assert latest_evidence.source_ledger_activity_revision == 1
+            assert reconciliation.ledger_activity_revision == 1
+            assert variance_run.ledger_activity_revision == 1
+            readiness = CloseService(verify, organization_id, administrator_id).readiness(cycle_id)
+            assert readiness.ledger_activity_revision == 2
+            assert readiness.evidence_freshness == "STALE"
     engine.dispose()
 
 
