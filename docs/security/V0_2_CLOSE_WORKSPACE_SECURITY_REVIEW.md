@@ -2,9 +2,9 @@
 
 ## Scope and exact correction
 
-- Required main baseline: `483e56675a2ce0b40747974edffd95b976af322c`.
-- Required final-review starting head: `8515585dccc943e09641579493e245d8c505ff6e`.
-- Validated implementation, regression, and restored-lock head before this documentation refresh: `96a282e2424f665643585331edb8780b0e910fbd`.
+- Current main baseline: `445241b4514baa42feef0541b677233920540114`.
+- Final-integration starting product head: `a08dcb96abbdb99bfee0f7bd3fb0bd6c30551e30`.
+- Validated merged implementation head before this documentation refresh: `ba2af5ca17bb71e0888f0eb3dd0ebebc31a6d4f2`.
 - This document intentionally does not rewrite the historical post-UX audit as if v0.2 were included in that baseline.
 - Trust-boundary assets are accounting periods and ledger-activity revisions, close cycles and typed policy, checklist tasks, reconciliations, variance runs/current rows, journal approvals/decisions, evidence metadata, `/close` routes, the protected Streamlit workspace, and the critical-module coverage policy.
 
@@ -62,14 +62,16 @@ The earlier supporting flow was `http://127.0.0.1:8512/` → authenticated contr
 
 Desktop and 390 px screenshots were inspected during the Browser run. No horizontal scroll, overlapping controls, unreadable content, or relevant console error was observed. Destructive close/post/cancel buttons were not activated in browser acceptance; their behavior is covered by authenticated API/service and separate-session concurrency tests.
 
-Literal Microsoft Edge acceptance on the final correction remains the sole manual UI blocker. Installed Edge is `151.0.4129.72`; Windows is 25H2 build `26200.8894` (AMD64). A fresh loopback API/Streamlit demo was healthy, but the installed Windows automation runtime could not enumerate windows (`EnumWindows` `0x80070003`) and its required documentation endpoint was absent. No safe zoom change or reliable UI state inspection was possible. Therefore literal 200% zoom, the exact-head 390 px recheck, Tab/Shift+Tab and arrow-key traversal, focus/trap checks, current Edge console state, and current duplicate/deprecated-warning checks are not claimed as passed. The disposable services and database were removed.
+Literal Microsoft Edge acceptance at 200% remains the sole manual UI blocker. Installed Edge is `151.0.4129.72`; Windows is 25H2 build `26200.8894` (64-bit). A dedicated Edge extension tab was positively bound to a fresh authenticated loopback API/Streamlit demo. Edge's native reset/zoom shortcuts sent through the tab surface did not change browser zoom, and the Windows-control runtime did not expose its mandatory safety-documentation API, so no OS-level keys were sent. Literal 200% is therefore not claimed.
+
+The same exact-head Edge run did complete the separate 390×844 CSS viewport acceptance. All six close sections rendered with `innerWidth=390`, `scrollWidth=390`, and no page-level horizontal overflow. Long tab rows and data surfaces retained deliberate internal scrolling; every rendered mutation control appeared in keyboard order. `Tab` and `Shift+Tab` changed focus, `:focus-visible` was present on native inputs, arrow keys selected all six close tabs in order, and no keyboard trap was observed. Browser error/warning logs were empty; no duplicate-widget-key, deprecated-width, raw API exception, credential, or token output appeared. The task-only services, database, and logs were removed after validation.
 
 ## Release security evidence
 
-- The complete pytest suite passed 639 tests. Release-authoritative line coverage is 87.96% (9,118/10,366); branch evidence is 71.37% (1,827/2,560). All nine configured critical-module line/branch floors passed.
+- The complete pytest suite passed 639 tests. Release-authoritative line coverage is 87.99% (9,121/10,366); branch evidence is 71.45% (1,829/2,560). All nine configured critical-module line/branch floors passed.
 - The accounting-controls subset passed 52 tests. Ruff, format check, mypy, `pip check`, the development dependency audit, and the current-tree secret scan passed.
-- The restored runtime lock verifies at SHA-256 `990aa39c04686870f6907074b32d01eff81f69f84f9281d98aefa91fb72163d9`, but its required audit now reports five GitPython 3.1.57 advisories, all fixed in 3.1.58. The final-review instruction requires the runtime lock to remain byte-for-byte equal to `origin/main`, so the lock was not changed and the aggregate quality gate remains failed solely on this runtime audit command.
-- Gitleaks 8.30.1 scanned all refs with `gitleaks git --redact --no-banner --log-opts="--all"`: 278 commits, approximately 3.77 MB, no leaks.
+- The runtime lock matches `origin/main` byte-for-byte, pins GitPython 3.1.58, verifies at SHA-256 `13c6b89298fd1767aa6f4a44b26e7cffcb6a7a0f146fa8e8ea80e2ac978c1312`, and its required hashed audit reports no known vulnerabilities. The aggregate quality gate passes with no skipped tool.
+- Gitleaks scanned all refs with `gitleaks git . --log-opts="--all" --redact`: 285 commits, approximately 3.83 MB, no leaks.
 - The deterministic route inventory maps 71 method/path entries with no unmapped application routes (63 application entries plus 8 documentation/schema entries).
 - `macli health` returned overall `ok`; `inspect-extensions` loaded the three enabled extensions and `inspect-contracts` listed both published contracts. Scheduler/extension warnings in the one-shot health process were noncritical local-runtime state.
 - GNU Make was not installed; the repository's stricter Python quality-gate runner executed the complete lint, format, typing, tests/coverage, dependency-audit, and secret-scan sequence directly.
@@ -82,7 +84,7 @@ Literal Microsoft Edge acceptance on the final correction remains the sole manua
 | `security.py` | 87.41% | 85.71% |
 | `services/auth_session_service.py` | 89.57% | 73.08% |
 | `services/period_lock.py` | 96.43% | 92.86% |
-| `services/close_service.py` | 91.45% | 81.69% |
+| `services/close_service.py` | 91.65% | 82.39% |
 | `services/reconciliation_service.py` | 91.94% | 81.37% |
 | `services/close_evidence_service.py` | 95.16% | 81.25% |
 | `routers/close.py` | 93.68% | 78.12% |
