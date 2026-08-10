@@ -1,6 +1,10 @@
-"""Forecast related routes."""
+"""Forecast-related routes with tenant-first authorization and sanitized failures."""
 
 from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from typing import TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
@@ -23,6 +27,55 @@ from ..services.forecast_service import ForecastService
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 _FORECAST_SERVICE = ForecastService()
+logger = logging.getLogger(__name__)
+
+_ResultT = TypeVar("_ResultT")
+_SAFE_VALIDATION_PREFIXES = (
+    "Actual values",
+    "Average impact",
+    "Backtest ",
+    "Event window",
+    "Forecast ",
+    "Impact ",
+    "Insufficient ",
+    "MAE",
+    "MAPE",
+    "Model dependency",
+    "Not enough ",
+    "Predicted values",
+    "RMSE",
+    "Regressor ",
+    "Regressor names",
+    "Series ",
+    "Unsupported forecasting model",
+    "event_end",
+    "event_start",
+    "horizon",
+    "initial_window",
+    "scikit-learn is required",
+    "step",
+    "Prophet model requested",
+)
+
+
+def _safe_validation_detail(exc: ValueError) -> str:
+    detail = str(exc).strip()
+    if detail and len(detail) <= 240 and detail.startswith(_SAFE_VALIDATION_PREFIXES):
+        return detail
+    return "Forecast request could not be evaluated"
+
+
+def _execute_forecast(operation: str, action: Callable[[], _ResultT]) -> _ResultT:
+    try:
+        return action()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=_safe_validation_detail(exc)) from None
+    except Exception as exc:
+        logger.warning(
+            "Forecast operation failed",
+            extra={"operation": operation, "error_type": type(exc).__name__},
+        )
+        raise HTTPException(status_code=400, detail="Forecast operation could not be completed") from None
 
 
 @router.post("/series", response_model=ForecastResponse)
@@ -31,19 +84,23 @@ def forecast_series(
     s: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> ForecastResponse:
-    """Generate a univariate time-series forecast."""
+    """Generate a bounded time-series forecast for an authorized organization."""
 
     get_current_organization(organization_id=payload.organization_id, session=s, current_user=current_user)
     if len(payload.series) < payload.horizon:
         raise HTTPException(status_code=400, detail="Series length must be at least the requested horizon")
-    fs = _FORECAST_SERVICE
-    # Pooled forecast service instance to reuse model state.
+
     series = [(str(point[0]), float(point[1])) for point in payload.series]
     regressors = payload.regressors or {}
-    try:
-        result = fs.forecast_series(series, payload.horizon, exogenous=regressors, model=payload.model)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    result = _execute_forecast(
+        "series",
+        lambda: _FORECAST_SERVICE.forecast_series(
+            series,
+            payload.horizon,
+            exogenous=regressors,
+            model=payload.model,
+        ),
+    )
     return ForecastResponse(
         forecast=result.points,
         horizon=result.horizon,
@@ -60,24 +117,23 @@ def list_models(
     s: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[ForecastModelInfo]:
-    """Return registered forecasting models."""
+    """Return registered forecasting models after tenant authorization."""
 
     get_current_organization(organization_id=organization_id, session=s, current_user=current_user)
-    models = []
-    for item in _FORECAST_SERVICE.available_models():
-        models.append(
-            ForecastModelInfo(
-                key=item.key,
-                name=item.name,
-                family=item.family,
-                description=item.description,
-                supports_exogenous=item.supports_exogenous,
-                available=item.available,
-                requirements=item.requirements,
-                notes=item.notes,
-            )
+    model_info = _execute_forecast("models", _FORECAST_SERVICE.available_models)
+    return [
+        ForecastModelInfo(
+            key=item.key,
+            name=item.name,
+            family=item.family,
+            description=item.description,
+            supports_exogenous=item.supports_exogenous,
+            available=item.available,
+            requirements=item.requirements,
+            notes=item.notes,
         )
-    return models
+        for item in model_info
+    ]
 
 
 @router.post("/backtest", response_model=list[BacktestResponse])
@@ -86,20 +142,20 @@ def backtest_series(
     s: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[BacktestResponse]:
-    """Run rolling backtests for the requested models."""
+    """Run rolling backtests for an authorized organization."""
 
     get_current_organization(organization_id=payload.organization_id, session=s, current_user=current_user)
-    try:
-        results = _FORECAST_SERVICE.backtest(
+    results = _execute_forecast(
+        "backtest",
+        lambda: _FORECAST_SERVICE.backtest(
             payload.series,
             horizon=payload.horizon,
             models=payload.models,
             exogenous=payload.regressors,
             initial_window=payload.initial_window,
             step=payload.step,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        ),
+    )
     return [
         BacktestResponse(
             model=result.model,
@@ -132,19 +188,19 @@ def causal_impact(
     s: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CausalImpactResponse:
-    """Estimate causal impact for a given intervention window."""
+    """Estimate a bounded causal-impact window for an authorized organization."""
 
     get_current_organization(organization_id=payload.organization_id, session=s, current_user=current_user)
-    try:
-        result = _FORECAST_SERVICE.causal_impact(
+    result = _execute_forecast(
+        "impact",
+        lambda: _FORECAST_SERVICE.causal_impact(
             payload.series,
             event_start=payload.event_start,
             event_end=payload.event_end,
             interventions=payload.interventions,
             model=payload.model,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        ),
+    )
     return CausalImpactResponse(
         model=result.model,
         event_start=result.event_start,
