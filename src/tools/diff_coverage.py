@@ -362,8 +362,7 @@ def render_markdown(result: DiffCoverageResult) -> str:
         item_percent = "not applicable" if item.percent is None else f"{item.percent:.2f}%"
         missed = "—" if not item.missed_lines else ", ".join(str(line) for line in item.missed_lines)
         lines.append(
-            f"| `{item.path}` | {len(item.executable_lines)} | {len(item.covered_lines)} | "
-            f"{missed} | {item_percent} |"
+            f"| `{item.path}` | {len(item.executable_lines)} | {len(item.covered_lines)} | {missed} | {item_percent} |"
         )
     if not result.files:
         lines.append("| _No configured production files changed_ | 0 | 0 | — | not applicable |")
