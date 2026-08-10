@@ -1,5 +1,8 @@
-# Critical accounting and authentication modules. Existing floors reflect the
-# measured audited baseline; new close modules target the v0.2 acceptance bar.
+# Critical accounting, authentication, background, provider, and forecasting modules.
+#
+# Floors are reviewable release controls derived from the measured v0.2 baseline.
+# Existing floors are preserved. Additional floors intentionally leave only a
+# small regression margin while the focused robustness suites close known gaps.
 
 [[module]]
 path = "src/apps/api/services/ledger_service.py"
@@ -45,3 +48,43 @@ branch_floor = 70.0
 path = "src/apps/api/routers/close.py"
 line_floor = 85.0
 branch_floor = 70.0
+
+[[module]]
+path = "src/apps/api/services/tax_service.py"
+line_floor = 90.0
+branch_floor = 80.0
+
+[[module]]
+path = "src/apps/api/services/snapshot_service.py"
+line_floor = 85.0
+branch_floor = 60.0
+
+[[module]]
+path = "src/apps/api/routers/audit.py"
+line_floor = 75.0
+branch_floor = 60.0
+
+[[module]]
+path = "src/apps/api/scheduler.py"
+line_floor = 90.0
+branch_floor = 70.0
+
+[[module]]
+path = "src/apps/api/services/forecast_service.py"
+line_floor = 78.0
+branch_floor = 60.0
+
+[[module]]
+path = "src/apps/api/routers/forecast.py"
+line_floor = 75.0
+branch_floor = 60.0
+
+[[module]]
+path = "src/apps/api/services/plugin_loader.py"
+line_floor = 88.0
+branch_floor = 70.0
+
+[[module]]
+path = "src/plugins/provider_limits.py"
+line_floor = 85.0
+branch_floor = 65.0
