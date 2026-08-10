@@ -197,8 +197,6 @@ def parse_changed_lines(diff_text: str) -> dict[str, set[int]]:
             continue
         if not line.startswith("@@ "):
             continue
-        if current_path is None:
-            raise ValueError("unified diff contains a hunk before a target file header")
         match = _HUNK_RE.match(line)
         if match is None:
             raise ValueError(f"unsupported unified diff hunk header: {line}")
@@ -206,6 +204,10 @@ def parse_changed_lines(diff_text: str) -> dict[str, set[int]]:
         count = int(match.group("new_count") or "1")
         if count < 0:
             raise ValueError(f"invalid unified diff hunk count: {line}")
+        if current_path is None:
+            if count == 0:
+                continue
+            raise ValueError("unified diff contains a hunk before a target file header")
         if count:
             changed[current_path].update(range(start, start + count))
     return changed
