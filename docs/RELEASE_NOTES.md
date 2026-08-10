@@ -54,9 +54,11 @@ The refreshed v0.2 candidate passes 639 tests with 87.99% line coverage
 (9,121/10,366) and 71.45% branch coverage (1,829/2,560). All configured
 critical-module floors, the 52-test accounting-control subset, `pip check`,
 the GitPython 3.1.58 hashed runtime-lock audit, and the development dependency
-audit pass. Literal Microsoft Edge 200% zoom remains a manual acceptance gate;
-the exact 390×844 Edge viewport, all six close sections, keyboard traversal,
-and browser console passed on the refreshed implementation.
+audit pass. Literal Microsoft Edge 200% zoom acceptance passed in Edge
+151.0.4129.72 on Windows 25H2 build 26200.8894: all six close sections,
+mutation and download reachability, keyboard traversal, responsive metric and
+table layout, and application-origin console checks passed. The exact 390×844
+CSS-pixel viewport recheck also passed without page-level horizontal overflow.
 
 Hosted CI additionally validates Python 3.12, 3.13, and 3.14, builds and starts the Compose services, verifies required JWT configuration, and inspects the live least-privilege container runtime. See [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md) and issue #87 for the current audit disposition.
 
