@@ -1,7 +1,8 @@
 PYTHON ?= python
 PIP ?= pip
+DIFF_HEAD ?= HEAD
 
-.PHONY: install lint format format-check typecheck test coverage quality security health plan-validate quality-gate audit release ci
+.PHONY: install lint format format-check typecheck test coverage diff-coverage quality security health plan-validate quality-gate audit release ci
 
 install:
 	$(PIP) install -r requirements-dev.txt
@@ -22,6 +23,11 @@ test:
 	pytest --cov=src/apps --cov=src/plugins --cov=src/cli --cov-report=term-missing --cov-fail-under=85
 
 coverage: test
+
+diff-coverage:
+	test -n "$(BASE)" || (echo "BASE=<commit-or-ref> is required" >&2 && exit 1)
+	$(PYTHON) -m pytest -o cache_dir=.pytest_cache_runtime --cov=src/apps --cov=src/plugins --cov=src/cli --cov-branch --cov-report=json:coverage.json
+	$(PYTHON) -m src.tools.diff_coverage coverage.json --base "$(BASE)" --head "$(DIFF_HEAD)" --config config/diff-coverage.toml --json-output diff-coverage.json --markdown-output diff-coverage.md
 
 security:
 	$(PYTHON) -m pip_audit --timeout 60 --require-hashes --disable-pip -r requirements-container.lock
