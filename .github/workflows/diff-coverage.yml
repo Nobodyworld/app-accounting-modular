@@ -39,6 +39,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
+      - name: Capture exact Ruff-formatted tool source
+        run: |
+          python -m ruff format src/tools/diff_coverage.py
+          cp src/tools/diff_coverage.py ruff-formatted-diff_coverage.py
+
       - name: Generate release-authoritative coverage evidence
         env:
           PYTHONPATH: ${{ github.workspace }}/src
@@ -78,5 +83,6 @@ jobs:
             coverage.json
             diff-coverage.json
             diff-coverage.md
+            ruff-formatted-diff_coverage.py
           if-no-files-found: error
           retention-days: 14
