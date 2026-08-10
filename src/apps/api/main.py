@@ -19,6 +19,7 @@ from .middleware import RequestBodyLimitMiddleware
 from .routers import (
     audit,
     auth,
+    close,
     core,
     extensions,
     forecast,
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
         (forecast.router, True),
         (reports.router, True),
         (workflow.router, True),
+        (close.router, True),
     )
 
     for router, requires_auth in router_registry:

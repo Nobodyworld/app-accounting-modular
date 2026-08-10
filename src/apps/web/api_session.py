@@ -23,6 +23,20 @@ PROTECTED_UTILITY_STATE_KEYS = (
     "market_sync_payload",
     "market_sync_error",
     "scenario_plan_preview",
+    "close_periods",
+    "close_cycles",
+    "close_selected_period_id",
+    "close_selected_cycle_id",
+    "close_cycle_payload",
+    "close_readiness",
+    "close_reconciliations",
+    "close_variances",
+    "close_approvals",
+    "close_checklist",
+    "close_evidence_preview",
+    "close_evidence_result",
+    "close_confirmation",
+    "close_error",
 )
 
 
@@ -229,7 +243,9 @@ def request_server_logout(
 def clear_protected_utility_state(state: MutableMapping[str, Any]) -> None:
     """Remove protected workspace results while preserving public and local-input state."""
 
-    for key in PROTECTED_UTILITY_STATE_KEYS:
+    protected_keys = set(PROTECTED_UTILITY_STATE_KEYS)
+    protected_keys.update(key for key in list(state) if key.startswith("close_"))
+    for key in protected_keys:
         state.pop(key, None)
 
 

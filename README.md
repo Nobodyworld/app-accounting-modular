@@ -7,7 +7,9 @@ A modular accounting-control toolkit for validating financial snapshots, provide
 >
 > This repository demonstrates accounting-control architecture and workflow evidence. Demo providers use controlled sample data unless external credentials are configured. It is not an ERP, production tax engine, bank-feed product, treasury platform, or commercially supported accounting system. Independently validate accounting, tax, security, data, and deployment behavior before relying on any result.
 
-The project demonstrates how accounting workflows can be broken into auditable modules: FX rates, commodity pricing, tax rules, ledger controls, provider health, cache diagnostics, and scenario plans. It is intentionally smaller than an ERP and focused on transparent controls, reproducible evidence, and clean integration boundaries.
+The project demonstrates how accounting workflows can be broken into auditable modules: period close, account reconciliation, budget variance review, journal approvals, FX rates, commodity pricing, tax rules, ledger controls, provider health, cache diagnostics, and scenario plans. It is intentionally smaller than an ERP and focused on transparent controls, reproducible evidence, and clean integration boundaries.
+
+Version 0.2 adds an authenticated Accountant Close Workspace. A controlled close cycle coordinates inclusive accounting periods, serialized posting gates, required balance-sheet reconciliation scope, current-run variance review, explicit journal-approval modes, one effective checklist, and evidence bound to both close content and authoritative ledger activity. Posting is frozen while a cycle awaits approval; administrator-only, reasoned policy exceptions are typed and audited. Final close and a deterministic `CLOSED` evidence record commit atomically. These controls remain an Early Beta demonstration; they are not automatic bank reconciliation, production close certification, or regulatory compliance.
 
 ## Streamlit demonstration interface using controlled sample data
 
@@ -37,6 +39,7 @@ Demo providers use controlled sample data unless external API credentials are co
 | Balanced journal-control examples | A complete GL/subledger platform |
 | Provenance, diagnostics, and health checks | Treasury execution software |
 | CLI/API/Streamlit review surfaces | A commercial accounting product |
+| Controlled period close and reconciliation evidence | ERP-complete financial close certification |
 
 ## Verified Core Capabilities
 
@@ -45,6 +48,7 @@ Demo providers use controlled sample data unless external API credentials are co
 - Journal control primitives for balanced postings and account traceability.
 - Operational CLI and API surfaces for snapshot, scenario plans, and diagnostics.
 - Regression-tested Streamlit interface focused on snapshot controls for portfolio review.
+- Authenticated close-cycle workspace with tenant-scoped lifecycle, readiness, evidence, and explicit separation of duties.
 
 ## Architecture Diagram
 
@@ -89,6 +93,8 @@ python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
 ```bash
 streamlit run src/apps/web/app.py
 ```
+
+To create the deterministic three-user close example in a fresh local database, set `MODACCT_DATABASE_URL`, run `python scripts/seed_close_demo.py`, and sign in through the Streamlit **API Session** sidebar. The script prints the controlled organization, cycle, budget, staged-workflow, account, and user identifiers. The complete walkthrough is in [`docs/examples/accountant_month_end_close.md`](docs/examples/accountant_month_end_close.md).
 
 4. Optional CLI snapshot and scenario proof:
 

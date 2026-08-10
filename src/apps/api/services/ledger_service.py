@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 
 from ..audit import AuditAction, AuditLogger, apply_creation_metadata
 from ..models.models import Account, AccountType, JournalEntry, Rate, Transaction
+from .period_lock import ensure_posting_allowed, record_posting_activity
 
 
 @dataclass(slots=True)
@@ -165,7 +166,9 @@ class LedgerService:
         source: str | None = None,
         source_reference: str | None = None,
     ) -> Transaction:
+        ensure_posting_allowed(self.s, self.organization_id, date)
         normalised = self.validate_transaction(date, description, postings)
+        ledger_activity_revision = record_posting_activity(self.s, self.organization_id, date)
 
         txn = Transaction(
             date=date,
@@ -194,33 +197,34 @@ class LedgerService:
                     currency=str(currency_value),
                 )
                 self.s.add(je)
-            self.s.commit()
+            # AuditLogger's synchronous path commits the mutation and audit row
+            # together; a logger failure therefore cannot leave an unaudited journal.
+            self.audit.log(
+                AuditAction.CREATE,
+                "Transaction",
+                txn.id,
+                after={
+                    "date": txn.date.isoformat(),
+                    "description": txn.description,
+                    "source": source,
+                    "source_reference": source_reference,
+                    "postings": [
+                        {
+                            "account_id": posting["account_id"],
+                            "debit": float(cast(Any, posting["debit"])),
+                            "credit": float(cast(Any, posting["credit"])),
+                            "currency": posting["currency"],
+                        }
+                        for posting in normalised
+                    ],
+                    "organization_id": txn.organization_id,
+                    "ledger_activity_revision": ledger_activity_revision,
+                },
+            )
             self.s.refresh(txn)
         except Exception:
             self.s.rollback()
             raise
-
-        self.audit.log(
-            AuditAction.CREATE,
-            "Transaction",
-            txn.id,
-            after={
-                "date": txn.date.isoformat(),
-                "description": txn.description,
-                "source": source,
-                "source_reference": source_reference,
-                "postings": [
-                    {
-                        "account_id": posting["account_id"],
-                        "debit": float(cast(Any, posting["debit"])),
-                        "credit": float(cast(Any, posting["credit"])),
-                        "currency": posting["currency"],
-                    }
-                    for posting in normalised
-                ],
-                "organization_id": txn.organization_id,
-            },
-        )
         return txn
 
     # ------------------------------------------------------------------

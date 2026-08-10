@@ -56,6 +56,22 @@ human-readable wording.
 | Workflow transactions | 100 |
 | Postings per staged transaction | 100 |
 | Staged IDs per process request, before deduplication | 500 |
+| Accounting period label | 120 characters |
+| Close-cycle name | 160 characters |
+| Close/checklist/reconciliation notes | 2,000–4,096 characters by field |
+| Transition reason | 1,000 characters |
+| Custom close tasks per cycle | 50 |
+| Reconciliations per cycle | 500 |
+| Variance review rows per materialization | 5,000 |
+| Journal approvals per cycle | 500 |
+| Default close list page | 100 records |
+| Close evidence rows | 20,000 |
+| Close evidence ZIP | 8 MiB |
+| Maximum close list page | 500 records |
+
+Reconciliation, current-variance, approval-summary, and approval-decision reads use `limit`/`offset`; their accepted limit is `1..500` and their default is 100. Approval summaries omit nested history, which is available only through its independently paged route. The 500th durable approval may be created; a new distinct reference after that is rejected before any approval, decision, audit, or revision mutation.
+
+Close evidence row and archive limits are enforced while the deterministic bundle is assembled in memory. Trial-balance rows and only deduplicated, sorted reconciliation account references participate in the shared row budget; there is no second organization-wide account lookup. A rejected bundle is not persisted. Close policy uses a fixed typed schema with bounded override reasons and account IDs; reconciliation evidence metadata uses the shared metadata validator below. Configuration may tighten but may not raise these hard maxima.
 
 Names are limited to 255 characters, source names to 128, source references to
 255, and forecast model keys to 128. Currency strings retain the existing

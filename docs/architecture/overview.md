@@ -98,6 +98,19 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    materializes its DataFrame internally, its HTTP response cannot be
    independently streamed or byte-counted at this adapter layer. Demo/reference
    providers perform no external I/O.
+
+## Accountant close domain
+
+The v0.2 close tranche follows the existing service-first architecture rather than placing accounting decisions in FastAPI or Streamlit:
+
+- `close_service.py` owns lifecycle guards, typed administrator-only policy overrides, atomic version/content-revision compare-and-swap updates, required control scope, revision-aware readiness, effective checklist status, and finalization.
+- `period_lock.py` acquires a SQLite tenant writer gate before period overlap decisions and before either close or direct/workflow posting evaluates period state. An accepted in-period post advances the period's authoritative ledger-activity revision in the same transaction. `auto_process=true` stages and posts in one request transaction.
+- `reconciliation_service.py` derives account balances, binds reconciliations and durable period-scoped variance runs to ledger activity, creates fresh rows owned by every variance rerun, and owns capped/paged current approval summaries plus separately paged append-only decisions.
+- `close_evidence_service.py` builds one cycle-scoped, row-bounded deterministic ZIP snapshot, looks up only sorted/deduplicated referenced accounts, conditionally persists that snapshot's manifest, and permits download only when recomputation matches the latest current durable record.
+- `routers/close.py` performs persisted-session authentication, tenant/role authorization, bounded `limit`/`offset` response contracts, response-schema translation, and deliberate `400`/`403`/`404`/`409` mapping.
+- `close_workspace.py` uses the existing one-refresh Streamlit API session and renders the API's readiness result rather than recalculating accounting controls.
+
+`AccountingPeriod.status` and `ledger_activity_revision` are authoritative. The lifecycle is `DRAFT → IN_PROGRESS/BLOCKED → READY_FOR_APPROVAL → CLOSED`. Ready freezes operational rows and all in-period posting and can return to work only with an administrator reason. Subsequent posting advances the ledger revision and makes older reconciliation, variance, and evidence proof stale. Cancellation preserves the durable cycle and can restart with a reason. Create and reopen acquire the same overlap gate before querying. Final close recalculates revision-aware readiness, establishes the final content revision, closes cycle and period, and records deterministic `CLOSED` evidence in one transaction. Deterministic event-controlled regressions cover both serialized writer orders: close-first rejects direct/workflow posting without a journal or revision change; posting-first commits one atomic journal/revision and causes close to reject the now-current operational state. SQLite's single-writer gate is the validated backend strategy; a multi-writer deployment must replace it with database-native row locking or an equivalent posting gate.
 5. **Observability** collects metrics, traces, and health reports. Metrics are
    exposed through `/health/metrics` while `/health/telemetry` and
    `apps.observability.diagnostics.collect_observability_snapshot` aggregate the

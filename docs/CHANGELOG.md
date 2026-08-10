@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 2026-08-08: Added the v0.2 authenticated Accountant Close Workspace: persistent periods and close cycles, inclusive posting locks, account reconciliations, BudgetService-backed variance reviews, staged-workflow blockers, independent journal approvals, deterministic checklist/readiness, spreadsheet-safe evidence ZIPs, Streamlit controls, multi-user demo data, fail-closed route inventory, and explicit critical-module line/branch coverage policy.
+- 2026-08-08: Corrected v0.2 integrity controls with immutable ready/closed/cancelled states, restart and return-to-work, overlap-safe reopen, database compare-and-swap revisions, serialized close/posting, atomic workflow auto-process, required control scopes, durable variance runs, one current journal approval reference, complete decision-history evidence, and atomic final `CLOSED` evidence.
+- 2026-08-08: Completed the v0.2 correction with an authoritative ledger-activity revision, READY direct/workflow posting freeze, stale reconciliation/variance/evidence blockers, typed reasoned administrator policy overrides, latest-run variance ownership, create/reopen and close/post race coverage, conditional evidence source locks, one manifest hash across bytes/metadata/audit, enforced close row limits, regenerated route evidence, and final responsive/keyboard/browser evidence.
+- 2026-08-08: Finalized v0.2 evidence integrity and response bounds: evidence POST now owns one persisted/audited/returned snapshot; download requires the latest current durable manifest; account name lookups are reference-bounded; reconciliation, variance, approval, and decision-history lists are paged; approvals have a per-cycle cap; and direct/workflow close races cover both deterministic writer orders.
+- 2026-08-09: Refreshed the v0.2 product branch from main `445241b4514baa42feef0541b677233920540114`, adopted the current GitPython 3.1.58 runtime lock and repository-root-safe Streamlit test baseline, reran the complete quality/security/accounting validation, regenerated the 71-route inventory deterministically, and recorded exact-head Edge responsive/keyboard evidence plus the remaining literal-200%-zoom manual gate.
+
 - 2026-07-10: Refreshed the public-release audit against baseline
   `b00b2d84d082e8d97ee9dba0cf366c1fbe6f21e1`, aligned release notes and
   roadmap status, corrected setup commands, repaired container build/runtime

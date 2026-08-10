@@ -22,6 +22,7 @@ from ..models.models import (
     WorkflowStatus,
 )
 from .ledger_service import LedgerService
+from .period_lock import PeriodPostingError, ensure_posting_allowed, record_posting_activity
 
 
 @dataclass(slots=True, frozen=True)
@@ -57,6 +58,7 @@ class WorkflowService:
         source_reference: str | None = None,
         metadata: Mapping[str, object] | None = None,
         chunk_size: int = 500,
+        commit: bool = True,
     ) -> list[StagedTransaction]:
         """Persist raw transaction payloads into the staging tables atomically."""
 
@@ -135,7 +137,10 @@ class WorkflowService:
                 if chunk_size > 0 and len(staged_records) % chunk_size == 0:
                     self.s.flush()
 
-            self.s.commit()
+            if commit:
+                self.s.commit()
+            else:
+                self.s.flush()
         except Exception:
             self.s.rollback()
             raise
@@ -150,6 +155,7 @@ class WorkflowService:
         staged_ids: Sequence[int] | None = None,
         *,
         auto_post: bool = True,
+        commit: bool = True,
     ) -> list[WorkflowResult]:
         """Validate and optionally post staged transactions independently."""
 
@@ -180,8 +186,13 @@ class WorkflowService:
 
             try:
                 payload, organization_id = self._prepare_postings(postings)
+                if auto_post:
+                    ensure_posting_allowed(self.s, organization_id, staged.date)
                 ledger = LedgerService(self.s, organization_id=organization_id)
                 normalised = ledger.validate_transaction(staged.date, staged.description, payload)
+            except PeriodPostingError:
+                self.s.rollback()
+                raise
             except ValueError as exc:
                 error = str(exc)
                 staged.status = WorkflowStatus.FAILED
@@ -199,7 +210,10 @@ class WorkflowService:
                     event="rejected",
                     organization_id=None,
                 )
-                self.s.commit()
+                if commit:
+                    self.s.commit()
+                else:
+                    self.s.flush()
                 results.append(self._result_from_staged(staged))
                 continue
 
@@ -225,7 +239,10 @@ class WorkflowService:
                     event=event,
                     organization_id=organization_id,
                 )
-                self.s.commit()
+                if commit:
+                    self.s.commit()
+                else:
+                    self.s.flush()
                 results.append(self._result_from_staged(staged))
                 continue
 
@@ -243,15 +260,20 @@ class WorkflowService:
                         event=event,
                         organization_id=organization_id,
                     )
-                    self.s.commit()
+                    if commit:
+                        self.s.commit()
+                    else:
+                        self.s.flush()
                     results.append(self._result_from_staged(staged))
                     continue
 
             try:
+                ledger_activity_revision = record_posting_activity(self.s, organization_id, staged.date)
                 transaction = self._stage_transaction(
                     staged,
                     normalised,
                     organization_id=organization_id,
+                    ledger_activity_revision=ledger_activity_revision,
                 )
                 staged.transaction_id = transaction.id
                 staged.status = WorkflowStatus.POSTED
@@ -264,9 +286,17 @@ class WorkflowService:
                     event=event,
                     organization_id=organization_id,
                 )
-                self.s.commit()
+                if commit:
+                    self.s.commit()
+                else:
+                    self.s.flush()
+            except PeriodPostingError:
+                self.s.rollback()
+                raise
             except Exception as exc:
                 self.s.rollback()
+                if not commit:
+                    raise
                 failed = self.s.get(StagedTransaction, staged_id)
                 if failed is None:
                     raise
@@ -464,6 +494,7 @@ class WorkflowService:
         normalised: Sequence[dict[str, object]],
         *,
         organization_id: int | None,
+        ledger_activity_revision: int | None,
     ) -> Transaction:
         transaction = Transaction(
             date=staged.date,
@@ -497,6 +528,7 @@ class WorkflowService:
                 "source": staged.source,
                 "source_reference": staged.source_reference,
                 "organization_id": organization_id,
+                "ledger_activity_revision": ledger_activity_revision,
                 "postings": [
                     {
                         "account_id": posting["account_id"],

@@ -42,24 +42,49 @@ Access and refresh credentials are not interchangeable. Refresh reuse revokes th
 - `GET /tax/rules` - Tax rules by jurisdiction
 
 ### Ledger
-- `GET /ledger/accounts` - List accounts
-- `POST /ledger/accounts` - Create account
-- `GET /ledger/transactions` - List transactions
-- `POST /ledger/transactions` - Record transaction
-- `GET /ledger/balance` - Account balances
+- `POST /ledger/account` - Create a tenant account
+- `POST /ledger/post` - Record a balanced tenant transaction; dates in closed periods return `409` with `ACCOUNTING_PERIOD_CLOSED`, and dates in a cycle awaiting approval return `409` with `ACCOUNTING_PERIOD_CLOSE_READY`
+- `GET /ledger/trial-balance` - Return tenant trial-balance rows and totals
 
 ### Reports
-- `GET /reports/pnl` - Profit & Loss report
-- `GET /reports/balance-sheet` - Balance sheet report
-- `GET /reports/tax-summary` - Tax summary report
+- `GET /reports/budget-vs-actual` - Tenant-scoped budget variance report used by close reviews
+- `GET /reports/cashflow-forecast` - Tenant-scoped cashflow report
 
 ### Forecasting
 - `POST /forecast` - Generate forecast
 - `GET /forecast/models` - List available models
 
 ### Audit
-- `GET /audit/snapshot` - Generate audit snapshot
-- `GET /audit/reports` - List audit reports
+- `GET /audit/` - Administrator-only tenant audit log with bounded pagination
+
+### Accountant close workspace
+
+Every route below requires a persisted access-token session and `organization_id`. Reads require tenant membership. Operational mutations require ledger-manager or administrator membership. Final close, reopen, cancellation, restart, return-to-work, and approval revocation require an administrator. The final checklist approval is never manually writable. Scoped objects and assignment users from another tenant return a nondisclosing `404` after organization authorization.
+
+- `POST|GET /close/periods` and `GET /close/periods/{period_id}`
+- `POST|GET /close/periods/{period_id}/cycles` and `GET /close/cycles/{cycle_id}`
+- `POST /close/cycles/{cycle_id}/{start|ready|return-to-work|close|reopen|cancel|restart}`
+- `GET /close/cycles/{cycle_id}/readiness`
+- `GET|POST /close/cycles/{cycle_id}/checklist`
+- `PATCH /close/cycles/{cycle_id}/checklist/{task_id}`
+- `GET|POST /close/cycles/{cycle_id}/reconciliations`
+- `PATCH /close/cycles/{cycle_id}/reconciliations/{reconciliation_id}`
+- `POST /close/cycles/{cycle_id}/reconciliations/{reconciliation_id}/approve`
+- `POST /close/cycles/{cycle_id}/variance-reviews/from-budget`
+- `GET /close/cycles/{cycle_id}/variance-reviews?limit=&offset=`
+- `PATCH /close/cycles/{cycle_id}/variance-reviews/{review_id}`
+- `GET /close/cycles/{cycle_id}/journal-approvals?limit=&offset=` and `POST /close/cycles/{cycle_id}/journal-approvals`
+- `GET /close/cycles/{cycle_id}/journal-approvals/{approval_id}/history?limit=&offset=`
+- `POST /close/cycles/{cycle_id}/journal-approvals/{approval_id}/decide`
+- `GET /close/cycles/{cycle_id}/evidence/preview`
+- `POST /close/cycles/{cycle_id}/evidence`
+- `GET /close/cycles/{cycle_id}/evidence/download`
+
+Reconciliation uses the explicit sign convention `difference = control_balance - ledger_ending_balance`. Cycle creation by a ledger manager uses server defaults. An administrator may supply only the typed policy fields for reconciliation scope/not-applicable status, variance requirement, and journal mode, and every override requires a bounded reason; unknown and inconsistent fields are rejected. Variance readiness requires the latest durable in-period run when enabled, including a zero-row run. Each rerun owns fresh rows, and only its current rows can be updated or affect readiness. Journal policy is explicit: `REQUESTED_ONLY` or `ALL_PERIOD_TRANSACTIONS`.
+
+Reconciliation, variance, approval-summary, and decision-history reads use `limit`/`offset`, default to 100 records, and reject limits above 500. Approval summaries do not embed decision history. A separate tenant- and cycle-scoped history route returns the immutable decisions. A cycle may retain at most 500 approval records; an idempotent request for a current reference remains valid at the cap, while a new reference is rejected without partial state.
+
+Operational writes are allowed only in `IN_PROGRESS`/`BLOCKED`; `READY_FOR_APPROVAL` freezes direct and workflow posting as well as close controls until an administrator records a reasoned return-to-work. `CLOSED` and `CANCELLED` are read-only except administrator reopen/restart. Every successful in-period post atomically advances `AccountingPeriod.ledger_activity_revision`. Approved reconciliations, the latest variance run, and evidence must match that revision. `CloseCycle.content_revision` independently tracks close-control mutations. Draft evidence conditionally verifies cycle status, close revision, and ledger revision at persistence time. `POST .../evidence` builds once and uses that one bundle for its response, durable `CloseEvidence` metadata, and generation audit. `GET .../evidence/download` returns `409 CLOSE_EVIDENCE_NOT_CURRENT` unless the latest tenant record matches the current cycle revision, ledger revision, draft/final classification, and recomputed manifest; it never records or silently regenerates evidence. Final close creates current `CLOSED` evidence in the same transaction. ZIPs contain only the latest variance run's current rows, durable run proof, immutable approval decisions, and a typed safe policy.
 
 ## Request/Response Format
 

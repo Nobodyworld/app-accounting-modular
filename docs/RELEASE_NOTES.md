@@ -2,12 +2,18 @@
 
 ## Current Candidate
 
-Version file: `0.1.0`  
-Validated baseline before the current UX/UI pull request: `35292ea58555e7a8a35d054f98ebd95566c9129f`
+Version candidate: `0.2.0`
+Current main baseline: `445241b4514baa42feef0541b677233920540114`
 
 This public repository is an Early Beta / Portfolio Preview accounting-controls toolkit. It demonstrates modular snapshot orchestration, authenticated tenant-scoped review utilities, accountant-ready reports, provider provenance, journal controls, health diagnostics, scenario plans, CLI/API/Streamlit review surfaces, and extension contracts. It is not presented as a production ERP, tax engine, treasury system, regulated bank-feed product, or commercially supported accounting platform.
 
 ## Highlights
+
+- Authenticated Accountant Close Workspace with immutable lifecycle states, a READY posting freeze, reasoned restart/return-to-work/reopen, typed administrator policy exceptions, ledger-revision-bound reconciliations and current variance runs, explicit journal-approval policy, conditionally persisted draft evidence, and atomic final `CLOSED` evidence.
+- Deterministic evidence ZIP with canonical JSON, LF spreadsheet-safe CSV, normalized entry timestamps, per-file SHA-256 values, one non-self-referential manifest hash across bytes/metadata/audit, and typed safe policy output.
+- Recorded-evidence download enforcement: generation builds once, while download requires a current persisted manifest and returns a typed conflict for missing, stale, reclassified, or mismatched evidence.
+- Bounded close collections with 100-record defaults, 500-record maximum pages, separately paged immutable journal decisions, and a 500-approval per-cycle cap.
+- Critical-module coverage policy with independent line and branch floors so aggregate coverage cannot mask close, ledger, workflow, or session-control regressions.
 
 - Public/local Streamlit review flow for financial snapshots, source evidence, freshness, and journal-control status.
 - Authenticated organization-scoped scenario-plan, budget, cashflow, FX, and market review workflows.
@@ -44,6 +50,16 @@ The quality gate runs:
 - `pip-audit`; and
 - current-tree secret scanning.
 
+The refreshed v0.2 candidate passes 639 tests with 87.99% line coverage
+(9,121/10,366) and 71.45% branch coverage (1,829/2,560). All configured
+critical-module floors, the 52-test accounting-control subset, `pip check`,
+the GitPython 3.1.58 hashed runtime-lock audit, and the development dependency
+audit pass. Literal Microsoft Edge 200% zoom acceptance passed in Edge
+151.0.4129.72 on Windows 25H2 build 26200.8894: all six close sections,
+mutation and download reachability, keyboard traversal, responsive metric and
+table layout, and application-origin console checks passed. The exact 390×844
+CSS-pixel viewport recheck also passed without page-level horizontal overflow.
+
 Hosted CI additionally validates Python 3.12, 3.13, and 3.14, builds and starts the Compose services, verifies required JWT configuration, and inspects the live least-privilege container runtime. See [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md) and issue #87 for the current audit disposition.
 
 ## Running The Demonstration
@@ -67,4 +83,4 @@ Demo providers use controlled sample data unless external credentials are config
 
 ## Release Decision
 
-The project remains an Early Beta / Portfolio Preview. Local demonstration is the validated deployment boundary. Trusted-team, LAN, or public hosting claims require completion of issue #87 and explicit deployment review.
+The project remains an Early Beta / Portfolio Preview. Local demonstration is the validated deployment boundary. The v0.2 close workspace is not ERP completeness, automatic bank reconciliation, production close certification, public-hosting approval, or regulatory compliance. Trusted-team, LAN, or public hosting claims require a separate deployment review.

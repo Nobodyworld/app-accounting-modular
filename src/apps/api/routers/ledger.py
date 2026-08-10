@@ -13,6 +13,7 @@ from ..models.models import Account, Transaction, User
 from ..schemas import AccountCreate, TransactionCreate, TrialBalanceResponse
 from ..security import get_current_organization, get_current_user
 from ..services.ledger_service import LedgerService
+from ..services.period_lock import PeriodPostingError
 
 router = APIRouter(prefix="/ledger", tags=["ledger"])
 
@@ -90,6 +91,8 @@ def post_transaction(
             source=payload.source,
             source_reference=payload.source_reference,
         )
+    except PeriodPostingError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

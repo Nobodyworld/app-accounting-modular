@@ -19,6 +19,7 @@ from ..schemas import (
     WorkflowResultSchema,
 )
 from ..security import get_current_organization, get_current_user
+from ..services.period_lock import PeriodPostingError
 from ..services.workflow_service import WorkflowService
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
@@ -245,6 +246,7 @@ def ingest_transactions(
             source=_storage_source(payload.source, org_id),
             source_reference=payload.source_reference,
             metadata={**payload.metadata, **internal_metadata},
+            commit=not payload.auto_process,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -252,7 +254,15 @@ def ingest_transactions(
     results = []
     if payload.auto_process:
         staged_ids = [_require_id(item.id, label="staged transaction") for item in staged]
-        results = svc.process_transactions(staged_ids)
+        try:
+            results = svc.process_transactions(staged_ids, commit=False)
+            s.commit()
+        except PeriodPostingError as exc:
+            s.rollback()
+            raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+        except Exception:
+            s.rollback()
+            raise
 
     return WorkflowIngestResponse(
         staged_ids=[_require_id(item.id, label="staged transaction") for item in staged],
@@ -283,7 +293,10 @@ def process_transactions(
     if not staged_ids:
         return []
 
-    results = svc.process_transactions(staged_ids, auto_post=payload.auto_post)
+    try:
+        results = svc.process_transactions(staged_ids, auto_post=payload.auto_post)
+    except PeriodPostingError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
     return [WorkflowResultSchema.from_result(result) for result in results]
 
 
