@@ -1,6 +1,6 @@
 # Contributing to Modular Accounting
 
-Thanks for your interest in improving Modular Accounting! This guide outlines the preferred development workflow, contributor expectations, and documentation standards.
+Thanks for your interest in improving Modular Accounting. This guide outlines the preferred development workflow, contributor expectations, and documentation standards.
 
 ## Getting Started
 
@@ -13,7 +13,7 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
    make install
    ```
 
-3. **Install pre-commit hooks** for formatting, linting, and commit message validation:
+3. **Install pre-commit hooks** for formatting, linting, and commit-message validation:
 
    ```bash
    pre-commit install --install-hooks
@@ -28,57 +28,85 @@ Thanks for your interest in improving Modular Accounting! This guide outlines th
 
 ## Branching & Commits
 
-- Use feature branches (`feature/<slug>`, `fix/<slug>`, `docs/<slug>`).
-- Follow [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages (e.g., `feat(ledger): add bulk import`).
+- Use feature branches (`feature/<slug>`, `fix/<slug>`, `docs/<slug>`, `quality/<slug>`).
+- Follow [Conventional Commits](https://www.conventionalcommits.org/) for commit messages (for example, `feat(ledger): add bulk import`).
 - Keep commits focused; avoid mixing behaviour changes with mechanical formatting.
-- Rebase before opening a PR to keep history clean.
+- Do not rewrite a shared or already reviewed branch without maintainer approval. Update your branch from its base using the collaboration method agreed for that PR.
 
 ## Code Style & Quality Gates
 
 - Python formatting: **Ruff format** (line length 120) enforced via pre-commit.
-- Linting: **Ruff** (including import sorting) with project-level configuration in `pyproject.toml`.
-- Static typing: **mypy** gradually enforced; consult [governance/plan.md](governance/plan.md) for the current strict coverage map.
-- Front-end assets: **Prettier** for Markdown/YAML/JSON.
-- Run `pre-commit run --all-files` or `make quality` before pushing to catch style issues locally. Use `make ci` for the full lint/type/test/security pipeline (`pip-audit` included). Public-release candidates also require full-history secret-scan evidence recorded in [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md).
+- Linting: **Ruff** with project-level configuration in `pyproject.toml`.
+- Ruff remains pinned to the validated 0.15.21 release; issue #102 owns the separate Ruff 0.16 migration and Markdown-formatting policy.
+- Static typing: **mypy** over the configured source packages; new critical modules should be added to meaningful checking.
+- Run `pre-commit run --all-files` or `make quality` before pushing. Use `make ci` for the full lint/type/test/security pipeline.
+- Public-release and security-review candidates also require full-history secret-scan evidence recorded in [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md) or the applicable security review.
 - Health checks: `make health` exercises the CLI-based readiness probes.
-- Steward metrics: `make audit` generates a Markdown snapshot under `docs/reports/` with
-  coverage, complexity, and dependency ratios when preparing quarterly reviews.
+- Steward metrics: `make audit` generates a Markdown snapshot under `docs/reports/` when preparing periodic reviews.
+
+### Changed-production-line coverage
+
+When production code changes, generate coverage and evaluate it against an explicit base commit:
+
+```bash
+make diff-coverage BASE=<base-sha-or-ref>
+```
+
+The underlying command is:
+
+```bash
+python -m src.tools.diff_coverage coverage.json \
+  --base <base-sha-or-ref> \
+  --head HEAD \
+  --config config/diff-coverage.toml \
+  --json-output diff-coverage.json \
+  --markdown-output diff-coverage.md
+```
+
+The policy evaluates changed executable lines under `src/apps`, `src/plugins`, and `src/cli` and requires at least 85% coverage. It is independent of the aggregate 85% line gate and per-critical-module line/branch floors. An unresolved base, malformed evidence, or a changed production file missing from Coverage.py evidence fails closed. Pull-request CI uses the exact GitHub base and head SHAs and uploads deterministic JSON/Markdown evidence.
+
+Generated `coverage.json`, XML, and changed-line evidence are run artifacts; do not commit them.
 
 ## Testing Strategy
 
-- Add unit tests under `tests/` mirroring the module path (`tests/services/test_*.py`, etc.).
-- For API changes, include integration tests using FastAPI's `TestClient` to validate status codes, schemas, and metadata.
+- Add unit tests under `tests/` using the repository's existing flat naming conventions.
+- For API changes, include integration tests using FastAPI's `TestClient` to validate authorization order, status codes, schemas, limits, and sanitized errors.
 - CLI commands should have smoke tests using Click's `CliRunner`.
-- Keep tests hermetic (no real network calls). Use fixtures/mocks for external APIs.
+- Keep tests hermetic: no live provider requests, model downloads, or credentials.
+- Test accounting and workflow changes for rollback, tenant isolation, boundary values, idempotency, and concurrency where state transitions can race.
+- Forecast changes must preserve finite-value, cadence, timezone, regressor-alignment, output, metric, and sanitized-error contracts documented in [`FORECASTING.md`](FORECASTING.md).
 
 ## Documentation Expectations
 
-- Every code change affecting behaviour must update relevant docs (`README.md`, `docs/`, router/service docstrings).
-- Include usage examples or migration notes when introducing new endpoints, CLI commands, or environment variables.
-- Ensure Markdown follows the conventions described in `docs/README.md` (tables for configuration, fenced code blocks for commands).
-- Changelog entries go under the **Unreleased** section of `CHANGELOG.md`. When shipping a release, run `python -m tools.release <version>` to roll the notes forward automatically.
+- Every behaviour change must update relevant docs (`README.md`, `docs/`, router/service docstrings).
+- Include usage examples or migration notes when introducing endpoints, CLI commands, environment variables, or quality policies.
+- Ensure Markdown follows the conventions described in [`README.md`](README.md).
+- Changelog entries go under the **Unreleased** section of `CHANGELOG.md`.
 
 ## Pull Request Checklist
 
-- [ ] Quality gates passing locally (`make quality`).
-- [ ] `pre-commit run --all-files` clean.
-- [ ] Documentation updated (including docstrings where appropriate) and new
-      guides linked from `docs/index.md` when applicable.
-- [ ] Added/updated entry in `CHANGELOG.md` if behaviour changed.
-- [ ] Screenshots attached for Streamlit/visual changes.
-- [ ] Linked issue(s) referenced in the PR body.
+- [ ] Quality gates pass locally (`make quality`).
+- [ ] Changed production code passes `make diff-coverage BASE=<base-sha-or-ref>`.
+- [ ] Independent critical-module floors pass.
+- [ ] `pre-commit run --all-files` is clean when hooks are installed.
+- [ ] Documentation and applicable docstrings are updated and new guides are linked from `docs/README.md`.
+- [ ] `CHANGELOG.md` is updated when behaviour changes.
+- [ ] Screenshots or browser evidence are attached for material Streamlit/visual changes.
+- [ ] Linked issues are referenced in the PR body.
 
 ## Review Process
 
-1. Open a PR with a clear title, summary, and testing notes (use the PR template).
-2. Automated checks (CI, CodeQL) run on every push.
-3. Address reviewer feedback via follow-up commits (use `fixup!` or `squash` when appropriate).
-4. Maintainers squash-merge once approvals and green checks are in place.
+1. Open a PR with a clear title, summary, scope boundary, and validation notes.
+2. Required workflows validate Python 3.12–3.14, changed-production coverage, accounting controls, dependency/secret gates, container supply chain, and container smoke as applicable.
+3. Address review feedback through focused follow-up commits; do not weaken gates to obtain a passing result.
+4. Maintainers use an exact-head squash merge after explicit authorization and green required checks.
+
+CodeQL is not currently an established required workflow for this repository. Do not claim CodeQL evidence unless an actual current scan has run.
 
 ## Reporting Bugs & Requesting Features
 
-- Use GitHub issue templates (`Bug report`, `Feature request`).
-- Provide reproduction steps, expected vs actual behaviour, and environment details (OS, Python version, database backend).
-- Tag severity/priority labels where applicable and assign to the relevant code owners.
+- Use the GitHub issue templates (`Bug report`, `Feature request`).
+- Provide reproduction steps, expected versus actual behaviour, and relevant environment details.
+- Never include credentials, tokens, production financial data, or sensitive environment dumps.
 
-We appreciate your contributions—thank you for helping build a modern, extensible accounting platform!
+Thank you for helping improve this Early Beta modular accounting-control toolkit.
