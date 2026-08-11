@@ -1,0 +1,11 @@
+# Repository-owned changed-production-line coverage policy.
+#
+# Coverage.py currently records the validated runtime under src/apps, src/plugins,
+# and src/cli. Development tooling under src/tools is validated by focused tests
+# but is not part of the release-authoritative runtime coverage denominator.
+
+[diff_coverage]
+include_roots = ["src/apps", "src/plugins", "src/cli"]
+exclude = []
+minimum_changed_line_percent = 85.0
+allow_no_changed_executable_lines = true

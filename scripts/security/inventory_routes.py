@@ -201,30 +201,37 @@ POLICIES: dict[str, Policy] = {
     "POST /forecast/series": Policy(
         "tenant member",
         "organization_id",
-        "caller-supplied series (compute forecast)",
-        "tests/test_forecast_service.py; tests/test_input_limits.py; tests/test_request_body_limits.py",
-        "route-level no-membership",
+        "caller-supplied finite regular-cadence series (compute forecast)",
+        "tests/test_forecast_api.py::test_tenant_authorization_runs_before_forecast_work; "
+        "tests/test_forecast_service.py; tests/test_forecast_robustness.py; tests/test_input_limits.py; "
+        "tests/test_request_body_limits.py",
+        "none identified",
     ),
     "GET /forecast/models": Policy(
         "tenant member",
         "organization_id",
-        "forecast model catalog (read)",
+        "bounded forecast model catalog and optional-dependency status (read)",
+        "tests/test_forecast_api.py::test_tenant_authorization_runs_before_forecast_work; "
         "tests/test_forecast_service.py",
-        "route-level no-membership",
+        "none identified",
     ),
     "POST /forecast/backtest": Policy(
         "tenant member",
         "organization_id",
-        "caller-supplied series (compute backtests)",
-        "tests/test_forecast_service.py; tests/test_input_limits.py; tests/test_request_body_limits.py",
-        "route-level no-membership",
+        "caller-supplied finite regular-cadence series (compute bounded backtests)",
+        "tests/test_forecast_api.py::test_tenant_authorization_runs_before_forecast_work; "
+        "tests/test_forecast_service.py; tests/test_forecast_robustness.py; tests/test_input_limits.py; "
+        "tests/test_request_body_limits.py",
+        "none identified",
     ),
     "POST /forecast/impact": Policy(
         "tenant member",
         "organization_id",
-        "caller-supplied series (compute causal impact)",
-        "tests/test_forecast_service.py; tests/test_input_limits.py; tests/test_request_body_limits.py",
-        "route-level no-membership",
+        "caller-supplied finite regular-cadence series and contained event window (compute causal impact)",
+        "tests/test_forecast_api.py::test_tenant_authorization_runs_before_forecast_work; "
+        "tests/test_forecast_service.py; tests/test_forecast_robustness.py; tests/test_input_limits.py; "
+        "tests/test_request_body_limits.py",
+        "none identified",
     ),
     "GET /reports/budget-vs-actual": Policy(
         "tenant member",

@@ -1,232 +1,257 @@
+"""Validated forecast boundary layered over the existing model engine."""
+
 from __future__ import annotations
 
-import importlib
-import logging
 import math
-import warnings
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from datetime import date, datetime
-from math import sqrt
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 from pandas import DatetimeIndex
+from pandas.tseries.offsets import BaseOffset
 from statsmodels.tsa.arima.model import ARIMA
 
-logger = logging.getLogger(__name__)
+from . import forecast_legacy as _legacy
+
+BacktestFold = _legacy.BacktestFold
+BacktestResult = _legacy.BacktestResult
+CausalImpactResult = _legacy.CausalImpactResult
+ForecastResult = _legacy.ForecastResult
+ImpactPoint = _legacy.ImpactPoint
+ModelInfo = _legacy.ModelInfo
+
+__all__ = [
+    "ARIMA",
+    "BacktestFold",
+    "BacktestResult",
+    "CausalImpactResult",
+    "ForecastResult",
+    "ForecastService",
+    "ImpactPoint",
+    "ModelInfo",
+]
 
 
-@dataclass(slots=True)
-class ForecastResult:
-    """Structured forecast output including diagnostics."""
+class ForecastService(_legacy.ForecastService):
+    """Forecast engine with deterministic validation and sanitized output contracts."""
 
-    horizon: int
-    points: list[tuple[str, float]]
-    model_order: tuple[int, int, int]
-    diagnostics: dict[str, object] | None
-    timezone: str | None
-    model: str = "arima"
-
-
-@dataclass(slots=True)
-class ModelInfo:
-    """Model registry metadata exposed via the API."""
-
-    key: str
-    name: str
-    family: Literal["statistical", "bayesian", "ml"]
-    description: str
-    supports_exogenous: bool = False
-    available: bool = True
-    requirements: tuple[str, ...] = ()
-    notes: str | None = None
-
-
-@dataclass(slots=True)
-class BacktestFold:
-    """Single rolling-origin evaluation fold."""
-
-    start: str
-    end: str
-    horizon: int
-    actual: list[tuple[str, float]]
-    forecast: list[tuple[str, float]]
-    mae: float
-    rmse: float
-    mape: float | None
-
-
-@dataclass(slots=True)
-class BacktestResult:
-    """Aggregated metrics for a model across folds."""
-
-    model: str
-    folds: list[BacktestFold]
-    metrics: dict[str, float | None]
-    tested_points: int
-    available: bool = True
-    reason: str | None = None
-    timezone: str | None = None
-
-
-@dataclass(slots=True)
-class ImpactPoint:
-    """Counterfactual vs observed for a single timestamp."""
-
-    timestamp: str
-    actual: float
-    predicted: float
-    impact: float
-
-
-@dataclass(slots=True)
-class CausalImpactResult:
-    """Summary of a causal impact analysis run."""
-
-    model: str
-    event_start: str
-    event_end: str
-    average_impact: float
-    cumulative_impact: float
-    p_value: float | None
-    points: list[ImpactPoint]
-    diagnostics: dict[str, object]
-    timezone: str | None = None
-
-
-class ForecastService:
-    def __init__(
-        self,
-        *,
-        candidate_orders: list[tuple[int, int, int]] | None = None,
-        minimum_observations: int = 5,
-        fallback_strategy: Literal["repeat_last", "mean", "raise"] = "repeat_last",
-    ):
-        if minimum_observations < 1:
-            raise ValueError("minimum_observations must be at least 1")
-        if fallback_strategy not in ("repeat_last", "mean", "raise"):
-            raise ValueError("Unsupported fallback strategy")
-
-        self.candidate_orders = candidate_orders or [
-            (1, 1, 1),
-            (0, 1, 1),
-            (1, 1, 0),
-            (2, 1, 1),
-            (1, 0, 1),
-        ]
-        self.minimum_observations = minimum_observations
-        self.fallback_strategy = fallback_strategy
-        self._prophet_class: Any | None = None
-        self._prophet_error: Exception | None = None
-        self._sklearn_error: Exception | None = None
-        self._model_registry = self._build_registry()
-
-    # ------------------------------------------------------------------
-    # Model registry helpers
-    # ------------------------------------------------------------------
-    def _build_registry(self) -> dict[str, ModelInfo]:
-        return {
-            "arima": ModelInfo(
-                key="arima",
-                name="Auto ARIMA",
-                family="statistical",
-                description="Seasonal-friendly ARIMA with optional exogenous regressors",
-                supports_exogenous=True,
-                available=True,
-            ),
-            "prophet": ModelInfo(
-                key="prophet",
-                name="Prophet",
-                family="bayesian",
-                description="Prophet with automatic seasonality and custom regressors",
-                supports_exogenous=True,
-                available=self._prophet_available(),
-                requirements=("prophet>=1.0",),
-                notes="Install the optional 'prophet' dependency to enable.",
-            ),
-            "gradient_boosting": ModelInfo(
-                key="gradient_boosting",
-                name="Gradient Boosting Regressor",
-                family="ml",
-                description="Tree-based regressor with lagged features and seasonality signals",
-                supports_exogenous=True,
-                available=self._sklearn_available(),
-                requirements=("scikit-learn>=1.5",),
-            ),
-        }
-
-    def available_models(self) -> list[ModelInfo]:
-        """Return registered models with availability state."""
-
-        models = list(self._model_registry.values())
-        models.sort(key=lambda item: item.key)
-        return models
-
-    def _normalise_model_key(self, model: str) -> str:
-        key = (model or "arima").strip().lower()
-        aliases = {
-            "fbprophet": "prophet",
-            "ml": "gradient_boosting",
-            "gbr": "gradient_boosting",
-            "gboost": "gradient_boosting",
-            "boosting": "gradient_boosting",
-        }
-        return aliases.get(key, key)
-
-    def _prophet_available(self) -> bool:
-        if self._prophet_class is not None:
-            return True
+    @staticmethod
+    def _finite_float(value: object, label: str) -> float:
+        if isinstance(value, bool):
+            raise ValueError(f"{label} must be numeric")
         try:
-            module = importlib.import_module("prophet")
-            self._prophet_class = module.Prophet
-            return True
-        except Exception as exc:  # pragma: no cover - availability depends on environment
-            self._prophet_error = exc
-            logger.debug("Prophet unavailable: %s", exc)
-            return False
+            result = float(cast(Any, value))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(f"{label} must be numeric") from exc
+        if not math.isfinite(result):
+            raise ValueError(f"{label} must be finite")
+        return result
 
-    def _sklearn_available(self) -> bool:
+    @staticmethod
+    def _timestamp(value: object, label: str) -> pd.Timestamp:
         try:
-            importlib.import_module("sklearn")
-            return True
-        except Exception as exc:  # pragma: no cover - availability depends on environment
-            self._sklearn_error = exc
-            logger.debug("scikit-learn unavailable: %s", exc)
-            return False
-
-    # ------------------------------------------------------------------
-    # Core helpers
-    # ------------------------------------------------------------------
-    def _prepare_series(self, series: list[tuple[str | date, float]]) -> tuple[pd.DataFrame, str | None]:
-        df = pd.DataFrame(series, columns=["ts", "y"]).copy()
-        try:
-            df["y"] = pd.to_numeric(df["y"], errors="raise").astype(float)
+            result = pd.Timestamp(cast(Any, value))
         except Exception as exc:
-            raise ValueError("Series contains non-numeric values") from exc
+            raise ValueError(f"{label} contains an invalid timestamp") from exc
+        if pd.isna(result):
+            raise ValueError(f"{label} contains an invalid timestamp")
+        return result
 
-        df["ts"] = pd.to_datetime(df["ts"])
-        df = df.drop_duplicates(subset="ts", keep="last").sort_values("ts")
-        timezone = None
-        if df["ts"].dt.tz is None:
-            timezone = "UTC"
+    @staticmethod
+    def _timezone_key(timestamp: pd.Timestamp) -> str:
+        if timestamp.tzinfo is None:
+            return "naive"
+        return str(getattr(timestamp.tzinfo, "key", None) or timestamp.tzinfo)
+
+    @staticmethod
+    def _cadence_label(offset: BaseOffset, *, prefix: str | None = None) -> str:
+        freq = str(getattr(offset, "freqstr", None) or offset)
+        normalized = freq.lower()
+        if normalized in {"d", "1d"}:
+            label = "daily"
+        elif normalized in {"h", "1h"}:
+            label = "hourly"
         else:
-            timezone = str(df["ts"].dt.tz)
-        df = df.set_index("ts")
-        return df, timezone
+            label = freq
+        return f"{prefix}:{label}" if prefix else label
+
+    @classmethod
+    def _infer_cadence(cls, index: DatetimeIndex) -> tuple[BaseOffset, str]:
+        if len(index) == 0:
+            raise ValueError("Series must contain observations")
+        if len(index) == 1:
+            offset: BaseOffset = pd.offsets.Day(1)
+            return offset, "single-observation-daily-default"
+        if len(index) == 2:
+            delta = index[1] - index[0]
+            if delta <= pd.Timedelta(0):
+                raise ValueError("Series timestamps must increase")
+            offset = pd.tseries.frequencies.to_offset(delta)
+            return offset, cls._cadence_label(offset, prefix="two-point-observed-interval")
+        inferred = pd.infer_freq(index)
+        if inferred is None:
+            raise ValueError("Series timestamps must use a regular cadence")
+        offset = pd.tseries.frequencies.to_offset(inferred)
+        return offset, cls._cadence_label(offset)
+
+    def _prepare_frame(
+        self,
+        series: Sequence[tuple[str | date, float]],
+        *,
+        label: str,
+        require_regular: bool,
+    ) -> tuple[pd.DataFrame, str]:
+        if not series:
+            raise ValueError(f"{label} must contain observations")
+
+        timezone_key: str | None = None
+        aware: bool | None = None
+        records: list[tuple[pd.Timestamp, float]] = []
+        for timestamp_value, numeric_value in series:
+            timestamp = self._timestamp(timestamp_value, label)
+            timestamp_aware = timestamp.tzinfo is not None
+            current_key = self._timezone_key(timestamp)
+            if aware is None:
+                aware = timestamp_aware
+                timezone_key = current_key
+            elif timestamp_aware != aware:
+                raise ValueError(f"{label} timestamps cannot mix naive and timezone-aware values")
+            elif current_key != timezone_key:
+                raise ValueError(f"{label} timestamps must use one timezone")
+            records.append((timestamp, self._finite_float(numeric_value, f"{label} values")))
+
+        deduplicated: dict[pd.Timestamp, float] = {}
+        for timestamp, value in records:
+            deduplicated[timestamp] = value
+        ordered = sorted(deduplicated.items(), key=lambda item: item[0])
+        index = pd.DatetimeIndex([item[0] for item in ordered])
+        cadence = "not-evaluated"
+        if require_regular:
+            offset, cadence = self._infer_cadence(index)
+            try:
+                index = pd.DatetimeIndex(index, freq=offset)
+            except ValueError as exc:
+                raise ValueError(f"{label} timestamps must use a regular cadence") from exc
+
+        frame = pd.DataFrame({"y": [item[1] for item in ordered]}, index=index)
+        frame.attrs["cadence"] = cadence
+        frame.attrs["duplicates_resolved"] = len(records) - len(ordered)
+        frame.attrs["timezone_key"] = timezone_key or "naive"
+        timezone = "UTC"
+        if timezone_key is not None and timezone_key != "naive":
+            timezone = timezone_key
+        return frame, timezone
+
+    def _prepare_series(self, series: list[tuple[str | date, float]]) -> tuple[pd.DataFrame, str | None]:
+        return self._prepare_frame(series, label="Series", require_regular=True)
 
     def _generate_future_index(self, index: DatetimeIndex, horizon: int) -> DatetimeIndex:
-        if index.freq is not None:
-            start = index[-1] + index.freq
-            return pd.date_range(start=start, periods=horizon, freq=index.freq)
+        if horizon <= 0:
+            raise ValueError("horizon must be positive")
+        offset = index.freq
+        if offset is None:
+            offset, _ = self._infer_cadence(index)
+        return pd.date_range(start=index[-1], periods=horizon + 1, freq=offset)[1:]
 
-        if len(index) >= 2:
-            inferred = pd.tseries.frequencies.to_offset(index[-1] - index[-2])
-        else:
-            inferred = pd.offsets.Day(1)
-        start = index[-1] + inferred
-        return pd.date_range(start=start, periods=horizon, freq=inferred)
+    def _prepare_exogenous(
+        self,
+        df: pd.DataFrame,
+        exogenous: Mapping[str, Sequence[tuple[str | date, float]]],
+    ) -> pd.DataFrame:
+        base_index = pd.DatetimeIndex(df.index)
+        target_timezone = str(df.attrs.get("timezone_key", self._timezone_key(pd.Timestamp(base_index[0]))))
+        aligned_frame = pd.DataFrame(index=base_index)
+        seen: set[str] = set()
+
+        for raw_name in sorted(exogenous):
+            name = raw_name.strip()
+            if not name:
+                raise ValueError("Regressor names must not be empty")
+            if name in seen:
+                raise ValueError(f"Regressor names must be unique: {name}")
+            seen.add(name)
+            values = exogenous[raw_name]
+            frame, _ = self._prepare_frame(values, label=f"Regressor '{name}'", require_regular=False)
+            regressor_timezone = str(frame.attrs.get("timezone_key"))
+            if regressor_timezone != target_timezone:
+                raise ValueError(f"Regressor '{name}' must use the target series timezone")
+            regressor_index = pd.DatetimeIndex(frame.index)
+            outside = regressor_index.difference(base_index)
+            if len(outside):
+                raise ValueError(f"Regressor '{name}' timestamps must align with the target series")
+            aligned = frame["y"].reindex(base_index, method="ffill")
+            if aligned.isna().any():
+                raise ValueError(f"Regressor '{name}' must begin at the first target timestamp")
+            values_array = aligned.to_numpy(dtype=float)
+            if not np.isfinite(values_array).all():
+                raise ValueError(f"Regressor '{name}' values must be finite")
+            aligned_frame[name] = values_array
+
+        return aligned_frame
+
+    def _default_future_exog(self, exog_df: pd.DataFrame, forecast_index: DatetimeIndex) -> pd.DataFrame:
+        if exog_df.empty:
+            raise ValueError("Regressor history must contain observations")
+        values = exog_df.to_numpy(dtype=float)
+        if not np.isfinite(values).all():
+            raise ValueError("Regressor values must be finite")
+        last_values = exog_df.iloc[-1].to_dict()
+        result = pd.DataFrame([last_values for _ in forecast_index], index=forecast_index)
+        if not np.isfinite(result.to_numpy(dtype=float)).all():
+            raise ValueError("Future regressor values must be finite")
+        return result
+
+    @classmethod
+    def _validate_diagnostic_value(cls, value: object, *, depth: int = 0) -> None:
+        if depth > 8:
+            raise ValueError("Forecast diagnostics exceed the supported nesting depth")
+        if value is None or isinstance(value, str | bool):
+            return
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            cls._finite_float(value, "Forecast diagnostics")
+            return
+        if isinstance(value, Mapping):
+            if len(value) > 256:
+                raise ValueError("Forecast diagnostics contain too many fields")
+            for key, nested in value.items():
+                if not isinstance(key, str):
+                    raise ValueError("Forecast diagnostic keys must be strings")
+                cls._validate_diagnostic_value(nested, depth=depth + 1)
+            return
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+            if len(value) > 256:
+                raise ValueError("Forecast diagnostics contain too many values")
+            for nested in value:
+                cls._validate_diagnostic_value(nested, depth=depth + 1)
+            return
+        raise ValueError("Forecast diagnostics contain an unsupported value")
+
+    def _validate_forecast_result(self, result: ForecastResult) -> ForecastResult:
+        if result.horizon != len(result.points):
+            raise ValueError("Forecast model returned an unexpected number of points")
+        previous: pd.Timestamp | None = None
+        for timestamp_text, value in result.points:
+            timestamp = self._timestamp(timestamp_text, "Forecast output")
+            if previous is not None and timestamp <= previous:
+                raise ValueError("Forecast output timestamps must increase")
+            previous = timestamp
+            self._finite_float(value, "Forecast output values")
+        if result.diagnostics is not None:
+            self._validate_diagnostic_value(result.diagnostics)
+        return result
+
+    @staticmethod
+    def _copy_diagnostics(result: ForecastResult) -> dict[str, object]:
+        return dict(result.diagnostics or {})
+
+    def _augment_result(self, result: ForecastResult, df: pd.DataFrame) -> ForecastResult:
+        diagnostics = self._copy_diagnostics(result)
+        diagnostics["cadence"] = str(df.attrs.get("cadence", "unknown"))
+        diagnostics["duplicate_timestamps_resolved"] = int(df.attrs.get("duplicates_resolved", 0))
+        result.diagnostics = diagnostics
+        return self._validate_forecast_result(result)
 
     def _fallback(
         self,
@@ -236,118 +261,7 @@ class ForecastService:
         *,
         model: str,
     ) -> ForecastResult:
-        if self.fallback_strategy == "raise":
-            raise ValueError("Insufficient observations for forecasting")
-
-        future_index = self._generate_future_index(pd.DatetimeIndex(df.index), horizon)
-        diagnostics: dict[str, object] = {"observations": len(df), "model": model}
-
-        if self.fallback_strategy == "mean":
-            value = float(df["y"].mean())
-            diagnostics["strategy"] = "fallback_mean"
-        else:
-            value = float(df["y"].iloc[-1])
-            diagnostics["strategy"] = "fallback_repeat_last"
-            last = df.index[-1]
-            ts = pd.Timestamp(last)
-            ts_utc = ts.tz_convert("UTC") if ts.tzinfo is not None else ts.tz_localize("UTC")
-            diagnostics["last_observation_label"] = ts.isoformat() if ts.tzinfo is not None else ts_utc.isoformat()
-            diagnostics["last_observation_epoch"] = ts_utc.timestamp()
-
-        if timezone and timezone != "UTC":
-            diagnostics["source_timezone"] = timezone
-
-        points = [(stamp.isoformat(), value) for stamp in future_index]
-        return ForecastResult(
-            horizon=horizon,
-            points=points,
-            model_order=(0, 0, 0),
-            diagnostics=diagnostics,
-            timezone=timezone or "UTC",
-            model=model,
-        )
-
-    def _prepare_exogenous(
-        self, df: pd.DataFrame, exogenous: Mapping[str, Sequence[tuple[str | date, float]]]
-    ) -> pd.DataFrame:
-        """Align exogenous regressors with the target series index."""
-
-        base_index = df.index
-        exog_df = pd.DataFrame(index=base_index)
-        for name, values in exogenous.items():
-            series_df = pd.DataFrame(values, columns=["ts", name])
-            series_df["ts"] = pd.to_datetime(series_df["ts"])
-            series_df = series_df.drop_duplicates(subset="ts", keep="last").set_index("ts").sort_index()
-            aligned = series_df.reindex(base_index, method="ffill").fillna(0.0)
-            exog_df[name] = pd.to_numeric(aligned[name], errors="coerce").fillna(0.0)
-        return exog_df
-
-    def _default_future_exog(self, exog_df: pd.DataFrame, forecast_index: DatetimeIndex) -> pd.DataFrame:
-        last_row = exog_df.iloc[-1:]
-        exog_future = pd.concat([last_row] * len(forecast_index), ignore_index=True)
-        exog_future.index = forecast_index
-        return exog_future
-
-    def build_event_regressors(
-        self,
-        events: Sequence[tuple[str | date, str]],
-        *,
-        keywords: Sequence[str] | None = None,
-    ) -> dict[str, list[tuple[str, float]]]:
-        """Convert event text into simple numeric regressors.
-
-        Counts keyword occurrences per event timestamp to produce a dummy series
-        suitable for the ``exogenous`` argument.
-        """
-
-        vocab = {kw.lower() for kw in (keywords or ("tax", "supply", "demand", "regulation", "outage"))}
-        series: list[tuple[str, float]] = []
-        for ts, text in events:
-            tokens = text.lower().split()
-            score = float(sum(1 for token in tokens if token.strip(".,;!") in vocab))
-            ts_label = pd.to_datetime(ts).isoformat()
-            series.append((ts_label, score))
-        return {"event_intensity": series}
-
-    # ------------------------------------------------------------------
-    # Forecasting entrypoints
-    # ------------------------------------------------------------------
-    def forecast_series(
-        self,
-        series: Sequence[tuple[str | date, float]],
-        horizon: int = 30,
-        *,
-        exogenous: Mapping[str, Sequence[tuple[str | date, float]]] | None = None,
-        model: str = "arima",
-    ) -> ForecastResult:
-        """Forecast time series using the requested model with sensible fallbacks."""
-
-        if horizon <= 0:
-            raise ValueError("horizon must be positive")
-        if not series:
-            return ForecastResult(
-                horizon=0,
-                points=[],
-                model_order=(0, 0, 0),
-                diagnostics={"observations": 0, "strategy": "empty_input", "model": model},
-                timezone="UTC",
-                model=model,
-            )
-
-        df, timezone = self._prepare_series(list(series))
-        model_key = self._normalise_model_key(model)
-        exog_df = self._prepare_exogenous(df, exogenous) if exogenous else None
-        if len(df) < self.minimum_observations:
-            return self._fallback(df, horizon, timezone, model=model_key)
-
-        return self._dispatch_model(
-            model_key,
-            df,
-            horizon,
-            timezone,
-            exog_df=exog_df,
-            exog_future=None,
-        )
+        return self._augment_result(super()._fallback(df, horizon, timezone, model=model), df)
 
     def _dispatch_model(
         self,
@@ -359,254 +273,77 @@ class ForecastService:
         exog_df: pd.DataFrame | None,
         exog_future: pd.DataFrame | None,
     ) -> ForecastResult:
-        if model == "arima":
-            return self._forecast_arima(df, horizon, timezone, exog_df=exog_df, exog_future=exog_future)
-        if model == "prophet":
-            return self._forecast_prophet(df, horizon, timezone, exog_df=exog_df, exog_future=exog_future)
-        if model == "gradient_boosting":
-            return self._forecast_gradient_boosting(df, horizon, timezone, exog_df=exog_df, exog_future=exog_future)
-        raise ValueError(f"Unsupported forecasting model '{model}'")
+        cast(Any, _legacy).ARIMA = ARIMA
+        result = super()._dispatch_model(
+            model,
+            df,
+            horizon,
+            timezone,
+            exog_df=exog_df,
+            exog_future=exog_future,
+        )
+        return self._augment_result(result, df)
 
-    def _forecast_arima(
+    def forecast_series(
         self,
-        df: pd.DataFrame,
-        horizon: int,
-        timezone: str | None,
+        series: Sequence[tuple[str | date, float]],
+        horizon: int = 30,
         *,
-        exog_df: pd.DataFrame | None,
-        exog_future: pd.DataFrame | None,
+        exogenous: Mapping[str, Sequence[tuple[str | date, float]]] | None = None,
+        model: str = "arima",
     ) -> ForecastResult:
-        best = None
-        best_order: tuple[int, int, int] | None = None
-        for order in self.candidate_orders:
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    model = ARIMA(df["y"], order=order, exog=exog_df)
-                    res = model.fit()
-            except Exception:
-                continue
+        if horizon <= 0:
+            raise ValueError("horizon must be positive")
+        if not series:
+            result = super().forecast_series(series, horizon, exogenous=exogenous, model=model)
+            return self._validate_forecast_result(result)
+        df, _ = self._prepare_series(list(series))
+        result = super().forecast_series(series, horizon, exogenous=exogenous, model=model)
+        return self._augment_result(result, df)
 
-            score = res.aic + res.bic if hasattr(res, "bic") else res.aic
-            if best is None or score < (best.aic + getattr(best, "bic", best.aic)):
-                best = res
-                best_order = order
+    @classmethod
+    def _validated_metric_inputs(
+        cls,
+        actual: Sequence[float],
+        predicted: Sequence[float],
+    ) -> tuple[list[float], list[float]]:
+        if len(actual) != len(predicted) or not actual:
+            raise ValueError("Forecast metric inputs must be nonempty and equal in length")
+        actual_values = [cls._finite_float(value, "Actual values") for value in actual]
+        predicted_values = [cls._finite_float(value, "Predicted values") for value in predicted]
+        return actual_values, predicted_values
 
-        if best is None or best_order is None:
-            return self._fallback(df, horizon, timezone, model="arima")
-
-        forecast_index = self._generate_future_index(pd.DatetimeIndex(df.index), horizon)
-        effective_exog_future = None
-        if exog_df is not None:
-            effective_exog_future = exog_future or self._default_future_exog(exog_df, forecast_index)
-        forecast_values = best.forecast(steps=horizon, exog=effective_exog_future)
-        points = [
-            (stamp.isoformat(), float(value)) for stamp, value in zip(forecast_index, forecast_values, strict=False)
-        ]
-
-        residuals = best.resid.dropna()
-        mae = float(abs(residuals).mean()) if not residuals.empty else 0.0
-        rmse = float(sqrt((residuals**2).mean())) if not residuals.empty else 0.0
-        diagnostics: dict[str, object] = {
-            "observations": len(df),
-            "model": "arima",
-            "mae": mae,
-            "rmse": rmse,
-        }
-        if timezone and timezone != "UTC":
-            diagnostics["source_timezone"] = timezone
-
-        return ForecastResult(
-            horizon=horizon,
-            points=points,
-            model_order=best_order,
-            diagnostics=diagnostics,
-            timezone=timezone or "UTC",
-            model="arima",
+    @classmethod
+    def _metric_mae(cls, actual: Sequence[float], predicted: Sequence[float]) -> float:
+        actual_values, predicted_values = cls._validated_metric_inputs(actual, predicted)
+        return cls._finite_float(
+            np.mean(np.abs(np.subtract(actual_values, predicted_values))),
+            "MAE",
         )
 
-    def _forecast_prophet(
-        self,
-        df: pd.DataFrame,
-        horizon: int,
-        timezone: str | None,
-        *,
-        exog_df: pd.DataFrame | None,
-        exog_future: pd.DataFrame | None,
-    ) -> ForecastResult:
-        if not self._prophet_available():
-            msg = "Prophet model requested but dependency is not installed"
-            raise ValueError(msg) from self._prophet_error
-
-        assert self._prophet_class is not None  # for type-checkers
-        working = df.copy()
-        working = working.sort_index()
-        working["ds"] = pd.to_datetime(working.index)
-        if working["ds"].dt.tz is not None:
-            working["ds"] = working["ds"].dt.tz_convert("UTC").dt.tz_localize(None)
-        regressors: list[str] = []
-        if exog_df is not None:
-            exog_aligned = exog_df.copy()
-            exog_aligned.index = working.index
-            working = working.join(exog_aligned)
-            regressors = list(exog_aligned.columns)
-
-        model = self._prophet_class(
-            yearly_seasonality=True,
-            weekly_seasonality=True,
-            daily_seasonality=False,
+    @classmethod
+    def _metric_rmse(cls, actual: Sequence[float], predicted: Sequence[float]) -> float:
+        actual_values, predicted_values = cls._validated_metric_inputs(actual, predicted)
+        return cls._finite_float(
+            np.sqrt(np.mean(np.square(np.subtract(actual_values, predicted_values)))),
+            "RMSE",
         )
-        for reg in regressors:
-            model.add_regressor(reg)
 
-        model.fit(working[["ds", "y", *regressors]])
-
-        forecast_index = self._generate_future_index(pd.DatetimeIndex(df.index), horizon)
-        future = pd.DataFrame({"ds": forecast_index})
-        if future["ds"].dt.tz is not None:
-            future["ds"] = future["ds"].dt.tz_convert("UTC").dt.tz_localize(None)
-
-        if regressors:
-            future_exog = (
-                exog_future
-                if exog_future is not None
-                else self._default_future_exog(
-                    exog_df if exog_df is not None else pd.DataFrame(index=df.index), forecast_index
+    @classmethod
+    def _metric_mape(cls, actual: Sequence[float], predicted: Sequence[float]) -> float | None:
+        actual_values, predicted_values = cls._validated_metric_inputs(actual, predicted)
+        if any(value == 0 for value in actual_values):
+            return None
+        return cls._finite_float(
+            np.mean(
+                np.abs(
+                    (np.asarray(actual_values, dtype=float) - np.asarray(predicted_values, dtype=float))
+                    / np.asarray(actual_values, dtype=float)
                 )
             )
-            for reg in regressors:
-                future[reg] = future_exog[reg].reset_index(drop=True)
-
-        forecast_frame = model.predict(future)
-        values = forecast_frame["yhat"].tolist()
-        points = [(stamp.isoformat(), float(value)) for stamp, value in zip(forecast_index, values, strict=False)]
-        diagnostics: dict[str, object] = {
-            "observations": len(df),
-            "model": "prophet",
-            "components": [c for c in ("trend", "seasonality") if c in forecast_frame.columns],
-        }
-        if timezone and timezone != "UTC":
-            diagnostics["source_timezone"] = timezone
-        return ForecastResult(
-            horizon=horizon,
-            points=points,
-            model_order=(0, 0, 0),
-            diagnostics=diagnostics,
-            timezone=timezone or "UTC",
-            model="prophet",
+            * 100,
+            "MAPE",
         )
-
-    def _ml_feature_row(
-        self,
-        ts: pd.Timestamp,
-        history: list[float],
-        position: int,
-        lags: tuple[int, ...],
-        exog_lookup: pd.DataFrame | None,
-    ) -> dict[str, float]:
-        features: dict[str, float] = {
-            "time_index": float(position),
-            "sin_week": math.sin(2 * math.pi * ts.dayofweek / 7.0),
-            "cos_week": math.cos(2 * math.pi * ts.dayofweek / 7.0),
-            "sin_year": math.sin(2 * math.pi * ts.dayofyear / 365.0),
-            "cos_year": math.cos(2 * math.pi * ts.dayofyear / 365.0),
-        }
-        for lag in lags:
-            idx = position - lag
-            features[f"lag_{lag}"] = float(history[idx]) if idx >= 0 else float(history[0])
-
-        if exog_lookup is not None and not exog_lookup.empty:
-            row = exog_lookup.loc[ts] if ts in exog_lookup.index else exog_lookup.iloc[-1]
-            for col in exog_lookup.columns:
-                features[col] = float(cast(Any, row[col]))
-        return features
-
-    def _forecast_gradient_boosting(
-        self,
-        df: pd.DataFrame,
-        horizon: int,
-        timezone: str | None,
-        *,
-        exog_df: pd.DataFrame | None,
-        exog_future: pd.DataFrame | None,
-    ) -> ForecastResult:
-        try:
-            from sklearn.ensemble import GradientBoostingRegressor  # type: ignore[import-untyped]
-        except Exception as exc:
-            self._sklearn_error = exc
-            raise ValueError("scikit-learn is required for gradient boosting forecasts") from exc
-
-        lags: tuple[int, ...] = (1, 7, 14)
-        history = [float(v) for v in df["y"].tolist()]
-        feature_rows: list[dict[str, float]] = []
-        targets: list[float] = []
-        index_list = list(df.index)
-        max_lag = max(lags)
-
-        for position in range(max_lag, len(history)):
-            ts = pd.Timestamp(index_list[position])
-            feature_rows.append(self._ml_feature_row(ts, history, position, lags, exog_df))
-            targets.append(history[position])
-
-        if not feature_rows:
-            return self._fallback(df, horizon, timezone, model="gradient_boosting")
-
-        feature_frame = pd.DataFrame(feature_rows)
-        model = GradientBoostingRegressor(random_state=42)
-        model.fit(feature_frame, targets)
-        feature_columns = list(feature_frame.columns)
-
-        forecast_index = self._generate_future_index(pd.DatetimeIndex(df.index), horizon)
-        exog_future_aligned = exog_future or (
-            self._default_future_exog(exog_df, forecast_index) if exog_df is not None else None
-        )
-        predictions: list[tuple[str, float]] = []
-        for _i, ts in enumerate(forecast_index):
-            position = len(history)
-            exog_lookup = None
-            if exog_future_aligned is not None:
-                exog_lookup = exog_future_aligned
-            feature_row = self._ml_feature_row(pd.Timestamp(ts), history, position, lags, exog_lookup)
-            row_df = pd.DataFrame([feature_row], columns=feature_columns).ffill().fillna(0.0)
-            pred = float(model.predict(row_df)[0])
-            history.append(pred)
-            predictions.append((pd.Timestamp(ts).isoformat(), pred))
-
-        diagnostics: dict[str, object] = {
-            "observations": len(df),
-            "model": "gradient_boosting",
-            "lags": lags,
-        }
-        if timezone and timezone != "UTC":
-            diagnostics["source_timezone"] = timezone
-
-        return ForecastResult(
-            horizon=horizon,
-            points=predictions,
-            model_order=(0, 0, 0),
-            diagnostics=diagnostics,
-            timezone=timezone or "UTC",
-            model="gradient_boosting",
-        )
-
-    # ------------------------------------------------------------------
-    # Evaluation utilities
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _metric_mae(actual: Sequence[float], predicted: Sequence[float]) -> float:
-        return float(np.mean(np.abs(np.subtract(actual, predicted))))
-
-    @staticmethod
-    def _metric_rmse(actual: Sequence[float], predicted: Sequence[float]) -> float:
-        return float(np.sqrt(np.mean(np.square(np.subtract(actual, predicted)))))
-
-    @staticmethod
-    def _metric_mape(actual: Sequence[float], predicted: Sequence[float]) -> float | None:
-        if not actual or any(a == 0 for a in actual):
-            return None
-        actual_arr = np.array(actual)
-        predicted_arr = np.array(predicted)
-        return float(np.mean(np.abs((actual_arr - predicted_arr) / actual_arr))) * 100
 
     def backtest(
         self,
@@ -618,121 +355,41 @@ class ForecastService:
         initial_window: int | None = None,
         step: int | None = None,
     ) -> list[BacktestResult]:
-        """Perform rolling-origin backtesting across one or more models."""
-
-        if horizon <= 0:
-            raise ValueError("horizon must be positive")
-        df, timezone = self._prepare_series(list(series))
-        exog_df = self._prepare_exogenous(df, exogenous) if exogenous else None
-
-        window = initial_window or max(self.minimum_observations, horizon * 2)
-        stride = step or horizon
-        model_keys = [self._normalise_model_key(model) for model in (models or ["arima"])]
-
-        results: list[BacktestResult] = []
-        for model_key in model_keys:
-            registry_entry = self._model_registry.get(model_key)
-            if registry_entry is None:
-                results.append(
-                    BacktestResult(
-                        model=model_key,
-                        folds=[],
-                        metrics={},
-                        tested_points=0,
-                        available=False,
-                        reason="Unknown model",
-                        timezone=timezone or "UTC",
-                    )
-                )
-                continue
-            if not registry_entry.available:
-                results.append(
-                    BacktestResult(
-                        model=model_key,
-                        folds=[],
-                        metrics={},
-                        tested_points=0,
-                        available=False,
-                        reason="Model dependency unavailable",
-                        timezone=timezone or "UTC",
-                    )
-                )
-                continue
-
-            folds: list[BacktestFold] = []
-            position = window
-            while position < len(df):
-                test_horizon = min(horizon, len(df) - position)
-                if test_horizon <= 0:
-                    break
-                train_slice = df.iloc[:position]
-                test_slice = df.iloc[position : position + test_horizon]
-                exog_train = exog_df.iloc[:position] if exog_df is not None else None
-                exog_test = exog_df.iloc[position : position + test_horizon] if exog_df is not None else None
-
-                forecast = self._dispatch_model(
-                    model_key,
-                    train_slice,
-                    test_horizon,
-                    timezone,
-                    exog_df=exog_train,
-                    exog_future=exog_test,
-                )
-                actual_values = [float(v) for v in test_slice["y"].tolist()]
-                predicted_values = [point[1] for point in forecast.points]
-                mae = self._metric_mae(actual_values, predicted_values)
-                rmse = self._metric_rmse(actual_values, predicted_values)
-                mape = self._metric_mape(actual_values, predicted_values)
-                folds.append(
-                    BacktestFold(
-                        start=pd.Timestamp(train_slice.index[0]).isoformat(),
-                        end=pd.Timestamp(test_slice.index[-1]).isoformat(),
-                        horizon=test_horizon,
-                        actual=list(zip((ts.isoformat() for ts in test_slice.index), actual_values, strict=False)),
-                        forecast=forecast.points,
-                        mae=mae,
-                        rmse=rmse,
-                        mape=mape,
-                    )
-                )
-                position += stride
-
-            if not folds:
-                results.append(
-                    BacktestResult(
-                        model=model_key,
-                        folds=[],
-                        metrics={},
-                        tested_points=0,
-                        available=False,
-                        reason="Insufficient data for backtesting",
-                        timezone=timezone or "UTC",
-                    )
-                )
-                continue
-
-            metrics = {
-                "mae": float(np.mean([fold.mae for fold in folds])),
-                "rmse": float(np.mean([fold.rmse for fold in folds])),
-                "mape": (
-                    float(np.mean([fold.mape for fold in folds if fold.mape is not None]))
-                    if any(fold.mape is not None for fold in folds)
-                    else None
-                ),
-            }
-            tested_points = sum(len(fold.actual) for fold in folds)
-            results.append(
-                BacktestResult(
-                    model=model_key,
-                    folds=folds,
-                    metrics=metrics,
-                    tested_points=tested_points,
-                    available=True,
-                    timezone=timezone or "UTC",
-                )
-            )
-
+        if initial_window is not None and initial_window <= 0:
+            raise ValueError("initial_window must be positive")
+        if step is not None and step <= 0:
+            raise ValueError("step must be positive")
+        results = super().backtest(
+            series,
+            horizon,
+            models=models,
+            exogenous=exogenous,
+            initial_window=initial_window,
+            step=step,
+        )
+        for result in results:
+            for fold in result.folds:
+                if fold.horizon != len(fold.actual) or fold.horizon != len(fold.forecast):
+                    raise ValueError("Backtest fold returned an unexpected number of points")
+                self._finite_float(fold.mae, "Backtest MAE")
+                self._finite_float(fold.rmse, "Backtest RMSE")
+                if fold.mape is not None:
+                    self._finite_float(fold.mape, "Backtest MAPE")
+                for _, value in fold.actual:
+                    self._finite_float(value, "Backtest actual values")
+                for _, value in fold.forecast:
+                    self._finite_float(value, "Backtest forecast values")
+            for name, metric_value in result.metrics.items():
+                if metric_value is not None:
+                    self._finite_float(metric_value, f"Backtest metric '{name}'")
         return results
+
+    def _event_timestamp(self, value: object, *, label: str, target_timezone: str) -> pd.Timestamp:
+        timestamp = self._timestamp(value, label)
+        timezone = self._timezone_key(timestamp)
+        if timezone != target_timezone:
+            raise ValueError(f"{label} must use the target series timezone")
+        return timestamp
 
     def causal_impact(
         self,
@@ -743,69 +400,37 @@ class ForecastService:
         interventions: Mapping[str, Sequence[tuple[str | date, float]]] | None = None,
         model: str = "arima",
     ) -> CausalImpactResult:
-        """Estimate the impact of an event window using a counterfactual forecast."""
-
-        df, timezone = self._prepare_series(list(series))
-        if df.empty:
-            raise ValueError("Series must contain observations")
-
-        start_ts = pd.to_datetime(event_start)
-        end_ts = pd.to_datetime(event_end) if event_end is not None else df.index[-1]
-        if start_ts not in df.index:
-            df = df.sort_index()
-        pre_event = df.loc[df.index < start_ts]
-        post_event = df.loc[(df.index >= start_ts) & (df.index <= end_ts)]
-        if len(pre_event) < self.minimum_observations:
-            raise ValueError("Not enough pre-event observations for causal impact analysis")
-        if post_event.empty:
-            raise ValueError("Event window contains no observations")
-
-        exog_df = self._prepare_exogenous(df, interventions) if interventions else None
-        exog_pre = exog_df.loc[pre_event.index] if exog_df is not None else None
-        exog_post = exog_df.loc[post_event.index] if exog_df is not None else None
-
-        forecast = self._dispatch_model(
-            self._normalise_model_key(model),
-            pre_event,
-            len(post_event),
-            timezone,
-            exog_df=exog_pre,
-            exog_future=exog_post,
+        df, _ = self._prepare_series(list(series))
+        target_timezone = str(df.attrs.get("timezone_key", "naive"))
+        start = self._event_timestamp(event_start, label="event_start", target_timezone=target_timezone)
+        end = (
+            self._event_timestamp(event_end, label="event_end", target_timezone=target_timezone)
+            if event_end is not None
+            else pd.Timestamp(df.index[-1])
         )
+        if end < start:
+            raise ValueError("event_end must not precede event_start")
+        if start < df.index[0] or start > df.index[-1] or end > df.index[-1]:
+            raise ValueError("Event window must be contained within the target series")
 
-        predicted = [point[1] for point in forecast.points]
-        actual = [float(v) for v in post_event["y"].tolist()]
-        impacts = [a - p for a, p in zip(actual, predicted, strict=False)]
-        avg_impact = float(np.mean(impacts))
-        cumulative = float(np.sum(impacts))
-
-        # Approximate a simple two-sided z-test using the pre-event variance.
-        std_dev = float(np.std(pre_event["y"])) if len(pre_event) > 1 else 0.0
-        p_value = None
-        if std_dev > 0:
-            z = abs(avg_impact) / (std_dev / sqrt(len(post_event)))
-            p_value = float(math.erfc(z / math.sqrt(2)))
-
-        points = [
-            ImpactPoint(timestamp=ts.isoformat(), actual=a, predicted=p, impact=i)
-            for ts, a, p, i in zip(post_event.index, actual, predicted, impacts, strict=False)
-        ]
-        diagnostics: dict[str, object] = {
-            "model": forecast.model,
-            "pre_event_observations": len(pre_event),
-            "post_event_observations": len(post_event),
-        }
-        if timezone and timezone != "UTC":
-            diagnostics["source_timezone"] = timezone
-
-        return CausalImpactResult(
-            model=forecast.model,
-            event_start=start_ts.isoformat(),
-            event_end=end_ts.isoformat(),
-            average_impact=avg_impact,
-            cumulative_impact=cumulative,
-            p_value=p_value,
-            points=points,
-            diagnostics=diagnostics,
-            timezone=timezone or "UTC",
+        result = super().causal_impact(
+            series,
+            event_start=start,
+            event_end=end,
+            interventions=interventions,
+            model=model,
         )
+        self._finite_float(result.average_impact, "Average impact")
+        self._finite_float(result.cumulative_impact, "Cumulative impact")
+        if result.p_value is not None:
+            p_value = self._finite_float(result.p_value, "Impact p-value")
+            if not 0 <= p_value <= 1:
+                raise ValueError("Impact p-value must be between 0 and 1")
+        for point in result.points:
+            self._finite_float(point.actual, "Impact actual values")
+            self._finite_float(point.predicted, "Impact predicted values")
+            self._finite_float(point.impact, "Impact values")
+        self._validate_diagnostic_value(result.diagnostics)
+        result.diagnostics["cadence"] = str(df.attrs.get("cadence", "unknown"))
+        result.diagnostics["duplicate_timestamps_resolved"] = int(df.attrs.get("duplicates_resolved", 0))
+        return result

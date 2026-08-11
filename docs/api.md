@@ -51,8 +51,15 @@ Access and refresh credentials are not interchangeable. Refresh reuse revokes th
 - `GET /reports/cashflow-forecast` - Tenant-scoped cashflow report
 
 ### Forecasting
-- `POST /forecast` - Generate forecast
-- `GET /forecast/models` - List available models
+
+Every route below requires an active persisted access-token session and tenant membership for `organization_id`. Authorization occurs before model discovery or forecast work.
+
+- `POST /forecast/series` - Generate a bounded forecast. Target values, regressors, predictions, and diagnostics must be finite. Exact duplicate timestamps use the last supplied value. Multi-point series must use a regular cadence.
+- `GET /forecast/models?organization_id={id}` - Return the bounded model registry and optional-dependency availability.
+- `POST /forecast/backtest` - Run bounded rolling-origin evaluation with finite MAE/RMSE and nullable MAPE when an actual denominator is zero.
+- `POST /forecast/impact` - Evaluate an ordered intervention window fully contained within the target series.
+
+Forecast timestamps cannot mix naive and timezone-aware values. All aware values use one timezone; regressors and interventions must use the target timezone and align to the target timeline. Daily and hourly local cadence remains timezone-aware across daylight-saving transitions. Expected validation failures return a bounded sanitized `400` detail. Unknown model-library failures return a generic `400` without raw exception text or request payloads in the response or logs. Request-shape and centralized hard-limit failures remain standard `422` responses. See [`FORECASTING.md`](FORECASTING.md) for the complete finite-value, duplicate, cadence, timezone, output, and diagnostic contracts.
 
 ### Audit
 - `GET /audit/` - Administrator-only tenant audit log with bounded pagination
