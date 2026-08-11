@@ -1,5 +1,6 @@
 name: Temporary Full-History Gitleaks Evidence
 
+# Temporary issue #59 evidence workflow; removed after the validated scan.
 on:
   pull_request:
     types: [opened, reopened, synchronize]
