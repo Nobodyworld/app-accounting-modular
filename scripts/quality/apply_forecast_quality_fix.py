@@ -72,7 +72,7 @@ def main() -> None:
     replace_exact(
         router,
         "def _execute_forecast(operation: str, action: Callable[[], _ResultT]) -> _ResultT:",
-        "def _execute_forecast[_ResultT](operation: str, action: Callable[[], _ResultT]) -> _ResultT:",
+        "def _execute_forecast[ResultT](operation: str, action: Callable[[], ResultT]) -> ResultT:",
     )
 
 
