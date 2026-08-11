@@ -8,8 +8,8 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 
 ## Toolkit Scope
 
-- In scope: accounting snapshot orchestration, provider adapters (FX/commodity/tax), journal and ledger control surfaces, and observability-first operational tooling.
-- Out of scope: full ERP coverage, treasury execution workflows, and a production-hardened React UI.
+- In scope: accounting snapshot orchestration, provider adapters (FX/commodity/tax), journal and ledger control surfaces, accountant close workflows, forecasting controls, and observability-first operational tooling.
+- Out of scope: full ERP coverage, treasury execution workflows, production forecast certification, and a production-hardened React UI.
 - Release readiness is tracked in the public audit log at [../PUBLIC_RELEASE_AUDIT.md](../PUBLIC_RELEASE_AUDIT.md).
 
 ## Getting Started
@@ -38,6 +38,8 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 ## Documentation Sections
 
 - **[Plugins](PLUGINS.md)**: How to create and integrate data providers
+- **[Forecasting](FORECASTING.md)**: Finite-value, cadence, timezone, model, and API contracts
+- **[Reliability and forecast policy](quality/reliability-and-forecast-policy.md)**: Changed-line coverage, independent critical floors, measured evidence, and issue #59 review reconciliation
 - **[Operations](operations.md)**: Observability, health checks, and incident response
 - **[Extension Guide](guides/extension_guide.md)**: Building automation extensions
 - **[Roadmap](roadmap.md)**: Future development milestones
