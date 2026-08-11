@@ -35,13 +35,13 @@ Policy:
 
 Pull-request CI checks out the exact head SHA and fetches the exact `github.event.pull_request.base.sha`. It writes deterministic JSON and Markdown evidence and uploads both with `coverage.json`. The workflow has read-only repository permission and uses full-SHA action pins.
 
-At exact implementation head `d0b325bd42a158e1feaa41a8b5a3c89e1b793d5c`, changed-line coverage was 90.67%: 111 of 122 changed executable production lines were covered, above the 85% floor.
+At production-code head `a12fd25b684a5738fcf5fc2d0a604283a7434188`, changed-line coverage was 91.61%: 273 of 298 changed executable production lines were covered, above the 85% floor. The forecast router reached 100%; the hardened forecast boundary reached 90.94% on changed executable lines.
 
 ## Independent critical-module policy
 
 Aggregate coverage cannot mask a critical accounting, authentication, background, provider, or forecasting regression. `config/critical-coverage.toml` independently enforces line and branch floors. Missing files, missing coverage records, and missing branch evidence fail closed.
 
-Measured Python 3.14 results at `d0b325bd42a158e1feaa41a8b5a3c89e1b793d5c`:
+Measured Python 3.14 results at production-code head `a12fd25b684a5738fcf5fc2d0a604283a7434188`:
 
 | Critical module | Line result / floor | Branch result / floor |
 | --- | ---: | ---: |
@@ -58,7 +58,7 @@ Measured Python 3.14 results at `d0b325bd42a158e1feaa41a8b5a3c89e1b793d5c`:
 | Snapshot service | 91.37% / 85% | 70.00% / 60% |
 | Audit router | 86.11% / 75% | 68.75% / 60% |
 | Scheduler | 94.67% / 90% | 73.53% / 70% |
-| Hardened forecast boundary | 90.17% / 78% | 78.03% / 60% |
+| Hardened forecast boundary | 90.13% / 78% | 77.97% / 60% |
 | Forecast router | 100.00% / 75% | 100.00% / 60% |
 | Provider loader | 93.33% / 88% | 84.00% / 70% |
 | Bounded provider transport | 90.22% / 85% | 83.33% / 65% |
@@ -104,15 +104,15 @@ The fail-closed route inventory remains the authoritative classification table. 
 
 ## Validation evidence
 
-Permanent exact-head hosted workflows at `d0b325bd42a158e1feaa41a8b5a3c89e1b793d5c` passed:
+Permanent hosted workflows on production-code head `a12fd25b684a5738fcf5fc2d0a604283a7434188` passed:
 
 - Python 3.12, 3.13, and 3.14 quality and accounting jobs;
-- 685 tests;
+- 686 tests;
 - 52 focused accounting controls;
-- 87.97% line coverage (`9,383/10,666`);
-- 71.55% branch coverage (`1,926/2,692`);
+- 87.97% line coverage (`9,381/10,664`);
+- 71.55% branch coverage (`1,925/2,690`);
 - every configured critical-module floor;
-- 90.67% changed-production-line coverage;
+- 91.61% changed-production-line coverage (`273/298`);
 - Ruff lint and formatting;
 - mypy;
 - `pip check`;
@@ -121,7 +121,7 @@ Permanent exact-head hosted workflows at `d0b325bd42a158e1feaa41a8b5a3c89e1b793d
 - container supply-chain; and
 - required container smoke and least-privilege checks.
 
-No required quality tool was skipped. PR-event attestations remain skipped by design; trusted-main events own attestation publication.
+No required quality tool was skipped. PR-event attestations remain skipped by design; trusted-main events own attestation publication. Documentation-only reconciliation commits must repeat the permanent exact-head workflows before merge readiness.
 
 ## Scope boundary
 
