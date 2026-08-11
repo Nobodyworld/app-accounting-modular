@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
@@ -29,7 +28,6 @@ router = APIRouter(prefix="/forecast", tags=["forecast"])
 _FORECAST_SERVICE = ForecastService()
 logger = logging.getLogger(__name__)
 
-_ResultT = TypeVar("_ResultT")
 _SAFE_VALIDATION_PREFIXES = (
     "Actual values",
     "Average impact",
@@ -65,7 +63,7 @@ def _safe_validation_detail(exc: ValueError) -> str:
     return "Forecast request could not be evaluated"
 
 
-def _execute_forecast(operation: str, action: Callable[[], _ResultT]) -> _ResultT:
+def _execute_forecast[ResultT](operation: str, action: Callable[[], ResultT]) -> ResultT:
     try:
         return action()
     except ValueError as exc:

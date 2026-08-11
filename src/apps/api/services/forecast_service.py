@@ -5,15 +5,16 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 from pandas import DatetimeIndex
+from pandas.tseries.offsets import BaseOffset
+from statsmodels.tsa.arima.model import ARIMA
 
 from . import forecast_legacy as _legacy
 
-ARIMA = _legacy.ARIMA
 BacktestFold = _legacy.BacktestFold
 BacktestResult = _legacy.BacktestResult
 CausalImpactResult = _legacy.CausalImpactResult
@@ -41,7 +42,7 @@ class ForecastService(_legacy.ForecastService):
         if isinstance(value, bool):
             raise ValueError(f"{label} must be numeric")
         try:
-            result = float(value)
+            result = float(cast(Any, value))
         except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{label} must be numeric") from exc
         if not math.isfinite(result):
@@ -51,7 +52,7 @@ class ForecastService(_legacy.ForecastService):
     @staticmethod
     def _timestamp(value: object, label: str) -> pd.Timestamp:
         try:
-            result = pd.Timestamp(value)
+            result = pd.Timestamp(cast(Any, value))
         except Exception as exc:
             raise ValueError(f"{label} contains an invalid timestamp") from exc
         if pd.isna(result):
@@ -65,7 +66,7 @@ class ForecastService(_legacy.ForecastService):
         return str(getattr(timestamp.tzinfo, "key", None) or timestamp.tzinfo)
 
     @staticmethod
-    def _cadence_label(offset: pd.DateOffset, *, prefix: str | None = None) -> str:
+    def _cadence_label(offset: BaseOffset, *, prefix: str | None = None) -> str:
         freq = str(getattr(offset, "freqstr", None) or offset)
         normalized = freq.lower()
         if normalized in {"d", "1d"}:
@@ -77,11 +78,11 @@ class ForecastService(_legacy.ForecastService):
         return f"{prefix}:{label}" if prefix else label
 
     @classmethod
-    def _infer_cadence(cls, index: DatetimeIndex) -> tuple[pd.DateOffset, str]:
+    def _infer_cadence(cls, index: DatetimeIndex) -> tuple[BaseOffset, str]:
         if len(index) == 0:
             raise ValueError("Series must contain observations")
         if len(index) == 1:
-            offset = pd.offsets.Day(1)
+            offset: BaseOffset = pd.offsets.Day(1)
             return offset, "single-observation-daily-default"
         if len(index) == 2:
             delta = index[1] - index[0]
@@ -138,7 +139,9 @@ class ForecastService(_legacy.ForecastService):
         frame.attrs["cadence"] = cadence
         frame.attrs["duplicates_resolved"] = len(records) - len(ordered)
         frame.attrs["timezone_key"] = timezone_key or "naive"
-        timezone = "UTC" if timezone_key in (None, "naive") else timezone_key
+        timezone = "UTC"
+        if timezone_key is not None and timezone_key != "naive":
+            timezone = timezone_key
         return frame, timezone
 
     def _prepare_series(self, series: list[tuple[str | date, float]]) -> tuple[pd.DataFrame, str | None]:
@@ -270,7 +273,7 @@ class ForecastService(_legacy.ForecastService):
         exog_df: pd.DataFrame | None,
         exog_future: pd.DataFrame | None,
     ) -> ForecastResult:
-        _legacy.ARIMA = ARIMA
+        cast(Any, _legacy).ARIMA = ARIMA
         result = super()._dispatch_model(
             model,
             df,
@@ -376,9 +379,9 @@ class ForecastService(_legacy.ForecastService):
                     self._finite_float(value, "Backtest actual values")
                 for _, value in fold.forecast:
                     self._finite_float(value, "Backtest forecast values")
-            for name, value in result.metrics.items():
-                if value is not None:
-                    self._finite_float(value, f"Backtest metric '{name}'")
+            for name, metric_value in result.metrics.items():
+                if metric_value is not None:
+                    self._finite_float(metric_value, f"Backtest metric '{name}'")
         return results
 
     def _event_timestamp(self, value: object, *, label: str, target_timezone: str) -> pd.Timestamp:

@@ -11,7 +11,9 @@ from apps.api.services.forecast_service import ForecastResult, ForecastService
 
 
 def _daily_series(count: int = 8, *, start: str = "2024-01-01") -> list[tuple[pd.Timestamp, float]]:
-    return [(timestamp, float(index + 1)) for index, timestamp in enumerate(pd.date_range(start, periods=count, freq="D"))]
+    return [
+        (timestamp, float(index + 1)) for index, timestamp in enumerate(pd.date_range(start, periods=count, freq="D"))
+    ]
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
@@ -126,15 +128,9 @@ def test_mixed_naive_and_aware_timestamps_are_rejected() -> None:
 
 def test_regressor_timezone_must_match_target_timezone() -> None:
     service = ForecastService(minimum_observations=10)
-    target = [
-        (datetime(2024, 1, 1 + index, tzinfo=ZoneInfo("America/New_York")), float(index))
-        for index in range(4)
-    ]
+    target = [(datetime(2024, 1, 1 + index, tzinfo=ZoneInfo("America/New_York")), float(index)) for index in range(4)]
     regressors = {
-        "driver": [
-            (datetime(2024, 1, 1 + index, tzinfo=ZoneInfo("UTC")), float(index))
-            for index in range(4)
-        ]
+        "driver": [(datetime(2024, 1, 1 + index, tzinfo=ZoneInfo("UTC")), float(index)) for index in range(4)]
     }
 
     with pytest.raises(ValueError, match="must use the target series timezone"):
