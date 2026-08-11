@@ -39,48 +39,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
-      - name: Capture forecast quality diagnostics
-        shell: bash
-        run: |
-          set -euo pipefail
-          diagnostic_dir="${RUNNER_TEMP}/forecast-quality-diagnostic"
-          mkdir -p "$diagnostic_dir/src/apps/api/services" \
-            "$diagnostic_dir/src/apps/api/routers" \
-            "$diagnostic_dir/tests"
-
-          set +e
-          python -m ruff check \
-            src/apps/api/services/forecast_service.py \
-            src/apps/api/services/forecast_legacy.py \
-            src/apps/api/routers/forecast.py \
-            tests/test_forecast_robustness.py \
-            tests/test_forecast_api.py \
-            > "$diagnostic_dir/ruff-check.log" 2>&1
-          printf '%s\n' "$?" > "$diagnostic_dir/ruff-check-exit.txt"
-
-          python -m mypy src/apps/api \
-            > "$diagnostic_dir/mypy.log" 2>&1
-          printf '%s\n' "$?" > "$diagnostic_dir/mypy-exit.txt"
-          set -e
-
-          python -m ruff format \
-            src/apps/api/services/forecast_service.py \
-            src/apps/api/services/forecast_legacy.py \
-            src/apps/api/routers/forecast.py \
-            tests/test_forecast_robustness.py \
-            tests/test_forecast_api.py
-
-          cp src/apps/api/services/forecast_service.py \
-            "$diagnostic_dir/src/apps/api/services/forecast_service.py"
-          cp src/apps/api/services/forecast_legacy.py \
-            "$diagnostic_dir/src/apps/api/services/forecast_legacy.py"
-          cp src/apps/api/routers/forecast.py \
-            "$diagnostic_dir/src/apps/api/routers/forecast.py"
-          cp tests/test_forecast_robustness.py \
-            "$diagnostic_dir/tests/test_forecast_robustness.py"
-          cp tests/test_forecast_api.py \
-            "$diagnostic_dir/tests/test_forecast_api.py"
-
       - name: Generate release-authoritative coverage evidence
         env:
           PYTHONPATH: ${{ github.workspace }}/src
@@ -120,6 +78,5 @@ jobs:
             coverage.json
             diff-coverage.json
             diff-coverage.md
-            ${{ runner.temp }}/forecast-quality-diagnostic
           if-no-files-found: error
           retention-days: 14
