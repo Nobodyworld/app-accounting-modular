@@ -100,5 +100,7 @@ def test_markdown_is_excluded_but_python_is_formatted(tmp_path: Path) -> None:
         text=True,
     )
 
+    output = (python_result.stdout + python_result.stderr).lower()
     assert python_result.returncode == 1
-    assert "Would reformat" in python_result.stdout + python_result.stderr
+    assert "would be reformatted" in output
+    assert python_file.name in output
