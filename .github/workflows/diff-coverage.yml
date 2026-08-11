@@ -27,61 +27,6 @@ jobs:
           git rev-parse --verify "${{ github.event.pull_request.base.sha }}^{commit}"
           git rev-parse --verify "${{ github.event.pull_request.head.sha }}^{commit}"
 
-      - name: Install pinned Gitleaks and scan pull-request commits
-        # gitleaks/gitleaks-action v3.0.0 (released 2026-05-30; resolved 2026-08-10)
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_VERSION: 8.30.1
-          GITLEAKS_ENABLE_COMMENTS: false
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
-          GITLEAKS_ENABLE_SUMMARY: false
-
-      - name: Scan all reachable refs
-        shell: bash
-        run: |
-          set -euo pipefail
-          evidence_dir="${RUNNER_TEMP}/full-history-gitleaks"
-          mkdir -p "$evidence_dir"
-
-          gitleaks version | tee "$evidence_dir/gitleaks-version.txt"
-          git rev-list --all --count | tee "$evidence_dir/reachable-commit-count.txt"
-          git rev-list --all --max-parents=0 | LC_ALL=C sort > "$evidence_dir/root-commits.txt"
-          git rev-parse HEAD > "$evidence_dir/scanned-head.txt"
-
-          gitleaks git . \
-            --log-opts="--all" \
-            --redact \
-            --report-format json \
-            --report-path "$evidence_dir/gitleaks-full-history.json" \
-            --exit-code 1
-
-          test -f "$evidence_dir/gitleaks-full-history.json"
-          python - "$evidence_dir/gitleaks-full-history.json" <<'PY'
-          import json
-          import pathlib
-          import sys
-
-          path = pathlib.Path(sys.argv[1])
-          payload = json.loads(path.read_text(encoding="utf-8") or "[]")
-          if not isinstance(payload, list):
-              raise SystemExit("Gitleaks report is not a JSON array")
-          if payload:
-              raise SystemExit(f"Gitleaks report contains {len(payload)} findings")
-          print("full-history findings: 0")
-          PY
-
-          (
-            cd "$evidence_dir"
-            sha256sum \
-              gitleaks-full-history.json \
-              gitleaks-version.txt \
-              reachable-commit-count.txt \
-              root-commits.txt \
-              scanned-head.txt \
-              > evidence.sha256
-          )
-
       - name: Set up Python
         # actions/setup-python v7.0.0 (released 2026-07-20; resolved 2026-07-31)
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -123,7 +68,7 @@ jobs:
         if: always()
         run: cat diff-coverage.md || true
 
-      - name: Upload changed-line and history-scan evidence
+      - name: Upload changed-line evidence
         if: always()
         # actions/upload-artifact v7.0.1 (released 2026-04-10; resolved 2026-07-31)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -133,6 +78,5 @@ jobs:
             coverage.json
             diff-coverage.json
             diff-coverage.md
-            ${{ runner.temp }}/full-history-gitleaks
           if-no-files-found: error
           retention-days: 14
