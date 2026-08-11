@@ -87,6 +87,7 @@ COMMANDS: Sequence[Sequence[str]] = (
         "requirements-dev.txt",
     ),
     (sys.executable, "-m", "src.tools.secret_scan"),
+    (sys.executable, "-m", "src.tools.full_history_gitleaks"),
 )
 
 
