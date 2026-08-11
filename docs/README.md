@@ -40,6 +40,7 @@ Modular Accounting is a portable, modular accounting toolkit with pluggable data
 - **[Plugins](PLUGINS.md)**: How to create and integrate data providers
 - **[Forecasting](FORECASTING.md)**: Finite-value, cadence, timezone, model, and API contracts
 - **[Reliability and forecast policy](quality/reliability-and-forecast-policy.md)**: Changed-line coverage, independent critical floors, measured evidence, and issue #59 review reconciliation
+- **[Ruff 0.16 migration policy](quality/ruff-0.16-migration.md)**: Exact tool pin, explicit lint selection, Python-only discovery, and Markdown exclusion
 - **[Operations](operations.md)**: Observability, health checks, and incident response
 - **[Extension Guide](guides/extension_guide.md)**: Building automation extensions
 - **[Roadmap](roadmap.md)**: Future development milestones
