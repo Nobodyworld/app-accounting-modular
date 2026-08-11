@@ -229,6 +229,15 @@ def test_backtest_validates_window_and_step_at_service_boundary() -> None:
         service.backtest(_daily_series(), step=0)
 
 
+def test_causal_event_window_rejects_naive_date_for_aware_utc_series() -> None:
+    service = ForecastService(minimum_observations=3)
+    index = pd.date_range("2024-01-01", periods=10, freq="D", tz="UTC")
+    series = [(timestamp, float(position)) for position, timestamp in enumerate(index)]
+
+    with pytest.raises(ValueError, match="event_start must use the target series timezone"):
+        service.causal_impact(series, event_start="2024-01-08")
+
+
 def test_causal_event_window_must_be_ordered_and_contained() -> None:
     service = ForecastService(minimum_observations=3)
     series = _daily_series(count=10)

@@ -388,8 +388,6 @@ class ForecastService(_legacy.ForecastService):
         timestamp = self._timestamp(value, label)
         timezone = self._timezone_key(timestamp)
         if timezone != target_timezone:
-            if {timezone, target_timezone} == {"naive", "UTC"}:
-                return timestamp
             raise ValueError(f"{label} must use the target series timezone")
         return timestamp
 
