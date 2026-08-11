@@ -21,7 +21,7 @@ Key runtime groups:
 
 - API/runtime: `fastapi`, `pydantic`, `sqlmodel`, `uvicorn`, `httpx`
 - Accounting and data: `pandas`, `numpy`, `statsmodels`, `scikit-learn`
-- Providers: `requests`, `yfinance`, `python-jose`, `python-dateutil`
+- Providers: `requests`, `yfinance`, `PyJWT`, `python-dateutil`
 - Operations/web: `APScheduler`, `streamlit`, `python-dotenv`
 
 `requests` provider calls are centralized behind the outbound response boundary
@@ -41,7 +41,7 @@ graph as exact versions with hashes, including the `uvicorn[standard]` and
 `PyJWT[crypto]` extras. Its header binds it to the input fingerprint, generator,
 Python/platform policy, and digest-pinned base image. The current lock contains
 19 direct and 65 transitive requirements and has SHA-256
-`990aa39c04686870f6907074b32d01eff81f69f84f9281d98aefa91fb72163d9`.
+`13c6b89298fd1767aa6f4a44b26e7cffcb6a7a0f146fa8e8ea80e2ac978c1312`.
 
 `requirements-lock-tools.lock` separately pins and hashes `uv==0.12.0`. Its
 SHA-256 is
@@ -72,10 +72,14 @@ Development dependencies are declared in `requirements-dev.txt` and include:
 - Security tooling: `pip-audit`
 
 Most human-edited development dependencies retain bounded compatibility ranges.
-`ruff==0.15.21` is intentionally exact because formatter and linter output must
+`ruff==0.16.0` is intentionally exact because formatter and linter output must
 stay stable, quality-gate behavior must be reproducible, and formatting changes
-should receive deliberate review. This development-tool pin is independent of,
-and is not a substitute for, the runtime container lock.
+should receive deliberate review. The repository keeps its lint selection and
+file-discovery policy explicit: ordinary Ruff commands evaluate Python/stub
+files and `pyproject.toml`, while Markdown and notebooks remain outside the Ruff
+format gate. See the [Ruff 0.16 migration policy](quality/ruff-0.16-migration.md).
+This development-tool pin is independent of, and is not a substitute for, the
+runtime container lock.
 
 ## Security Audit Policy
 
@@ -84,7 +88,7 @@ and is not a substitute for, the runtime container lock.
   requirements via:
 
 ```bash
-python -m pip_audit -r requirements.txt -r requirements-dev.txt
+python -m pip_audit -r requirements-dev.txt
 ```
 
 This avoids reporting unrelated global packages from reused environments.
