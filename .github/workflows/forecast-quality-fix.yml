@@ -1,0 +1,102 @@
+name: Temporary Forecast Quality Correction
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  apply-correction:
+    if: >-
+      github.repository == 'Nobodyworld/app-accounting-modular' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'quality/critical-coverage-and-forecast-robustness'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout exact feature branch
+        # actions/checkout v7.0.1 (released 2026-07-20; resolved 2026-07-31)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: quality/critical-coverage-and-forecast-robustness
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        # actions/setup-python v7.0.0 (released 2026-07-20; resolved 2026-07-31)
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install validated development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Apply exact fail-closed corrections
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          python scripts/quality/apply_forecast_quality_fix.py
+          python -m ruff format \
+            src/apps/api/services/forecast_service.py \
+            src/apps/api/services/forecast_legacy.py \
+            src/apps/api/routers/forecast.py \
+            tests/test_forecast_robustness.py \
+            tests/test_forecast_api.py
+
+      - name: Verify corrected source
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          python -m ruff check \
+            src/apps/api/services/forecast_service.py \
+            src/apps/api/services/forecast_legacy.py \
+            src/apps/api/routers/forecast.py \
+            tests/test_forecast_robustness.py \
+            tests/test_forecast_api.py
+          python -m ruff format --check \
+            src/apps/api/services/forecast_service.py \
+            src/apps/api/services/forecast_legacy.py \
+            src/apps/api/routers/forecast.py \
+            tests/test_forecast_robustness.py \
+            tests/test_forecast_api.py
+          python -m mypy src/apps/api
+          pytest -q \
+            tests/test_forecast_service.py \
+            tests/test_forecast_robustness.py \
+            tests/test_forecast_api.py
+
+      - name: Verify mutation scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed='^(src/apps/api/services/forecast_service.py|src/apps/api/services/forecast_legacy.py|src/apps/api/routers/forecast.py|tests/test_forecast_robustness.py|tests/test_forecast_api.py)$'
+          changed="$(git diff --name-only)"
+          test -n "$changed"
+          while IFS= read -r path; do
+            if ! [[ "$path" =~ $allowed ]]; then
+              echo "Unexpected corrected path: $path" >&2
+              exit 1
+            fi
+          done <<< "$changed"
+          git diff --check
+
+      - name: Commit and push validated correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/apps/api/services/forecast_service.py \
+            src/apps/api/services/forecast_legacy.py \
+            src/apps/api/routers/forecast.py \
+            tests/test_forecast_robustness.py \
+            tests/test_forecast_api.py
+          git commit -m "fix(forecast): satisfy quality and typing gates"
+          git push origin HEAD:quality/critical-coverage-and-forecast-robustness
