@@ -1,72 +1,110 @@
 # Forecasting
 
-Modular Accounting includes forecasting capabilities for time series prediction, supporting both baseline statistical models and advanced techniques with external regressors.
+Modular Accounting provides authenticated, tenant-scoped forecasting, rolling backtests, causal-impact analysis, and model discovery. The forecast surface remains an Early Beta analytical control. It is not a financial prediction guarantee, automated accounting conclusion, or substitute for model governance.
 
-## Overview
+## Supported models
 
-The forecasting system provides:
+The model engine currently exposes:
 
-- **Baseline Models**: ARIMA with automatic order selection
-- **Advanced Models**: Prophet (optional dependency) and gradient boosting regressors with engineered seasonality
-- **Event Awareness**: Exogenous regressors, intervention dummies, and causal impact analysis
-- **Evaluation**: Rolling backtests with MAE/RMSE/MAPE diagnostics
-- **API Integration**: REST endpoints for forecasts, causal impact, backtesting, and model discovery
-- **Extensibility**: Plugin architecture for custom forecasting models
+- **ARIMA** — baseline statistical model with bounded candidate-order selection.
+- **Gradient boosting** — scikit-learn regressor using lag and calendar features.
+- **Prophet** — optional model reported as unavailable when its dependency is not installed.
 
-## ForecastService
+All models use the same validated `ForecastService` boundary. The original model implementations remain isolated behind that boundary so input, cadence, output, metric, diagnostic, and error contracts apply consistently.
 
-The core forecasting service now supports multiple algorithms from a single entrypoint:
+## Input contract
 
-### ARIMA Baseline
+### Finite numeric values
+
+Target observations, regressors, interventions, model predictions, backtest values, metrics, causal-impact values, p-values, and numeric diagnostics must be finite. The service rejects:
+
+- `NaN`;
+- positive or negative infinity;
+- non-numeric values; and
+- values that cannot be represented as finite floats.
+
+Legitimate negative and zero observations remain valid. Invalid exogenous values are not converted to zero.
+
+### Timestamp and duplicate policy
+
+Timestamps are sorted before modeling. Exact duplicate timestamps use a deterministic **last supplied value wins** rule. The result diagnostics include `duplicate_timestamps_resolved`.
+
+A series must not mix naive and timezone-aware timestamps, and all aware timestamps must use one compatible timezone. Regressors and interventions must use the target series timezone.
+
+### Cadence policy
+
+The future index is derived under an explicit policy:
+
+| Observations | Policy |
+| --- | --- |
+| One timestamp | Daily fallback cadence, reported as `single-observation-daily-default` |
+| Two timestamps | Positive observed interval, reported with `two-point-observed-interval:` |
+| Three or more timestamps | A regular pandas-compatible frequency must be inferable; irregular cadence is rejected |
+
+The service no longer extrapolates an irregular multi-point series from only its final interval. Daily and hourly timezone-aware frequencies preserve local-time cadence across daylight-saving transitions.
+
+### Regressor and intervention alignment
+
+Regressor names must be nonempty and unique after trimming. Regressor timestamps must be drawn from the target timeline. Forward-fill is allowed only after a regressor supplies a value at the first target timestamp; leading gaps and out-of-range timestamps are rejected. Future exogenous values use the last validated finite row.
+
+### Bounds
+
+Request schemas retain the centralized application limits:
+
+- maximum target-series length: 10,000 observations;
+- maximum forecast horizon: 365;
+- maximum regressors: 32;
+- maximum observations per regressor: 10,000;
+- maximum requested backtest models: 16; and
+- positive, bounded backtest horizon, initial window, and step.
+
+## Output and diagnostic contract
+
+Public results are validated before serialization:
+
+- forecast timestamps must increase and match the requested horizon;
+- forecast and causal-impact values must be finite;
+- backtest folds must have matching actual/forecast lengths;
+- MAE and RMSE must be finite;
+- MAPE is `null` when any actual denominator is zero;
+- p-values, when present, must be finite and between zero and one;
+- diagnostics must be bounded, JSON-compatible, use string keys, and contain no non-finite numeric values.
+
+The API does not serialize `NaN` or infinity.
+
+## Service examples
+
+### Forecast
 
 ```python
 from apps.api.services.forecast_service import ForecastService
 
 service = ForecastService()
-forecast = service.forecast_series(
+result = service.forecast_series(
     series=historical_data,
     horizon=30,
     model="arima",
+    exogenous={"fx_rate": fx_series},
 )
 ```
 
-### Prophet and Advanced Regressors
-
-Prophet is treated as an optional dependency; when installed it is available via the same dispatcher:
+### Rolling backtest
 
 ```python
-forecast = service.forecast_series(
-    series=historical_data,
-    horizon=30,
-    model="prophet",
-    exogenous={
-        "fx_rate": fx_series,
-        "commodity_price": commodity_series,
-        "events": event_dummies,
-    },
+results = service.backtest(
+    historical_data,
+    horizon=7,
+    models=["arima", "gradient_boosting"],
+    initial_window=30,
+    step=7,
 )
 ```
 
-### Gradient Boosting Regressor
-
-A tree-based regressor with engineered seasonality and lagged features:
-
-```python
-forecast = service.forecast_series(
-    series=historical_data,
-    horizon=14,
-    model="gradient_boosting",
-    exogenous={"promo": promo_flags},
-)
-```
-
-### Causal Impact Analysis
-
-Estimate the lift or drag of an intervention window using a counterfactual baseline:
+### Causal impact
 
 ```python
 impact = service.causal_impact(
-    series=historical_data,
+    historical_data,
     event_start="2024-07-01",
     event_end="2024-07-14",
     interventions={"campaign": campaign_dummy_series},
@@ -74,197 +112,66 @@ impact = service.causal_impact(
 )
 ```
 
-### Event NLP Helpers
+The intervention window must be ordered and fully contained within the target series.
 
-Use `ForecastService.build_event_regressors` to convert event titles into
-simple keyword-driven intensity scores that can be passed as exogenous
-regressors for event-informed forecasts.
+## API endpoints
 
-## API Endpoints
+Every forecast route requires an active persisted access-token session and tenant membership for `organization_id`. Authorization occurs before model discovery or forecast work.
 
-### Generate Forecast
+### `POST /forecast/series`
 
-**POST** `/forecast/series`
-
-Request body:
 ```json
 {
-  "series": [[timestamp, value], ...],
-  "horizon": 30,
+  "organization_id": 1,
+  "series": [["2024-01-01", 100.0], ["2024-01-02", 105.0]],
+  "horizon": 2,
   "model": "arima",
   "regressors": {
-    "fx_usd_eur": [[timestamp, rate], ...],
-    "event_impact": [[timestamp, dummy], ...]
-  },
-  "organization_id": 1
-}
-```
-
-Response:
-```json
-{
-  "forecast": [[timestamp, predicted_value], ...],
-  "horizon": 30,
-  "order": [1, 1, 1],
-  "diagnostics": {
-    "model": "arima",
-    "mae": 0.1,
-    "rmse": 0.2
-  },
-  "model": "arima",
-  "timezone": "UTC"
-}
-```
-
-### List Available Models
-
-**GET** `/forecast/models`
-
-Returns available forecasting models and their capabilities, including whether optional dependencies (like Prophet) are installed.
-
-### Backtesting Harness
-
-**POST** `/forecast/backtest`
-
-Request:
-```json
-{
-  "series": [[timestamp, value], ...],
-  "horizon": 7,
-  "models": ["arima", "gradient_boosting"],
-  "regressors": {
-    "fx_usd_eur": [[timestamp, rate], ...]
-  },
-  "initial_window": 30,
-  "step": 7,
-  "organization_id": 1
-}
-```
-
-Response:
-```json
-[
-  {
-    "model": "arima",
-    "metrics": {"mae": 0.2, "rmse": 0.3, "mape": 1.5},
-    "tested_points": 21,
-    "folds": [
-      {
-        "start": "2024-01-01T00:00:00",
-        "end": "2024-01-21T00:00:00",
-        "horizon": 7,
-        "mae": 0.21,
-        "rmse": 0.32,
-        "mape": 1.6,
-        "actual": [[timestamp, value], ...],
-        "forecast": [[timestamp, predicted], ...]
-      }
-    ]
+    "fx_usd_eur": [["2024-01-01", 0.91], ["2024-01-02", 0.92]]
   }
-]
-```
-
-### Causal Impact Analysis
-
-**POST** `/forecast/impact`
-
-Request:
-```json
-{
-  "series": [[timestamp, value], ...],
-  "event_start": "2024-07-01",
-  "event_end": "2024-07-14",
-  "interventions": {
-    "campaign": [[timestamp, 0], [timestamp, 1], ...]
-  },
-  "model": "arima",
-  "organization_id": 1
 }
 ```
 
-Response (counterfactual vs observed):
-```json
-{
-  "model": "arima",
-  "event_start": "2024-07-01T00:00:00",
-  "event_end": "2024-07-14T00:00:00",
-  "average_impact": 4.2,
-  "cumulative_impact": 58.8,
-  "p_value": 0.03,
-  "points": [
-    {
-      "timestamp": "2024-07-03T00:00:00",
-      "actual": 120.0,
-      "predicted": 115.0,
-      "impact": 5.0
-    }
-  ]
-}
-```
+The route requires at least as many target observations as the requested horizon.
 
-## Model Types
+### `GET /forecast/models?organization_id={id}`
 
-### ARIMA (AutoRegressive Integrated Moving Average)
+Returns the bounded model registry and optional-dependency availability after tenant authorization.
 
-- **Use Case**: Baseline forecasting for stationary or seasonally adjusted series
-- **Parameters**: Automatically selected p, d, q orders
-- **Seasonal Support**: SARIMA for seasonal patterns
+### `POST /forecast/backtest`
 
-### Prophet (Optional)
+Runs bounded rolling-origin evaluation for the requested models and returns ordered folds plus aggregate metrics.
 
-- **Use Case**: Seasonality-rich business series with holiday or event regressors
-- **Parameters**: Automatic trend and seasonality detection; add regressors via `regressors` payload
-- **Dependency**: Install `prophet>=1.0`; the API reports availability via `/forecast/models`.
+### `POST /forecast/impact`
 
-### Gradient Boosting Regressor
+Returns bounded counterfactual-versus-observed points for a contained intervention window.
 
-- **Use Case**: Non-linear relationships with lagged effects and engineered seasonality
-- **Parameters**: Lagged features (1/7/14 days) plus calendar sine/cosine terms
-- **Dependency**: `scikit-learn` (shipped in base requirements)
+## Error behavior
 
-### Regression with Exogenous Variables
+Expected validation failures return a controlled `400` detail from a bounded allowlist. Unknown model-library exceptions return a generic `400` response. Server logs record only the forecast operation and exception type; they do not include raw exception text, request payloads, regressors, credentials, or tenant data.
 
-- **Use Case**: Incorporating external factors (FX rates, commodity prices, events)
-- **Parameters**: Lagged regressors, interaction terms
-- **Event Integration**: Dummy variables for significant events
+Pydantic request-shape and hard-limit failures continue to use the standard `422` response.
 
-## Integration Examples
+## Testing policy
 
-### Python Client
+Required forecast tests are hermetic and cover:
 
-```python
-import requests
+- target, regressor, intervention, output, metric, and diagnostic non-finite values;
+- duplicate resolution and sorted input;
+- one-point, two-point, regular daily/hourly, and irregular cadence;
+- spring-forward and fall-back timezone behavior;
+- mixed timezone rejection and regressor alignment;
+- constant, negative, and zero-heavy data;
+- MAPE zero-denominator behavior;
+- model unavailability and unsupported models;
+- tenant-first API execution; and
+- sanitized service and API failures.
 
-response = requests.post('http://localhost:8000/forecast/series', json={
-    'series': [[1640995200, 100.0], [1641081600, 105.0], ...],
-    'horizon': 7,
-    'model': 'arima'
-})
+No required test downloads models, uses provider credentials, or makes live network calls.
 
-forecast = response.json()['forecast']
-```
+## Known limits
 
-### CLI Usage
-
-```bash
-# Forecast with historical data
-python -m cli.macli forecast --series data.csv --horizon 30 --output forecast.json
-```
-
-## Evaluation and Backtesting
-
-Use `/forecast/backtest` to run rolling-origin validation across one or more models. Metrics returned:
-
-- **MAE**: Mean Absolute Error
-- **RMSE**: Root Mean Square Error
-- **MAPE**: Mean Absolute Percentage Error (ignored when actuals contain zeroes)
-- **Fold Diagnostics**: Per-fold error metrics plus the forecast/actual pairs for inspection
-
-## Future Enhancements
-
-- Deep learning models (e.g., temporal convolution or LSTM variants)
-- Automated model selection and blending
-- Forecast combination techniques
-- Real-time forecast updates
-
-See TASKLIST.md for detailed tracking of forecasting improvements (TASK-0011 through TASK-0015).
+- Forecast quality depends on the supplied data and model assumptions.
+- Prophet remains optional and is not installed by the base requirements.
+- Future exogenous observations are not accepted as a separate request surface; the current engine carries forward the final validated regressor row.
+- The service does not perform automated model governance, approval, or accounting posting.
