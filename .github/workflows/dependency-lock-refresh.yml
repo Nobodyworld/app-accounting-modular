@@ -15,13 +15,20 @@ permissions:
 
 jobs:
   generate-container-lock:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'deps/consolidated-runtime-and-attestation-refresh'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout repository
+      - name: Checkout exact pull-request head
         # actions/checkout v7.0.1 (released 2026-07-20; resolved 2026-07-31)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: true
 
       - name: Set up Python 3.14
         # actions/setup-python v7.0.0 (released 2026-07-20; resolved 2026-07-31)
@@ -41,7 +48,22 @@ jobs:
         run: |
           python scripts/dependencies/generate_container_lock.py
           python scripts/dependencies/verify_container_lock.py
+          git diff --exit-code -- requirements.txt
           sha256sum requirements.txt requirements-container.lock
+
+      - name: Commit generated lock to the guarded branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- requirements-container.lock; then
+            echo "The generated lock is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add requirements-container.lock
+          git commit -m "deps: regenerate hashed container runtime lock"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
 
       - name: Upload generated lock evidence
         # actions/upload-artifact v7.0.1 (released 2026-04-10; resolved 2026-07-31)
