@@ -1,3 +1,4 @@
+# Temporary exact-head evidence workflow; remove after the scan is recorded.
 name: PR 139 Full-History Gitleaks Evidence
 
 on:
