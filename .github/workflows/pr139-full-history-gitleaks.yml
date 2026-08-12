@@ -60,11 +60,12 @@ jobs:
           canary_dir="$RUNNER_TEMP/gitleaks-canary"
           canary_report="$RUNNER_TEMP/gitleaks-canary.json"
           mkdir -p "$canary_dir"
-          printf 'token = "%s%s"\n' \
-            'ghp_1234567890' 'abcdefghijklmnopqrstuvwxyz' \
+          printf 'discord_client_secret = "%s%s"\n' \
+            '8dyfuiRyq=vVc3RRr_' 'edRk-fK__JItpZ' \
             > "$canary_dir/canary.txt"
           set +e
           "$RUNNER_TEMP/gitleaks" dir "$canary_dir" \
+            --enable-rule generic-api-key \
             --no-banner \
             --redact \
             --report-format json \
@@ -75,6 +76,7 @@ jobs:
           test "$status" -eq 42
           test -s "$canary_report"
           test "$(jq 'length' "$canary_report")" -ge 1
+          test "$(jq -r '.[0].RuleID' "$canary_report")" = 'generic-api-key'
           rm -rf "$canary_dir" "$canary_report"
 
       - name: Scan all reachable repository history
