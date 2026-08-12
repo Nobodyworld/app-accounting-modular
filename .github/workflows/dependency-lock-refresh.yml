@@ -1,4 +1,4 @@
-name: Finalize Dependency Refresh
+name: Prepare Dependency Refresh Files
 
 on:
   pull_request:
@@ -9,23 +9,21 @@ permissions:
   contents: read
 
 jobs:
-  finalize:
+  prepare:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref == 'deps/consolidated-runtime-and-attestation-refresh'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout exact pull-request head
         # actions/checkout v7.0.1 (released 2026-07-20; resolved 2026-07-31)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: true
+          persist-credentials: false
 
-      - name: Correct attestation metadata and remove temporary workflow
+      - name: Prepare corrected permanent files
         shell: bash
         run: |
           set -euo pipefail
@@ -33,16 +31,38 @@ jobs:
           from pathlib import Path
 
           workflow = Path('.github/workflows/ci.yml')
-          text = workflow.read_text(encoding='utf-8')
-          old = '# actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)'
-          new = '# actions/attest v4.2.2 (released 2026-08-04; resolved 2026-08-12)'
-          if text.count(old) != 4:
-              raise SystemExit(f'expected four stale attestation comments; found {text.count(old)}')
-          workflow.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
+          workflow_text = workflow.read_text(encoding='utf-8')
+          old_comment = '# actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)'
+          new_comment = '# actions/attest v4.2.2 (released 2026-08-04; resolved 2026-08-12)'
+          if workflow_text.count(old_comment) != 4:
+              raise SystemExit(f'expected four stale attestation comments; found {workflow_text.count(old_comment)}')
+          workflow.write_text(workflow_text.replace(old_comment, new_comment), encoding='utf-8', newline='\n')
+
+          test_path = Path('tests/test_container_supply_chain.py')
+          test_text = test_path.read_text(encoding='utf-8')
+          replacements = {
+              'assert summary.requirement_count == 84': 'assert summary.requirement_count == 77',
+              'assert summary.transitive_requirement_count == 65': 'assert summary.transitive_requirement_count == 58',
+              '9cb72bf6c119404c7d9c85aaf0c0bc737d272bd5928c0b8200f41fffbefbf34d': '4f5586d77750784f6e71a9bd041ff6122558c7c216599bc1a0e3f78e0ac502e3',
+          }
+          for old, new in replacements.items():
+              if test_text.count(old) != 1:
+                  raise SystemExit(f'expected one occurrence of {old!r}; found {test_text.count(old)}')
+              test_text = test_text.replace(old, new)
+
+          addition = '''\n\ndef test_consolidated_dependency_versions_and_manifest_floors_are_explicit() -> None:\n    manifest = RUNTIME_INPUT.read_text(encoding="utf-8").lower()\n    lock_text = RUNTIME_LOCK.read_text(encoding="utf-8").lower()\n\n    assert "streamlit>=1.61.1,<2.0" in manifest\n    assert "pyjwt[crypto]>=2.13.0,<3.0" in manifest\n    assert re.search(r"^streamlit==1\\.61\\.1 \\\\", lock_text, re.MULTILINE)\n    assert re.search(r"^pyjwt\\[crypto\\]==2\\.13\\.0 \\\\", lock_text, re.MULTILINE)\n\n\ndef test_dependabot_avoids_unnecessary_floor_only_updates() -> None:\n    dependabot = (REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")\n\n    pip_section = dependabot.split("# GitHub Actions updates", maxsplit=1)[0]\n    assert "package-ecosystem: pip" in pip_section\n    assert "versioning-strategy: increase-if-necessary" in pip_section\n\n\ndef test_attestation_action_is_exactly_pinned_to_v4_2_2() -> None:\n    workflow = WORKFLOW.read_text(encoding="utf-8")\n    reference = "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6"\n    release_comment = "actions/attest v4.2.2 (released 2026-08-04; resolved 2026-08-12)"\n\n    assert workflow.count(reference) == 4\n    assert workflow.count(release_comment) == 4\n    assert "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d" not in workflow\n'''
+          if 'def test_consolidated_dependency_versions_and_manifest_floors_are_explicit' in test_text:
+              raise SystemExit('dependency refresh tests already exist')
+          test_path.write_text(test_text.rstrip() + addition + '\n', encoding='utf-8', newline='\n')
           PY
-          git rm .github/workflows/dependency-lock-refresh.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/ci.yml
-          git commit -m "ci: finalize attestation refresh metadata"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+
+      - name: Upload corrected permanent files
+        # actions/upload-artifact v7.0.1 (released 2026-04-10; resolved 2026-07-31)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dependency-refresh-permanent-files-${{ github.sha }}
+          path: |
+            .github/workflows/ci.yml
+            tests/test_container_supply_chain.py
+          if-no-files-found: error
+          retention-days: 3
