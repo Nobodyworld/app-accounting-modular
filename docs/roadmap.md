@@ -14,17 +14,18 @@ This roadmap reflects the repository state as of August 2026. Dates from the ori
 | Quality and forecast robustness | Complete | Repository-owned changed-production coverage, 17 independent critical-module floors, forecast finite-value/cadence/timezone hardening, DST coverage, sanitized API errors, and exact-head Python/container evidence are merged. | Maintain the policy and increase floors only when measured evidence supports a deliberate review. |
 | Ruff tooling policy | Complete | Ruff 0.16.2 is deliberately pinned with explicit lint selection, Python-only discovery, Markdown exclusion, and executable regression coverage. | Evaluate future updates only through the same explicit policy and exact-head validation boundary. |
 | Observability pack | Foundation complete | Metrics, tracing hooks, health/readiness endpoints, startup diagnostics, scheduler state, and CLI observability commands exist. | Add deployment examples, alerting guidance, and optional OTLP collector integration. |
-| Container onboarding | Validated for local demonstration; issue #138 complete | Digest-pinned API and Streamlit images, hash-locked dependencies, Compose configuration, least-privilege checks, SBOMs, checksums, trusted-event attestations, and the coordinated Python-base/runtime-provider maintenance closeout are present. | Maintain current provenance and regenerate the complete lock for every reviewed runtime or base-image change. |
+| Container onboarding | Validated for local demonstration; maintenance candidate prepared | Digest-pinned API and Streamlit images, hash-locked dependencies, Compose configuration, least-privilege checks, SBOMs, checksums, and trusted-event attestations are present. Draft PR #139 contains the coordinated Python-base/runtime-provider maintenance candidate, but it remains unmerged and issue #138 remains open. | Review draft PR #139 and merge only after explicit authorization and green exact-head gates; maintain current provenance and regenerate the complete lock for every reviewed runtime or base-image change. |
 | Public portfolio release | Public Early Beta | The repository is public with an explicit Early Beta / Portfolio Preview boundary and a completed post-UX code audit. | Maintain accurate release evidence; do not infer LAN or public-hosting approval from repository visibility. |
 
 ## Near-term Priorities
 
-1. Keep setup instructions executable from a clean clone on Windows, macOS, Linux, and Docker.
-2. Convert the current source-layout application into a conventionally installable Python project when packaging work begins.
-3. Expand strict typing beyond the current targeted modules.
-4. Persist provider-catalog administration rather than relying only on process configuration.
-5. Package the provider/extension contracts as a documented third-party adapter conformance kit.
-6. Extend the validated v0.2 close controls only through explicit policy decisions and measured critical-module coverage.
+1. Review draft PR #139, satisfy its exact-head gates, and merge only after explicit authorization; issue #138 remains open until integration.
+2. Keep setup instructions executable from a clean clone on Windows, macOS, Linux, and Docker.
+3. Convert the current source-layout application into a conventionally installable Python project when packaging work begins.
+4. Expand strict typing beyond the current targeted modules.
+5. Persist provider-catalog administration rather than relying only on process configuration.
+6. Package the provider/extension contracts as a documented third-party adapter conformance kit.
+7. Extend the validated v0.2 close controls only through explicit policy decisions and measured critical-module coverage.
 
 ## Future Opportunities
 

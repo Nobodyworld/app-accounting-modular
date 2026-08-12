@@ -3,7 +3,7 @@
 ## Current Candidate
 
 Version candidate: `0.2.0`
-Current main baseline: `a6fc6976b679eef30b2697512ce22f36a73d53de`
+Current main baseline: `6742be345b3e30635e475392d48cdb3fbeb3f676`
 
 This public repository is an Early Beta / Portfolio Preview accounting-controls toolkit. It demonstrates modular snapshot orchestration, authenticated tenant-scoped review utilities, accountant-ready reports, provider provenance, journal controls, health diagnostics, scenario plans, CLI/API/Streamlit review surfaces, extension contracts, and the v0.2 Accountant Close Workspace. It is not presented as a production ERP, tax engine, treasury system, regulated bank-feed product, or commercially supported accounting platform.
 
@@ -41,7 +41,7 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - PR #126 delivered the v0.2 Accountant Close and Reconciliation Workspace.
 - PR #130 delivered deterministic changed-production coverage, the completed critical-module policy, and forecast robustness.
 - Issue #102 established the isolated Ruff 0.16.0 migration without Markdown-wide formatting or product changes.
-- Issue #138 completed the coordinated v0.2 maintenance closeout: the verified Python 3.14.7 slim-trixie base, YFinance 1.x compatibility and regenerated runtime lock, and the reviewed Ruff 0.16.2 patch.
+- Draft PR #139 contains the coordinated v0.2 maintenance candidate for issue #138: the verified Python 3.14.7 slim-trixie base, YFinance 1.x compatibility and regenerated runtime lock, and the reviewed Ruff 0.16.2 patch. The draft remains unmerged pending review.
 
 ## Validation
 
