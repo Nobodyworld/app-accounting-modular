@@ -1,0 +1,141 @@
+name: PR 139 Full-History Gitleaks Evidence
+
+on:
+  push:
+    branches:
+      - build/v0.2-python-base-and-state-closeout
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-history-gitleaks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout complete repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Fetch every branch and tag without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --prune origin \
+            '+refs/heads/*:refs/remotes/origin/*' \
+            '+refs/tags/*:refs/tags/*'
+
+      - name: Download and verify Gitleaks 8.30.0
+        id: install
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='8.30.0'
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${version}"
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/$archive" "$base/$archive"
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/checksums.txt" \
+            "$base/gitleaks_${version}_checksums.txt"
+          (
+            cd "$RUNNER_TEMP"
+            grep "  $archive$" checksums.txt | sha256sum --check --strict -
+          )
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          chmod 0755 "$RUNNER_TEMP/gitleaks"
+          "$RUNNER_TEMP/gitleaks" version
+          echo "binary_sha256=$(sha256sum "$RUNNER_TEMP/gitleaks" | cut -d' ' -f1)" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Prove the scanner detects a runtime canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          canary_dir="$RUNNER_TEMP/gitleaks-canary"
+          canary_report="$RUNNER_TEMP/gitleaks-canary.json"
+          mkdir -p "$canary_dir"
+          printf 'token = "%s%s"\n' \
+            'ghp_1234567890' 'abcdefghijklmnopqrstuvwxyz' \
+            > "$canary_dir/canary.txt"
+          set +e
+          "$RUNNER_TEMP/gitleaks" dir \
+            --source "$canary_dir" \
+            --no-banner \
+            --redact \
+            --report-format json \
+            --report-path "$canary_report" \
+            --exit-code 42
+          status=$?
+          set -e
+          test "$status" -eq 42
+          test -s "$canary_report"
+          test "$(jq 'length' "$canary_report")" -ge 1
+          rm -rf "$canary_dir" "$canary_report"
+
+      - name: Scan all reachable repository history
+        id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/pr139-gitleaks-evidence"
+          report="$evidence_dir/gitleaks-full-history.json"
+          summary="$evidence_dir/summary.txt"
+          mkdir -p "$evidence_dir"
+
+          root_commits="$(git rev-list --max-parents=0 --all | sort)"
+          reachable_commits="$(git rev-list --all --count)"
+          reachable_refs="$(git for-each-ref \
+            --format='%(refname)' refs/heads refs/remotes refs/tags | wc -l)"
+
+          "$RUNNER_TEMP/gitleaks" git \
+            --source . \
+            --log-opts='--all' \
+            --no-banner \
+            --redact \
+            --report-format json \
+            --report-path "$report" \
+            --exit-code 1
+
+          if [[ ! -f "$report" ]]; then
+            printf '[]\n' > "$report"
+          fi
+
+          findings="$(jq 'length' "$report")"
+          report_sha256="$(sha256sum "$report" | cut -d' ' -f1)"
+          archive_sha256="$(sha256sum \
+            "$RUNNER_TEMP/gitleaks_8.30.0_linux_x64.tar.gz" | cut -d' ' -f1)"
+
+          {
+            printf 'repository=%s\n' "$GITHUB_REPOSITORY"
+            printf 'event=%s\n' "$GITHUB_EVENT_NAME"
+            printf 'head_sha=%s\n' "$GITHUB_SHA"
+            printf 'gitleaks_version=8.30.0\n'
+            printf 'gitleaks_archive_sha256=%s\n' "$archive_sha256"
+            printf 'gitleaks_binary_sha256=%s\n' \
+              '${{ steps.install.outputs.binary_sha256 }}'
+            printf 'root_commits=%s\n' "$root_commits"
+            printf 'reachable_commits=%s\n' "$reachable_commits"
+            printf 'reachable_refs=%s\n' "$reachable_refs"
+            printf 'findings=%s\n' "$findings"
+            printf 'redacted_report_sha256=%s\n' "$report_sha256"
+          } | tee "$summary"
+
+          test "$findings" -eq 0
+
+          echo "reachable_commits=$reachable_commits" >> "$GITHUB_OUTPUT"
+          echo "reachable_refs=$reachable_refs" >> "$GITHUB_OUTPUT"
+          echo "report_sha256=$report_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload redacted full-history evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr139-full-history-gitleaks-${{ github.sha }}
+          path: ${{ runner.temp }}/pr139-gitleaks-evidence
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 9
