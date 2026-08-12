@@ -3,7 +3,7 @@
 ## Current Candidate
 
 Version candidate: `0.2.0`
-Current main baseline: `6742be345b3e30635e475392d48cdb3fbeb3f676`
+Pre-maintenance main baseline: `6742be345b3e30635e475392d48cdb3fbeb3f676`
 
 This public repository is an Early Beta / Portfolio Preview accounting-controls toolkit. It demonstrates modular snapshot orchestration, authenticated tenant-scoped review utilities, accountant-ready reports, provider provenance, journal controls, health diagnostics, scenario plans, CLI/API/Streamlit review surfaces, extension contracts, and the v0.2 Accountant Close Workspace. It is not presented as a production ERP, tax engine, treasury system, regulated bank-feed product, or commercially supported accounting platform.
 
@@ -40,8 +40,9 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - PR #124 added the digest-pinned, hash-locked, SBOM-producing, attestable container supply chain.
 - PR #126 delivered the v0.2 Accountant Close and Reconciliation Workspace.
 - PR #130 delivered deterministic changed-production coverage, the completed critical-module policy, and forecast robustness.
-- Issue #102 established the isolated Ruff 0.16.0 migration without Markdown-wide formatting or product changes.
-- Draft PR #139 contains the coordinated v0.2 maintenance candidate for issue #138: the verified Python 3.14.7 slim-trixie base, YFinance 1.x compatibility and regenerated runtime lock, and the reviewed Ruff 0.16.2 patch. The draft remains unmerged pending review.
+- PR #132 completed the isolated Ruff 0.16 migration without Markdown-wide formatting or product changes.
+- PR #135 consolidated the PyJWT and Streamlit compatibility floors, regenerated hashed runtime graph, `actions/attest` update, and pip Dependabot policy.
+- PR #139 coordinates the reviewed Python 3.14.7 slim-trixie base, yfinance 1.5.2 compatibility, deterministic runtime-lock refresh, and Ruff 0.16.2 patch. GitHub records its final review and merge disposition.
 
 ## Validation
 
@@ -57,12 +58,28 @@ The quality gate runs:
 - current-tree secret scanning; and
 - verified full-history Gitleaks scanning.
 
-The merged reliability baseline passed 686 tests with 87.97% line coverage
-(9,381/10,664) and 71.55% branch coverage (1,925/2,690). All 17 configured
+The v0.2 maintenance candidate passed 695 tests with 88.00% line coverage
+(9,384/10,664) and 71.64% branch coverage (1,927/2,690). All 17 configured
 critical-module floors, the 52-test accounting-control subset, `pip check`,
-the hashed runtime-lock audit, the development dependency audit, current-tree
-secret scan, and full-history Gitleaks scan passed. Changed-production coverage
-was 91.61% (273/298) against the independent 85% floor.
+the hashed runtime-lock audit, the development dependency audit, and the
+current-tree secret scan passed. Ruff 0.16.2 lint and formatting passed across
+247 files, and mypy passed across 69 source files. Changed-production coverage
+reported an explicit not-applicable pass because the candidate changes no
+configured production source line.
+
+A checksum-verified Gitleaks 8.30.0 binary first detected a runtime-generated
+`generic-api-key` canary, then scanned all fetched branches and tags. It
+processed 160 commits across 167 reachable commits and seven refs, found zero
+leaks, and produced a redacted empty report with SHA-256
+`37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570`.
+
+Hosted exact-head CI additionally passed Python 3.12, 3.13, and 3.14,
+changed-production coverage, API and Streamlit no-cache container builds and
+health checks, missing-secret rejection, installed-lock conformance, UID/GID
+`10001:10001`, read-only roots, dropped capabilities, `no-new-privileges`,
+intended writable paths, SPDX SBOM/checksum evidence, and teardown. PR-event
+attestations remain skipped by design; trusted-main attestations run only after
+an authorized merge.
 
 The merged v0.2 browser acceptance remains valid: literal Microsoft Edge 200%
 zoom passed in Edge 151.0.4129.72 on Windows 25H2 build 26200.8894 across all
@@ -76,7 +93,7 @@ commands while making their file set and lint policy explicit in
 `pyproject.toml`. Markdown Python fences remain outside the normal formatter
 gate. See [`quality/ruff-0.16-migration.md`](quality/ruff-0.16-migration.md).
 
-Hosted CI additionally validates Python 3.12, 3.13, and 3.14, changed-production coverage, builds and starts the Compose services, verifies required JWT configuration, and inspects the live least-privilege container runtime. See [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md) and the final post-UX audit documentation for the current code-audit disposition.
+See [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md) and the final post-UX audit documentation for the current code-audit disposition.
 
 ## Running The Demonstration
 
