@@ -64,8 +64,7 @@ jobs:
             'ghp_1234567890' 'abcdefghijklmnopqrstuvwxyz' \
             > "$canary_dir/canary.txt"
           set +e
-          "$RUNNER_TEMP/gitleaks" dir \
-            --source "$canary_dir" \
+          "$RUNNER_TEMP/gitleaks" dir "$canary_dir" \
             --no-banner \
             --redact \
             --report-format json \
@@ -93,8 +92,7 @@ jobs:
           reachable_refs="$(git for-each-ref \
             --format='%(refname)' refs/heads refs/remotes refs/tags | wc -l)"
 
-          "$RUNNER_TEMP/gitleaks" git \
-            --source . \
+          "$RUNNER_TEMP/gitleaks" git . \
             --log-opts='--all' \
             --no-banner \
             --redact \
