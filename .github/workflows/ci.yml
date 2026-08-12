@@ -392,14 +392,14 @@ jobs:
           sha256sum --check runtime-lock.sha256
 
       - name: Attest API archive provenance
-        # actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)
+        # actions/attest v4.2.2 (released 2026-08-04; resolved 2026-08-12)
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-api-${{ github.sha }}.tar
           push-to-registry: false
 
       - name: Attest API archive SBOM
-        # actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)
+        # actions/attest v4.2.2 (released 2026-08-04; resolved 2026-08-12)
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-api-${{ github.sha }}.tar
@@ -407,14 +407,14 @@ jobs:
           push-to-registry: false
 
       - name: Attest web archive provenance
-        # actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)
+        # actions/attest v4.2.2 (released 2026-08-04; resolved 2026-08-12)
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-web-${{ github.sha }}.tar
           push-to-registry: false
 
       - name: Attest web archive SBOM
-        # actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)
+        # actions/attest v4.2.2 (released 2026-08-04; resolved 2026-08-12)
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: ${{ runner.temp }}/container-supply-chain-evidence/modacct-web-${{ github.sha }}.tar
