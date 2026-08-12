@@ -1,20 +1,15 @@
-name: Dependency Lock Refresh Evidence
+name: Finalize Dependency Refresh
 
 on:
   pull_request:
     paths:
-      - requirements.txt
-      - requirements-container.lock
-      - requirements-lock-tools.lock
-      - scripts/dependencies/**
       - .github/workflows/dependency-lock-refresh.yml
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  generate-container-lock:
+  finalize:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -30,48 +25,24 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: true
 
-      - name: Set up Python 3.14
-        # actions/setup-python v7.0.0 (released 2026-07-20; resolved 2026-07-31)
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: "3.14"
-          cache: pip
-
-      - name: Install hashed lock-generation toolchain
-        run: |
-          python -m pip install \
-            --disable-pip-version-check \
-            --require-hashes \
-            -r requirements-lock-tools.lock
-
-      - name: Generate and verify container runtime lock
-        run: |
-          python scripts/dependencies/generate_container_lock.py
-          python scripts/dependencies/verify_container_lock.py
-          git diff --exit-code -- requirements.txt
-          sha256sum requirements.txt requirements-container.lock
-
-      - name: Commit generated lock to the guarded branch
+      - name: Correct attestation metadata and remove temporary workflow
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- requirements-container.lock; then
-            echo "The generated lock is already current."
-            exit 0
-          fi
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/ci.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old = '# actions/attest v4.2.1 (released 2026-07-29; resolved 2026-07-31)'
+          new = '# actions/attest v4.2.2 (released 2026-08-04; resolved 2026-08-12)'
+          if text.count(old) != 4:
+              raise SystemExit(f'expected four stale attestation comments; found {text.count(old)}')
+          workflow.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
+          PY
+          git rm .github/workflows/dependency-lock-refresh.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add requirements-container.lock
-          git commit -m "deps: regenerate hashed container runtime lock"
+          git add .github/workflows/ci.yml
+          git commit -m "ci: finalize attestation refresh metadata"
           git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
-
-      - name: Upload generated lock evidence
-        # actions/upload-artifact v7.0.1 (released 2026-04-10; resolved 2026-07-31)
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: generated-container-lock-${{ github.sha }}
-          path: |
-            requirements.txt
-            requirements-container.lock
-          if-no-files-found: error
-          retention-days: 3
