@@ -69,7 +69,7 @@ configured production source line.
 
 A checksum-verified Gitleaks 8.30.0 binary first detected a runtime-generated
 `generic-api-key` canary, then scanned all fetched branches and tags. It
-processed 160 commits across 167 reachable commits and seven refs, found zero
+processed 162 commits across 169 reachable commits and seven refs, found zero
 leaks, and produced a redacted empty report with SHA-256
 `37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570`.
 
