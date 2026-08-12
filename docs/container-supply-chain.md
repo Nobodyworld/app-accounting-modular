@@ -14,37 +14,46 @@ application behavior.
 | `requirements-container.lock` | Generated Python 3.14/Linux runtime graph with exact versions and hashes. |
 | `requirements-lock-tools.lock` | Exact, hashed lock for the generator; it is not installed in application images. |
 
-The committed runtime lock contains 84 packages: 19 direct requirements and 65
+The committed runtime lock contains 76 packages: 19 direct requirements and 57
 transitive requirements. Its SHA-256 is
-`990aa39c04686870f6907074b32d01eff81f69f84f9281d98aefa91fb72163d9`.
+`5b110e5a7926b5248d6182af035dda9296f1fbfd73133b2dc88059c5f26f56ed`.
 The lock preserves required extras such as `uvicorn[standard]` and
 `PyJWT[crypto]`.
 
 The runtime lock header records the canonical-LF SHA-256 of its input. The
 current `requirements.txt` fingerprint is
-`9cb72bf6c119404c7d9c85aaf0c0bc737d272bd5928c0b8200f41fffbefbf34d`.
+`c748d7807e46f9cf5f8348e05c9a4886f5130fba6e21da7829bbc03b61d878dc`.
 Line endings are normalized to LF for this fingerprint so Windows and Linux
 checkouts have the same policy identity; the lock-file checksums in this guide
 are ordinary byte-for-byte SHA-256 values.
+
+The 2026-08-12 generation moved `yfinance` from 0.2.66 to 1.5.2, retained
+`curl-cffi` 0.16.0, and removed `frozendict`. It also advanced
+`charset-normalizer` from 3.4.9 to 3.5.0 and `typing-inspection` from 0.4.3 to
+0.4.4 as reviewed transitive patch outcomes. No other package version moved.
 
 ## Pinned Python base
 
 Both application Dockerfiles use the same official manifest-list reference:
 
 ```text
-python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6
+python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc
 ```
 
-On 2026-07-31, the tag was resolved with registry-aware Docker Buildx tooling:
+On 2026-08-12, the tag was resolved with registry-aware Docker Buildx tooling:
 
 ```bash
 docker buildx imagetools inspect docker.io/library/python:3.14-slim
 ```
 
-The output identified the official `docker.io/library/python` image, the OCI
-manifest-list digest shown above, and a `linux/amd64` manifest. The image
-reported Python 3.14.6 on the `slim-trixie` variant. This is a registry manifest
-digest, not a local Docker image ID.
+The output identified the official `docker.io/library/python` image and the OCI
+manifest-list digest shown above. Its `linux/amd64` platform manifest is
+`sha256:d6e0850f13fda0e2305d4c3c1c2f7930fe1042d34ddd958e49bba6ef685d0bb2`.
+The image reports Python 3.14.7 on the `slim-trixie` variant, was created
+2026-08-05T16:25:49Z, and carries the official `docker-library/python` source
+annotation at commit `228f71e70a42ba9f9a092321b971031603bb88ff`. These are
+registry manifest identities and verified image metadata, not local Docker
+image IDs.
 
 When updating the base, repeat the inspection rather than copying a digest from
 an unverified source. Confirm the official image owner and `linux/amd64`
@@ -55,7 +64,7 @@ not replace the pinned base.
 ## Locked generator
 
 Runtime locking uses `uv==0.12.0`. The one-entry tool lock has SHA-256
-`2522c140fe61233b873b30a8cb54e613e80f2c4bea1ea39f64e21f37b2a4d51a`.
+`aff84fdd6d16ce2a4ea44c059f2f4c47bb0760acce5c585981b2f1e31317a8dd`.
 It records the hash of the official Linux x86-64 manylinux wheel and installs
 with `--require-hashes` and `--only-binary=:all:` inside the pinned base image.
 
@@ -164,14 +173,15 @@ commit, and workflow-run metadata. These run-specific archives and SBOMs are
 never committed.
 
 The actions used by the CI workflow were resolved from their official
-publishers on 2026-07-31 and are executable only at full commit SHAs:
+publishers on the dates recorded in the workflow comments and are executable
+only at full commit SHAs:
 
 | Repository | Release | Release date | Full commit SHA | Purpose |
 | --- | --- | --- | --- | --- |
 | `actions/checkout` | `v7.0.1` | 2026-07-20 | `3d3c42e5aac5ba805825da76410c181273ba90b1` | Credential-free source checkout. |
 | `actions/setup-python` | `v7.0.0` | 2026-07-20 | `5fda3b95a4ea91299a34e894583c3862153e4b97` | Python 3.12/3.13/3.14 quality matrix. |
 | `actions/upload-artifact` | `v7.0.1` | 2026-04-10 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` | Upload 14-day ordinary evidence. |
-| `actions/attest` | `v4.2.1` | 2026-07-29 | `508db95dd578ae2727ebd6217d5ba78e4fbda05d` | Build-provenance and SBOM attestations. |
+| `actions/attest` | `v4.2.2` | 2026-08-04 | `1e69f48acb82d1966a394da916b4c1698aa569d6` | Build-provenance and SBOM attestations. |
 | `anchore/sbom-action` | `v0.24.0` | 2026-03-20 | `e22c389904149dbc22b58101806040fa8d37a610` | SPDX JSON generation with Syft 1.50.0. |
 | `actions/download-artifact` | `v8.0.1` | 2026-03-11 | `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` | Retrieve exact evidence for attestation. |
 
@@ -242,11 +252,13 @@ the reviewed regeneration step is required before merging an update.
 
 ## Ruff pin rationale
 
-`ruff==0.15.21` remains exact in `requirements-dev.txt` because formatter and
+`ruff==0.16.2` remains exact in `requirements-dev.txt` because formatter and
 linter output must remain stable, quality-gate behavior should be reproducible,
 and formatting changes should receive deliberate review. Ruff is a development
 quality tool and its pin is independent of the runtime container lock; it must
-not be described as that lock.
+not be described as that lock. The reviewed 0.16.2 patch preserves the explicit
+lint, discovery, preview, and formatting policy established by the 0.16.0
+migration.
 
 ## Known limits
 

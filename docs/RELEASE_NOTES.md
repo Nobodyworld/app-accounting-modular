@@ -15,7 +15,7 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - Bounded close collections with 100-record defaults, 500-record maximum pages, separately paged immutable journal decisions, and a 500-approval per-cycle cap.
 - Repository-owned changed-production coverage and 17 independent critical-module line/branch policies so aggregate coverage cannot mask accounting, session, background, provider, or forecast regressions.
 - Forecast finite-value, cadence, timezone/DST, regressor-alignment, output, metric, and sanitized-error contracts.
-- Deliberate Ruff 0.16.0 tooling policy with an exact pin, explicit lint families, preview disabled, Python/stub-only discovery, and Markdown/notebook exclusion.
+- Deliberate Ruff 0.16 tooling policy with a current exact 0.16.2 pin, explicit lint families, preview disabled, Python/stub-only discovery, and Markdown/notebook exclusion.
 - Public/local Streamlit review flow for financial snapshots, source evidence, freshness, and journal-control status.
 - Authenticated organization-scoped scenario-plan, budget, cashflow, FX, market, and close workflows.
 - Accountant-ready result panels with structured metrics, tables, partial/empty/no-change states, sanitized details, and CSV exports.
@@ -40,7 +40,8 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - PR #124 added the digest-pinned, hash-locked, SBOM-producing, attestable container supply chain.
 - PR #126 delivered the v0.2 Accountant Close and Reconciliation Workspace.
 - PR #130 delivered deterministic changed-production coverage, the completed critical-module policy, and forecast robustness.
-- Issue #102 is the isolated Ruff 0.16 migration and does not include Markdown-wide formatting or product changes.
+- Issue #102 established the isolated Ruff 0.16.0 migration without Markdown-wide formatting or product changes.
+- Issue #138 completed the coordinated v0.2 maintenance closeout: the verified Python 3.14.7 slim-trixie base, YFinance 1.x compatibility and regenerated runtime lock, and the reviewed Ruff 0.16.2 patch.
 
 ## Validation
 
@@ -70,7 +71,7 @@ responsive metric/table layout, and application-origin console checks. The
 exact 390×844 CSS-pixel viewport recheck also passed without page-level
 horizontal overflow.
 
-The Ruff migration keeps the normal `ruff check .` and `ruff format --check .`
+The current Ruff 0.16.2 policy keeps the normal `ruff check .` and `ruff format --check .`
 commands while making their file set and lint policy explicit in
 `pyproject.toml`. Markdown Python fences remain outside the normal formatter
 gate. See [`quality/ruff-0.16-migration.md`](quality/ruff-0.16-migration.md).

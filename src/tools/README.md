@@ -18,11 +18,12 @@ python -m ruff check .
 python -m ruff format --check .
 ```
 
-Ruff is pinned exactly to `0.16.0`. `pyproject.toml` explicitly selects the
+Ruff is pinned exactly to `0.16.2`. `pyproject.toml` explicitly selects the
 reviewed lint families and limits discovery to Python/stub files plus the
 configuration file. Markdown and notebooks are excluded, preview behavior is
 disabled, and `force-exclude` prevents an explicit path from bypassing the
-repository policy. See
+repository policy. The reviewed 0.16.2 patch preserves the policy established
+by the original 0.16.0 migration. See
 [`docs/quality/ruff-0.16-migration.md`](../../docs/quality/ruff-0.16-migration.md).
 
 ## Changed-production-line coverage
