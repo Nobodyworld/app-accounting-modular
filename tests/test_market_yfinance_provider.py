@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 from datetime import date, timedelta
 
 import pandas as pd
@@ -17,6 +18,12 @@ from plugins.provider_limits import (
 )
 
 provider_module = importlib.import_module("plugins.market_yfinance.provider")
+
+
+def test_installed_download_signature_supports_bounded_options() -> None:
+    parameters = inspect.signature(provider_module.yf.download).parameters
+
+    assert {"timeout", "multi_level_index"} <= parameters.keys()
 
 
 def test_normal_dataframe_produces_expected_prices(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -47,6 +54,12 @@ def test_normal_dataframe_produces_expected_prices(monkeypatch: pytest.MonkeyPat
 
 def test_empty_dataframe_returns_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(provider_module.yf, "download", lambda *args, **kwargs: pd.DataFrame())
+
+    assert list(YFinanceMarketProvider().fetch_prices("ACME", date(2024, 1, 1), date(2024, 1, 2))) == []
+
+
+def test_none_download_result_returns_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(provider_module.yf, "download", lambda *args, **kwargs: None)
 
     assert list(YFinanceMarketProvider().fetch_prices("ACME", date(2024, 1, 1), date(2024, 1, 2))) == []
 
@@ -123,7 +136,10 @@ def test_malformed_close_or_index_is_rejected_safely(
     assert "private-upstream-data" not in str(exc_info.value)
 
 
-def test_download_failure_is_sanitized_and_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_download_failure_is_sanitized_and_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     calls = 0
 
     def download(*args: object, **kwargs: object) -> pd.DataFrame:
@@ -132,12 +148,15 @@ def test_download_failure_is_sanitized_and_not_retried(monkeypatch: pytest.Monke
         raise RuntimeError("private upstream response")
 
     monkeypatch.setattr(provider_module.yf, "download", download)
+    caplog.set_level("WARNING", logger=provider_module.__name__)
 
     with pytest.raises(ProviderTransportError, match="Provider request failed") as exc_info:
         list(YFinanceMarketProvider().fetch_prices("ACME", date(2024, 1, 1), date(2024, 1, 3)))
 
     assert calls == 1
     assert "private upstream response" not in str(exc_info.value)
+    assert "Outbound market provider request failed" in caplog.text
+    assert "private upstream response" not in caplog.text
 
 
 @pytest.mark.parametrize("symbol", ["", " BAD", "BAD/QUERY", "A" * 33])

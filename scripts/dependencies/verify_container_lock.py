@@ -14,7 +14,7 @@ RUNTIME_INPUT: Final = "requirements.txt"
 RUNTIME_LOCK: Final = "requirements-container.lock"
 TOOL_LOCK: Final = "requirements-lock-tools.lock"
 
-BASE_IMAGE: Final = "python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6"
+BASE_IMAGE: Final = "python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc"
 GENERATOR_NAME: Final = "uv"
 GENERATOR_VERSION: Final = "0.12.0"
 PYTHON_POLICY: Final = "3.14"
