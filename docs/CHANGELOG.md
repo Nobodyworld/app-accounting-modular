@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 2026-08-11: Migrated deliberately to Ruff 0.16.0 with an exact development pin, explicit lint families, preview disabled, Python/stub-only discovery, Markdown/notebook exclusion, `force-exclude`, executable policy tests, and no runtime or container-lock changes.
 - 2026-08-10: Added repository-owned changed-production-line coverage with an explicit Git base/head, merge-base evaluation, Coverage.py executable-line intersection, deterministic JSON/Markdown evidence, an 85% floor, fail-closed error handling, and an exact-base read-only PR workflow.
 - 2026-08-10: Expanded independent critical-module line/branch floors to tax, snapshots, audit, scheduler, forecasting, provider loading, and bounded provider transport; hardened forecasts against non-finite values, irregular cadence, mixed timezones, misaligned regressors, non-finite outputs/metrics, and raw model-error disclosure; added deterministic DST, cadence, service, and API suites.
 - 2026-08-08: Added the v0.2 authenticated Accountant Close Workspace: persistent periods and close cycles, inclusive posting locks, account reconciliations, BudgetService-backed variance reviews, staged-workflow blockers, independent journal approvals, deterministic checklist/readiness, spreadsheet-safe evidence ZIPs, Streamlit controls, multi-user demo data, fail-closed route inventory, and explicit critical-module line/branch coverage policy.

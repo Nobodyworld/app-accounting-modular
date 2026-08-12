@@ -3,7 +3,7 @@
 ## Current Candidate
 
 Version candidate: `0.2.0`
-Current main baseline: `4266ea43ed40201388df82bb53f757df45afe204`
+Current main baseline: `a6fc6976b679eef30b2697512ce22f36a73d53de`
 
 This public repository is an Early Beta / Portfolio Preview accounting-controls toolkit. It demonstrates modular snapshot orchestration, authenticated tenant-scoped review utilities, accountant-ready reports, provider provenance, journal controls, health diagnostics, scenario plans, CLI/API/Streamlit review surfaces, extension contracts, and the v0.2 Accountant Close Workspace. It is not presented as a production ERP, tax engine, treasury system, regulated bank-feed product, or commercially supported accounting platform.
 
@@ -13,7 +13,9 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - Deterministic evidence ZIP with canonical JSON, LF spreadsheet-safe CSV, normalized entry timestamps, per-file SHA-256 values, one non-self-referential manifest hash across bytes/metadata/audit, and typed safe policy output.
 - Recorded-evidence download enforcement: generation builds once, while download requires a current persisted manifest and returns a typed conflict for missing, stale, reclassified, or mismatched evidence.
 - Bounded close collections with 100-record defaults, 500-record maximum pages, separately paged immutable journal decisions, and a 500-approval per-cycle cap.
-- Critical-module coverage policy with independent line and branch floors so aggregate coverage cannot mask close, ledger, workflow, or session-control regressions.
+- Repository-owned changed-production coverage and 17 independent critical-module line/branch policies so aggregate coverage cannot mask accounting, session, background, provider, or forecast regressions.
+- Forecast finite-value, cadence, timezone/DST, regressor-alignment, output, metric, and sanitized-error contracts.
+- Deliberate Ruff 0.16.0 tooling policy with an exact pin, explicit lint families, preview disabled, Python/stub-only discovery, and Markdown/notebook exclusion.
 - Public/local Streamlit review flow for financial snapshots, source evidence, freshness, and journal-control status.
 - Authenticated organization-scoped scenario-plan, budget, cashflow, FX, market, and close workflows.
 - Accountant-ready result panels with structured metrics, tables, partial/empty/no-change states, sanitized details, and CSV exports.
@@ -37,8 +39,8 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - PR #105 completed the post-UX pre-release code audit and closed issue #87 after all identified findings were remediated.
 - PR #124 added the digest-pinned, hash-locked, SBOM-producing, attestable container supply chain.
 - PR #126 delivered the v0.2 Accountant Close and Reconciliation Workspace.
-- Issue #59 is the active reliability tranche for deterministic changed-production-line coverage, the remaining critical-module floors, and forecast finite-value/cadence/timezone hardening.
-- Ruff 0.16 remains isolated in issue #102.
+- PR #130 delivered deterministic changed-production coverage, the completed critical-module policy, and forecast robustness.
+- Issue #102 is the isolated Ruff 0.16 migration and does not include Markdown-wide formatting or product changes.
 
 ## Validation
 
@@ -50,24 +52,30 @@ The quality gate runs:
 - independent critical-module line and branch floors;
 - focused accounting-control tests;
 - `pip check`;
-- `pip-audit`; and
-- current-tree secret scanning.
+- `pip-audit`;
+- current-tree secret scanning; and
+- verified full-history Gitleaks scanning.
 
-The merged v0.2 baseline passed 639 tests with 87.97% line coverage
-(9,119/10,366) and 71.41% branch coverage (1,828/2,560). All configured
+The merged reliability baseline passed 686 tests with 87.97% line coverage
+(9,381/10,664) and 71.55% branch coverage (1,925/2,690). All 17 configured
 critical-module floors, the 52-test accounting-control subset, `pip check`,
-the GitPython 3.1.58 hashed runtime-lock audit, and the development dependency
-audit passed. Literal Microsoft Edge 200% zoom acceptance passed in Edge
-151.0.4129.72 on Windows 25H2 build 26200.8894: all six close sections,
-mutation and download reachability, keyboard traversal, responsive metric and
-table layout, and application-origin console checks passed. The exact 390×844
-CSS-pixel viewport recheck also passed without page-level horizontal overflow.
+the hashed runtime-lock audit, the development dependency audit, current-tree
+secret scan, and full-history Gitleaks scan passed. Changed-production coverage
+was 91.61% (273/298) against the independent 85% floor.
 
-Issue #59 introduces a repository-owned changed-production-line policy with an
-explicit Git base SHA, deterministic JSON/Markdown evidence, and an 85% floor
-that remains independent of the aggregate and per-critical-module gates.
+The merged v0.2 browser acceptance remains valid: literal Microsoft Edge 200%
+zoom passed in Edge 151.0.4129.72 on Windows 25H2 build 26200.8894 across all
+six close sections, mutation and download reachability, keyboard traversal,
+responsive metric/table layout, and application-origin console checks. The
+exact 390×844 CSS-pixel viewport recheck also passed without page-level
+horizontal overflow.
 
-Hosted CI additionally validates Python 3.12, 3.13, and 3.14, builds and starts the Compose services, verifies required JWT configuration, and inspects the live least-privilege container runtime. See [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md) and the final post-UX audit documentation for the current code-audit disposition.
+The Ruff migration keeps the normal `ruff check .` and `ruff format --check .`
+commands while making their file set and lint policy explicit in
+`pyproject.toml`. Markdown Python fences remain outside the normal formatter
+gate. See [`quality/ruff-0.16-migration.md`](quality/ruff-0.16-migration.md).
+
+Hosted CI additionally validates Python 3.12, 3.13, and 3.14, changed-production coverage, builds and starts the Compose services, verifies required JWT configuration, and inspects the live least-privilege container runtime. See [`../PUBLIC_RELEASE_AUDIT.md`](../PUBLIC_RELEASE_AUDIT.md) and the final post-UX audit documentation for the current code-audit disposition.
 
 ## Running The Demonstration
 

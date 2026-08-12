@@ -9,6 +9,22 @@ Automation utilities and release helpers used during development.
 - `quality_gate.py` – Runs the consolidated lint, format, typing, test, accounting-control, dependency, and secret checks.
 - `release.py` / `release_manager.py` – Support the `make release` workflow for semver bumps and changelog updates.
 
+## Ruff policy
+
+The quality gate invokes:
+
+```bash
+python -m ruff check .
+python -m ruff format --check .
+```
+
+Ruff is pinned exactly to `0.16.0`. `pyproject.toml` explicitly selects the
+reviewed lint families and limits discovery to Python/stub files plus the
+configuration file. Markdown and notebooks are excluded, preview behavior is
+disabled, and `force-exclude` prevents an explicit path from bypassing the
+repository policy. See
+[`docs/quality/ruff-0.16-migration.md`](../../docs/quality/ruff-0.16-migration.md).
+
 ## Changed-production-line coverage
 
 Run the normal quality gate first so `coverage.json` exists, then provide an explicit base SHA or ref:

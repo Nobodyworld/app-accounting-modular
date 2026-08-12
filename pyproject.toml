@@ -10,8 +10,13 @@ fix = false
 show-fixes = true
 src = ["src/apps", "src/cli", "src/plugins", "tests"]
 respect-gitignore = true
+force-exclude = true
+include = ["*.py", "*.pyi", "pyproject.toml"]
+extend-exclude = ["*.md", "*.ipynb"]
 
 [tool.ruff.lint]
+# Keep the reviewed repository rule set explicit so Ruff release defaults cannot
+# silently add or remove diagnostics.
 select = [
   "E",
   "F",
@@ -22,6 +27,7 @@ select = [
 ignore = [
   "B008",  # allow dependency injection defaults
 ]
+preview = false
 
 [tool.ruff.lint.isort]
 known-first-party = ["src.apps", "src.plugins", "src.cli", "tests"]
@@ -30,6 +36,8 @@ known-first-party = ["src.apps", "src.plugins", "src.cli", "tests"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
+preview = false
+docstring-code-format = false
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
