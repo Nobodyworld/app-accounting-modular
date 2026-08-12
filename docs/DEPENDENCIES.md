@@ -24,6 +24,11 @@ Key runtime groups:
 - Providers: `requests`, `yfinance`, `PyJWT`, `python-dateutil`
 - Operations/web: `APScheduler`, `streamlit`, `python-dotenv`
 
+The reviewed minimums currently require `PyJWT[crypto]>=2.13.0,<3.0` and
+`streamlit>=1.61.1,<2.0`. PyJWT 2.13.0 supplies the adopted token and JWK
+hardening boundary. Streamlit 1.61.1 is the tested minimum for the current
+accountant-facing workspace and repository-root-safe AppTest behavior.
+
 `requests` provider calls are centralized behind the outbound response boundary
 documented in [`PLUGINS.md`](PLUGINS.md). The `yfinance` dependency exposes a
 high-level download API that returns a fully materialized DataFrame. The
@@ -40,8 +45,19 @@ artifact generated from `requirements.txt`. It contains the complete dependency
 graph as exact versions with hashes, including the `uvicorn[standard]` and
 `PyJWT[crypto]` extras. Its header binds it to the input fingerprint, generator,
 Python/platform policy, and digest-pinned base image. The current lock contains
-19 direct and 65 transitive requirements and has SHA-256
-`13c6b89298fd1767aa6f4a44b26e7cffcb6a7a0f146fa8e8ea80e2ac978c1312`.
+19 direct and 58 transitive requirements and has SHA-256
+`aec961b2d973c422a106e49c5b5b52106d56063982341da339f938549cc9bb31`.
+The canonical-LF `requirements.txt` input fingerprint is
+`4f5586d77750784f6e71a9bd041ff6122558c7c216599bc1a0e3f78e0ac502e3`.
+
+The August 2026 consolidated refresh moved Streamlit from 1.60.0 to 1.61.1 and
+kept PyJWT at the already locked 2.13.0 while raising its supported minimum.
+The same deterministic resolution advanced `cffi`, `curl-cffi`, `greenlet`,
+`numpy`, `packaging`, `platformdirs`, `soupsieve`, `SQLAlchemy`,
+`typing-inspection`, and `uvicorn`. Streamlit's new graph removed the runtime
+`GitPython`, `gitdb`, `smmap`, `markdown-it-py`, `mdurl`, `Pygments`, and `rich`
+packages. These are generated transitive outcomes, not hand-edited lock
+choices.
 
 `requirements-lock-tools.lock` separately pins and hashes `uv==0.12.0`. Its
 SHA-256 is
@@ -63,6 +79,15 @@ editable, VCS, or direct-URL entries. It does not re-resolve PyPI, so a new
 package release cannot break an unrelated pull request. Dependency refreshes
 are deliberate operations using the documented Docker-backed generator.
 
+### Dependabot policy
+
+Pip updates use `versioning-strategy: increase-if-necessary`. Dependabot should
+therefore preserve a compatible manifest floor when the existing range already
+permits a newer release. Any change to `requirements.txt` that does alter the
+reviewed compatibility boundary must still regenerate and review the complete
+hashed container lock before merge. A manifest-only dependency PR is expected
+to fail the lock fingerprint check; that failure must not be bypassed.
+
 ## Development Dependencies
 
 Development dependencies are declared in `requirements-dev.txt` and include:
@@ -80,6 +105,14 @@ files and `pyproject.toml`, while Markdown and notebooks remain outside the Ruff
 format gate. See the [Ruff 0.16 migration policy](quality/ruff-0.16-migration.md).
 This development-tool pin is independent of, and is not a substitute for, the
 runtime container lock.
+
+## GitHub Actions dependencies
+
+All executable action references remain pinned to full commit SHAs. The
+attestation workflow uses `actions/attest` v4.2.2 at
+`1e69f48acb82d1966a394da916b4c1698aa569d6`. Attestation write permissions
+remain isolated to the trusted `main` event job; pull-request runs build and
+upload ordinary evidence but do not publish attestations.
 
 ## Security Audit Policy
 
