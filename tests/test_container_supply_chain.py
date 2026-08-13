@@ -80,9 +80,9 @@ def test_dockerfiles_install_only_the_hashed_runtime_lock() -> None:
 def test_runtime_lock_passes_offline_policy_validation() -> None:
     summary = verify_container_lock(RUNTIME_LOCK, RUNTIME_INPUT)
 
-    assert summary.requirement_count == 77
+    assert summary.requirement_count == 76
     assert summary.direct_requirement_count == 19
-    assert summary.transitive_requirement_count == 58
+    assert summary.transitive_requirement_count == 57
     assert len(summary.sha256) == 64
 
 
@@ -90,7 +90,7 @@ def test_runtime_lock_fingerprint_matches_canonical_input() -> None:
     input_fingerprint = canonical_sha256(RUNTIME_INPUT.read_bytes())
     lock_text = RUNTIME_LOCK.read_text(encoding="utf-8")
 
-    assert input_fingerprint == "4f5586d77750784f6e71a9bd041ff6122558c7c216599bc1a0e3f78e0ac502e3"
+    assert input_fingerprint == "c748d7807e46f9cf5f8348e05c9a4886f5130fba6e21da7829bbc03b61d878dc"
     assert f"# input-sha256: {input_fingerprint}" in lock_text
 
 
@@ -172,14 +172,18 @@ def test_workflow_action_references_are_full_commit_shas() -> None:
         assert re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", reference), reference
 
 
-def test_consolidated_dependency_versions_and_manifest_floors_are_explicit() -> None:
+def test_consolidated_dependency_versions_and_manifest_ranges_are_explicit() -> None:
     manifest = RUNTIME_INPUT.read_text(encoding="utf-8").lower()
     lock_text = RUNTIME_LOCK.read_text(encoding="utf-8").lower()
 
     assert "streamlit>=1.61.1,<2.0" in manifest
     assert "pyjwt[crypto]>=2.13.0,<3.0" in manifest
+    assert "yfinance>=0.2.44,<2.0" in manifest
     assert re.search(r"^streamlit==1\.61\.1 \\", lock_text, re.MULTILINE)
     assert re.search(r"^pyjwt\[crypto\]==2\.13\.0 \\", lock_text, re.MULTILINE)
+    assert re.search(r"^yfinance==1\.5\.2\s", lock_text, re.MULTILINE)
+    assert re.search(r"^curl-cffi==0\.16\.0\s", lock_text, re.MULTILINE)
+    assert not re.search(r"^frozendict==", lock_text, re.MULTILINE)
 
 
 def test_dependabot_avoids_unnecessary_floor_only_updates() -> None:

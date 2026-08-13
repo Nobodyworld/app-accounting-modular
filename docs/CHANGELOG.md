@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 2026-08-12: Coordinated the v0.2 maintenance contract in PR #139: verified the Python 3.14.7 slim-trixie base digest, adopted `yfinance>=0.2.44,<2.0` with locked 1.5.2 compatibility coverage, regenerated the 76-package hashed runtime graph, and reviewed Ruff 0.16.2 under the existing explicit policy. The generated graph retained curl-cffi 0.16.0, removed frozendict, and advanced charset-normalizer to 3.5.0 and typing-inspection to 0.4.4 as reviewed transitive outcomes.
 - 2026-08-11: Migrated deliberately to Ruff 0.16.0 with an exact development pin, explicit lint families, preview disabled, Python/stub-only discovery, Markdown/notebook exclusion, `force-exclude`, executable policy tests, and no runtime or container-lock changes.
 - 2026-08-10: Added repository-owned changed-production-line coverage with an explicit Git base/head, merge-base evaluation, Coverage.py executable-line intersection, deterministic JSON/Markdown evidence, an 85% floor, fail-closed error handling, and an exact-base read-only PR workflow.
 - 2026-08-10: Expanded independent critical-module line/branch floors to tax, snapshots, audit, scheduler, forecasting, provider loading, and bounded provider transport; hardened forecasts against non-finite values, irregular cadence, mixed timezones, misaligned regressors, non-finite outputs/metrics, and raw model-error disclosure; added deterministic DST, cadence, service, and API suites.

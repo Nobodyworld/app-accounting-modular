@@ -45,10 +45,10 @@ artifact generated from `requirements.txt`. It contains the complete dependency
 graph as exact versions with hashes, including the `uvicorn[standard]` and
 `PyJWT[crypto]` extras. Its header binds it to the input fingerprint, generator,
 Python/platform policy, and digest-pinned base image. The current lock contains
-19 direct and 58 transitive requirements and has SHA-256
-`aec961b2d973c422a106e49c5b5b52106d56063982341da339f938549cc9bb31`.
+19 direct and 57 transitive requirements and has SHA-256
+`5b110e5a7926b5248d6182af035dda9296f1fbfd73133b2dc88059c5f26f56ed`.
 The canonical-LF `requirements.txt` input fingerprint is
-`4f5586d77750784f6e71a9bd041ff6122558c7c216599bc1a0e3f78e0ac502e3`.
+`c748d7807e46f9cf5f8348e05c9a4886f5130fba6e21da7829bbc03b61d878dc`.
 
 The August 2026 consolidated refresh moved Streamlit from 1.60.0 to 1.61.1 and
 kept PyJWT at the already locked 2.13.0 while raising its supported minimum.
@@ -59,9 +59,18 @@ The same deterministic resolution advanced `cffi`, `curl-cffi`, `greenlet`,
 packages. These are generated transitive outcomes, not hand-edited lock
 choices.
 
+The 2026-08-12 v0.2 maintenance closeout widened the reviewed YFinance range to
+`yfinance>=0.2.44,<2.0` and generated `yfinance==1.5.2`. The installed download
+signature retains the provider's bounded `timeout` and `multi_level_index`
+options; offline contracts also cover a `None` result and prevent private
+upstream exception text from entering application logs. The generated graph
+retained `curl-cffi==0.16.0`, removed `frozendict`, and advanced
+`charset-normalizer` from 3.4.9 to 3.5.0 and `typing-inspection` from 0.4.3 to
+0.4.4 as reviewed transitive patch outcomes. No other package version moved.
+
 `requirements-lock-tools.lock` separately pins and hashes `uv==0.12.0`. Its
 SHA-256 is
-`2522c140fe61233b873b30a8cb54e613e80f2c4bea1ea39f64e21f37b2a4d51a`.
+`aff84fdd6d16ce2a4ea44c059f2f4c47bb0760acce5c585981b2f1e31317a8dd`.
 The generator runs only inside the pinned container and is not installed in
 application images. See the
 [container supply-chain guide](container-supply-chain.md) for bootstrap,
@@ -97,13 +106,14 @@ Development dependencies are declared in `requirements-dev.txt` and include:
 - Security tooling: `pip-audit`
 
 Most human-edited development dependencies retain bounded compatibility ranges.
-`ruff==0.16.0` is intentionally exact because formatter and linter output must
+`ruff==0.16.2` is intentionally exact because formatter and linter output must
 stay stable, quality-gate behavior must be reproducible, and formatting changes
-should receive deliberate review. The repository keeps its lint selection and
-file-discovery policy explicit: ordinary Ruff commands evaluate Python/stub
-files and `pyproject.toml`, while Markdown and notebooks remain outside the Ruff
-format gate. See the [Ruff 0.16 migration policy](quality/ruff-0.16-migration.md).
-This development-tool pin is independent of, and is not a substitute for, the
+should receive deliberate review. The reviewed patch from the original 0.16.0
+migration did not change lint selection, discovery, preview, or formatting
+policy. Ordinary Ruff commands evaluate Python/stub files and `pyproject.toml`,
+while Markdown and notebooks remain outside the Ruff format gate. See the
+[Ruff 0.16 migration policy](quality/ruff-0.16-migration.md). This
+development-tool pin is independent of, and is not a substitute for, the
 runtime container lock.
 
 ## GitHub Actions dependencies

@@ -37,7 +37,7 @@ Thanks for your interest in improving Modular Accounting. This guide outlines th
 
 - Python formatting: **Ruff format** (line length 120) enforced via the consolidated quality gate.
 - Linting: **Ruff** with project-level configuration in `pyproject.toml`.
-- Ruff is pinned exactly to `0.16.0`. The reviewed lint families are explicit, preview behavior is disabled, and Markdown/notebooks are excluded from ordinary Ruff discovery. See the [Ruff 0.16 migration policy](quality/ruff-0.16-migration.md).
+- Ruff is pinned exactly to `0.16.2`. The reviewed lint families are explicit, preview behavior is disabled, and Markdown/notebooks are excluded from ordinary Ruff discovery. See the [Ruff 0.16 migration policy](quality/ruff-0.16-migration.md).
 - Markdown Python fences are not reformatted by `make quality`; documentation-formatting changes require a separate, intentional proposal.
 - Static typing: **mypy** over the configured source packages; new critical modules should be added to meaningful checking.
 - Run `pre-commit run --all-files` or `make quality` before pushing. Use `make ci` for the full lint/type/test/security pipeline.
