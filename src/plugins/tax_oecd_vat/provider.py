@@ -6,6 +6,21 @@ from collections.abc import Iterable
 from datetime import date
 
 from apps.api.models.models import TaxRule
+from apps.provider_sdk import ProviderManifest
+
+__version__ = "0.3.0"
+
+PROVIDER_MANIFEST = ProviderManifest(
+    key="tax:oecd_vat",
+    name="Illustrative OECD VAT Rules",
+    version=__version__,
+    api_major=0,
+    capabilities=("tax",),
+    description="Deterministic illustrative OECD VAT-rule sample adapter.",
+    license="Apache-2.0",
+    network_policy="none",
+    data_classification="controlled-sample",
+)
 
 
 class OECDEVATProvider:

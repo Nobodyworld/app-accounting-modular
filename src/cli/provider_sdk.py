@@ -40,19 +40,39 @@ def _render_report(report: ProviderConformanceReport) -> str:
     return "\n".join(lines)
 
 
-def _resolve_target(
+def _resolve_targets(
     key: str | None,
     module: str | None,
-) -> tuple[str, str | None, tuple[str, ...] | None]:
-    if bool(key) == bool(module):
-        raise click.UsageError("Provide exactly one of --key or --module")
+    all_configured: bool,
+) -> tuple[tuple[str, str | None, tuple[str, ...] | None], ...]:
+    selected = sum((key is not None, module is not None, all_configured))
+    if selected != 1:
+        raise click.UsageError("Provide exactly one of --key, --module, or --all-configured")
     if module is not None:
-        return module, None, None
-    assert key is not None
-    info = settings.allowed_providers.get(key)
-    if info is None:
-        raise click.ClickException(f"Provider '{key}' is not allowed")
-    return info.module, key, tuple(info.capabilities)
+        return ((module, None, None),)
+    if key is not None:
+        info = settings.allowed_providers.get(key)
+        if info is None:
+            raise click.ClickException(f"Provider '{key}' is not allowed")
+        return ((info.module, key, tuple(info.capabilities)),)
+    return tuple(
+        (info.module, provider_key, tuple(info.capabilities))
+        for provider_key, info in sorted(settings.allowed_providers.items())
+    )
+
+
+def _render_reports(reports: tuple[ProviderConformanceReport, ...]) -> str:
+    return "\n\n".join(_render_report(report) for report in reports)
+
+
+def _json_reports(reports: tuple[ProviderConformanceReport, ...]) -> dict[str, Any] | dict[str, object]:
+    if len(reports) == 1:
+        return reports[0].to_dict()
+    return {
+        "passed": all(report.passed for report in reports),
+        "provider_count": len(reports),
+        "reports": [report.to_dict() for report in reports],
+    }
 
 
 @click.group("provider-sdk")
@@ -63,6 +83,7 @@ def provider_sdk_group() -> None:
 @provider_sdk_group.command("validate")
 @click.option("--key", help="Configured provider key to validate.")
 @click.option("--module", help="Importable provider module to validate.")
+@click.option("--all-configured", is_flag=True, help="Validate every configured provider.")
 @click.option(
     "--format",
     "format_",
@@ -73,29 +94,33 @@ def provider_sdk_group() -> None:
 @click.option(
     "--instantiate/--structural-only",
     default=False,
-    help="Invoke the synchronous factory after structural checks.",
+    help="Invoke synchronous factories after structural checks.",
 )
 def validate_provider(
     key: str | None,
     module: str | None,
+    all_configured: bool,
     format_: str,
     instantiate: bool,
 ) -> None:
     """Emit deterministic provider conformance evidence."""
 
-    target, expected_key, expected_capabilities = _resolve_target(key, module)
-    report = inspect_provider_module(
-        target,
-        expected_key=expected_key,
-        expected_capabilities=expected_capabilities,
-        api_version=API_VERSION,
-        instantiate=instantiate,
+    targets = _resolve_targets(key, module, all_configured)
+    reports = tuple(
+        inspect_provider_module(
+            target,
+            expected_key=expected_key,
+            expected_capabilities=expected_capabilities,
+            api_version=API_VERSION,
+            instantiate=instantiate,
+        )
+        for target, expected_key, expected_capabilities in targets
     )
     if format_.lower() == "json":
-        click.echo(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+        click.echo(json.dumps(_json_reports(reports), indent=2, sort_keys=True))
     else:
-        click.echo(_render_report(report))
-    if not report.passed:
+        click.echo(_render_reports(reports))
+    if not all(report.passed for report in reports):
         raise click.exceptions.Exit(1)
 
 
@@ -133,6 +158,13 @@ def validate_provider(
     default="controlled-sample",
     show_default=True,
 )
+@click.option(
+    "--format",
+    "format_",
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    default="table",
+    show_default=True,
+)
 @click.option("--force", is_flag=True, help="Overwrite only the known generated files.")
 def scaffold_provider_command(
     key: str,
@@ -147,6 +179,7 @@ def scaffold_provider_command(
     network_policy: str,
     credential_env: tuple[str, ...],
     data_classification: str,
+    format_: str,
     force: bool,
 ) -> None:
     """Generate a provider package and its structural conformance test."""
@@ -170,10 +203,24 @@ def scaffold_provider_command(
     except (FileExistsError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
+    relative_files = tuple(path.relative_to(directory) for path in result.created_files)
     payload: dict[str, Any] = {
         "key": result.key,
         "package": result.package,
-        "root": str(result.root),
-        "created_files": [str(path) for path in result.created_files],
+        "module": result.module,
+        "root": result.package,
+        "created_files": [path.as_posix() for path in relative_files],
     }
-    click.echo(json.dumps(payload, indent=2, sort_keys=True))
+    if format_.lower() == "json":
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    click.echo(f"Scaffolded provider: {result.key}")
+    click.echo(f"Import module: {result.module}")
+    click.echo("Generated files:")
+    for path in relative_files:
+        click.echo(f"- {path.as_posix()}")
+
+
+if __name__ == "__main__":  # pragma: no cover - manual invocation guard
+    provider_sdk_group()

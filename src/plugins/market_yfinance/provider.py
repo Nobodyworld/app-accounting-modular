@@ -12,6 +12,7 @@ from numbers import Real
 
 import yfinance as yf  # type: ignore[import-untyped]
 from apps.api.models.models import Price
+from apps.provider_sdk import ProviderManifest
 
 from plugins.provider_limits import (
     MAX_MARKET_PRICE_RECORDS,
@@ -23,7 +24,20 @@ from plugins.provider_limits import (
     ProviderTransportError,
 )
 
-__all__ = ["YFinanceMarketProvider", "provider"]
+__all__ = ["PROVIDER_MANIFEST", "YFinanceMarketProvider", "provider"]
+__version__ = "0.3.0"
+
+PROVIDER_MANIFEST = ProviderManifest(
+    key="market:yfinance",
+    name="Yahoo Finance Market Data",
+    version=__version__,
+    api_major=0,
+    capabilities=("market",),
+    description="Bounded high-level Yahoo Finance market-price adapter.",
+    license="Apache-2.0",
+    network_policy="https",
+    data_classification="external-service",
+)
 
 logger = logging.getLogger(__name__)
 _MARKET_SYMBOL = re.compile(r"^[A-Za-z0-9.^=_-]{1,32}$")

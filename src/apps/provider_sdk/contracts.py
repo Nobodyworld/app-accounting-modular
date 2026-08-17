@@ -41,7 +41,7 @@ CAPABILITY_PARAMETERS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "tax": {"upsert_rules": ()},
 }
 
-_KEY_PATTERN = re.compile(r"^[a-z0-9]+:[a-z0-9]+(?:-[a-z0-9]+)*$")
+_KEY_PATTERN = re.compile(r"^[a-z0-9]+:[a-z0-9]+(?:[-_][a-z0-9]+)*$")
 _VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 _SDK_VERSION_PATTERN = re.compile(r"^\d+\.\d+$")
 _FACTORY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -69,6 +69,23 @@ def _normalise_text(value: str | None, *, field_name: str, maximum: int, require
     return cleaned
 
 
+def _normalise_values(values: Iterable[str], *, field_name: str) -> tuple[str, ...]:
+    if isinstance(values, (str, bytes)):
+        raise ProviderManifestError(f"{field_name} must be a sequence of text values")
+    cleaned: list[str] = []
+    try:
+        for value in values:
+            if not isinstance(value, str):
+                raise ProviderManifestError(f"{field_name} entries must be text")
+            item = value.strip()
+            if not item:
+                raise ProviderManifestError(f"{field_name} entries must not be empty")
+            cleaned.append(item)
+    except TypeError as exc:
+        raise ProviderManifestError(f"{field_name} must be a sequence of text values") from exc
+    return tuple(sorted(cleaned))
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderManifest:
     """Bounded, immutable metadata declared by a provider package."""
@@ -92,7 +109,7 @@ class ProviderManifest:
         assert key is not None
         if _KEY_PATTERN.fullmatch(key) is None:
             raise ProviderManifestError(
-                "key must follow 'namespace:slug' using lowercase letters, numbers, and hyphens"
+                "key must follow 'namespace:slug' using lowercase letters, numbers, hyphens, and underscores"
             )
 
         name = _normalise_text(self.name, field_name="name", maximum=128, required=True)
@@ -122,7 +139,7 @@ class ProviderManifest:
         ):
             raise ProviderManifestError("api_major must be an integer between 0 and 999")
 
-        capabilities = tuple(sorted(capability.strip() for capability in self.capabilities))
+        capabilities = _normalise_values(self.capabilities, field_name="capabilities")
         if not capabilities:
             raise ProviderManifestError("at least one capability is required")
         if len(capabilities) != len(set(capabilities)):
@@ -131,7 +148,14 @@ class ProviderManifest:
         if unknown:
             raise ProviderManifestError(f"unsupported capabilities: {', '.join(unknown)}")
 
-        credential_env = tuple(sorted(value.strip() for value in self.credential_env))
+        if self.network_policy not in NETWORK_POLICIES:
+            raise ProviderManifestError("network_policy must be 'none' or 'https'")
+        if self.data_classification not in DATA_CLASSIFICATIONS:
+            raise ProviderManifestError("unsupported data_classification")
+
+        credential_env = (
+            _normalise_values(self.credential_env, field_name="credential_env") if self.credential_env else ()
+        )
         if len(credential_env) != len(set(credential_env)):
             raise ProviderManifestError("credential_env names must be unique")
         for variable_name in credential_env:
@@ -141,11 +165,6 @@ class ProviderManifest:
                 )
         if credential_env and self.network_policy == "none":
             raise ProviderManifestError("credential_env requires network_policy='https'")
-
-        if self.network_policy not in NETWORK_POLICIES:
-            raise ProviderManifestError("network_policy must be 'none' or 'https'")
-        if self.data_classification not in DATA_CLASSIFICATIONS:
-            raise ProviderManifestError("unsupported data_classification")
 
         description = _normalise_text(
             self.description,

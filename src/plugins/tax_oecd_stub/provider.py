@@ -6,8 +6,22 @@ from collections.abc import Iterable
 from datetime import date
 
 from apps.api.models.models import TaxRule
+from apps.provider_sdk import ProviderManifest
 
-__all__ = ["OECDFakeTaxProvider", "provider"]
+__all__ = ["OECDFakeTaxProvider", "PROVIDER_MANIFEST", "provider"]
+__version__ = "0.3.0"
+
+PROVIDER_MANIFEST = ProviderManifest(
+    key="tax:oecd_demo",
+    name="OECD-style Tax Rules Demo",
+    version=__version__,
+    api_major=0,
+    capabilities=("tax",),
+    description="Deterministic OECD-style tax-rule sample adapter.",
+    license="Apache-2.0",
+    network_policy="none",
+    data_classification="controlled-sample",
+)
 
 
 class OECDFakeTaxProvider:

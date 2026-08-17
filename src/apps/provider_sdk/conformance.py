@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
+import re
+from contextlib import suppress
 from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, Literal, get_type_hints
@@ -13,14 +15,31 @@ from .contracts import CAPABILITY_PARAMETERS, PROVIDER_SDK_VERSION, ProviderMani
 
 CheckStatus = Literal["pass", "fail", "warning"]
 
+_CHECK_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_.-]{0,95}$")
+_MAX_CHECK_MESSAGE = 256
+_MAX_MODULE_NAME = 256
+_MAX_CHECKS = 128
+
 
 @dataclass(frozen=True, slots=True)
 class ConformanceCheck:
-    """One deterministic conformance result."""
+    """One deterministic, bounded conformance result."""
 
     code: str
     status: CheckStatus
     message: str
+
+    def __post_init__(self) -> None:
+        if _CHECK_CODE_PATTERN.fullmatch(self.code) is None:
+            raise ValueError("conformance check code is invalid")
+        if self.status not in ("pass", "fail", "warning"):
+            raise ValueError("conformance check status is invalid")
+        if not isinstance(self.message, str) or not self.message.strip():
+            raise ValueError("conformance check message is required")
+        cleaned = self.message.strip()
+        if len(cleaned) > _MAX_CHECK_MESSAGE:
+            raise ValueError(f"conformance check message exceeds {_MAX_CHECK_MESSAGE} characters")
+        object.__setattr__(self, "message", cleaned)
 
     def to_dict(self) -> dict[str, str]:
         return {"code": self.code, "status": self.status, "message": self.message}
@@ -33,6 +52,16 @@ class ProviderConformanceReport:
     module: str
     checks: tuple[ConformanceCheck, ...]
     manifest: ProviderManifest | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.module, str) or not self.module.strip():
+            raise ValueError("provider module is required")
+        module = self.module.strip()
+        if len(module) > _MAX_MODULE_NAME:
+            raise ValueError(f"provider module exceeds {_MAX_MODULE_NAME} characters")
+        if len(self.checks) > _MAX_CHECKS:
+            raise ValueError(f"provider conformance report exceeds {_MAX_CHECKS} checks")
+        object.__setattr__(self, "module", module)
 
     @property
     def passed(self) -> bool:
@@ -107,6 +136,8 @@ def _import_module(module_or_name: str | ModuleType, evaluation: _Evaluation) ->
 
 
 def _parse_api_major(api_version: str) -> int | None:
+    if not isinstance(api_version, str):
+        return None
     first = api_version.split(".", 1)[0].strip()
     return int(first) if first.isdigit() else None
 
@@ -243,7 +274,8 @@ def _factory(evaluation: _Evaluation, *, factory_name: str, instantiate: bool) -
     if inspect.isawaitable(instance):
         close = getattr(instance, "close", None)
         if callable(close):
-            close()
+            with suppress(Exception):
+                close()
         evaluation.checks.append(
             _check("factory.result", "fail", "provider factory returned an awaitable")
         )
@@ -313,6 +345,39 @@ def _validate_instance(evaluation: _Evaluation) -> None:
             )
 
 
+def _inspect_structural_instance(evaluation: _Evaluation, factory_name: str) -> None:
+    assert evaluation.module is not None
+    factory = getattr(evaluation.module, factory_name)
+    try:
+        return_annotation = get_type_hints(factory, globalns=vars(evaluation.module)).get("return")
+    except (AttributeError, NameError, TypeError):
+        return_annotation = None
+    provider_type = return_annotation if isinstance(return_annotation, type) else None
+    if provider_type is None:
+        evaluation.checks.append(
+            _check(
+                "provider.structure",
+                "warning",
+                "factory return annotation is unavailable; runtime loading completes interface checks",
+            )
+        )
+        return
+    try:
+        structural_instance = object.__new__(provider_type)
+    except TypeError:
+        evaluation.checks.append(
+            _check(
+                "provider.structure",
+                "warning",
+                "provider type cannot be inspected without runtime construction",
+            )
+        )
+        return
+    evaluation.instance = structural_instance
+    _validate_instance(evaluation)
+    evaluation.instance = None
+
+
 def _evaluate_provider(
     module_or_name: str | ModuleType,
     *,
@@ -345,38 +410,7 @@ def _evaluate_provider(
     if instantiate:
         _validate_instance(evaluation)
     else:
-        assert evaluation.module is not None
-        factory = getattr(evaluation.module, selected_factory)
-        try:
-            return_annotation = get_type_hints(factory, globalns=vars(evaluation.module)).get("return")
-        except (NameError, TypeError):
-            return_annotation = None
-        provider_type = return_annotation if isinstance(return_annotation, type) else None
-        if provider_type is not None:
-            try:
-                structural_instance = object.__new__(provider_type)
-            except TypeError:
-                structural_instance = None
-            if structural_instance is not None:
-                evaluation.instance = structural_instance
-                _validate_instance(evaluation)
-                evaluation.instance = None
-            else:
-                evaluation.checks.append(
-                    _check(
-                        "provider.structure",
-                        "warning",
-                        "provider type cannot be inspected without runtime construction",
-                    )
-                )
-        else:
-            evaluation.checks.append(
-                _check(
-                    "provider.structure",
-                    "warning",
-                    "factory return annotation is unavailable; runtime loading completes interface checks",
-                )
-            )
+        _inspect_structural_instance(evaluation, selected_factory)
     return evaluation
 
 

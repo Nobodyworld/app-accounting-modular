@@ -5,6 +5,22 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date, timedelta
 
+from apps.provider_sdk import ProviderManifest
+
+__version__ = "0.3.0"
+
+PROVIDER_MANIFEST = ProviderManifest(
+    key="macro:fred_demo",
+    name="FRED-style Macroeconomic Demo",
+    version=__version__,
+    api_major=0,
+    capabilities=("macro",),
+    description="Deterministic FRED-style macroeconomic time-series sample adapter.",
+    license="Apache-2.0",
+    network_policy="none",
+    data_classification="controlled-sample",
+)
+
 
 class FREDMacroProvider:
     """Return synthetic macroeconomic series for testing."""
