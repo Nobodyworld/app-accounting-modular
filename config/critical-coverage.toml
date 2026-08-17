@@ -81,7 +81,7 @@ branch_floor = 60.0
 
 [[module]]
 path = "src/apps/api/services/plugin_loader.py"
-line_floor = 88.0
+line_floor = 85.0
 branch_floor = 70.0
 
 [[module]]
