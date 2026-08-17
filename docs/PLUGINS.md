@@ -1,144 +1,121 @@
-# Plugins
+# Providers and Operational Extensions
 
-Plugins extend Modular Accounting with custom data providers for foreign exchange rates, commodity prices, tax rules, and market data. This guide explains how to create, test, and integrate plugins.
+Modular Accounting has two separate optional-code boundaries:
 
-## Plugin Structure
+- **Providers** supply accounting-related source data such as FX rates, market prices, tax rules, macroeconomic series, or bank-feed records.
+- **Operational extensions** add optional application behavior such as reporting, scenarios, analytics, or observability.
 
-Each plugin is a Python package under the `src/plugins/` directory with the following structure:
+They are not interchangeable. Providers use the public `apps.provider_sdk` contract and remain subject to the explicit provider allowlist. Operational extensions use the existing extension registry and lifecycle. Neither boundary is a marketplace, an arbitrary package installer, or a production certification program.
 
-```text
-src/plugins/
-  your_plugin_name/
-    __init__.py
-    provider.py
-    requirements.txt  # optional, for additional dependencies
-    README.md         # optional, documentation
+The repository remains an **Early Beta / Portfolio Preview** validated for local demonstration.
+
+## Provider boundary
+
+Provider modules are authorized only when `settings.allowed_providers` maps a configured key to an import module and capabilities. Importable code is not automatically discovered or enabled.
+
+Each conforming provider module declares:
+
+- a bounded immutable `PROVIDER_MANIFEST`;
+- a synchronous zero-required-argument factory, normally `provider`;
+- a non-empty provider instance name; and
+- one or more supported capability method shapes.
+
+Supported provider capabilities are:
+
+| Capability | Required methods |
+| --- | --- |
+| `fx` | `sync_daily_rates` |
+| `market` | `fetch_prices` |
+| `tax` | `upsert_rules` |
+| `macro` | `fetch_series` |
+| `bank` | `list_accounts`, `fetch_transactions` |
+
+Structural conformance validates module import, manifest type, SDK version, API-major compatibility, configured key/capability alignment, factory shape, provider name, and required signatures. It does not invoke provider data/network methods.
+
+Runtime loading occurs only after the allowlist and all required conformance checks pass. A provider manifest is descriptive metadata; it cannot authorize installation, tenant access, database access, credentials, or network privileges.
+
+## Provider commands
+
+Validate one configured provider:
+
+```powershell
+python -m cli.macli provider-sdk validate --key fx:ecb
 ```
 
-## Creating a Provider
+Validate every configured provider and emit deterministic JSON:
 
-Your plugin must expose a `provider()` factory function in `provider.py` that returns an object implementing one of the adapter contracts:
-
-- `FXDataPort` for foreign exchange rates
-- `CommodityDataPort` for commodity prices
-- `TaxDataPort` for tax rules
-- `MarketDataPort` for market data
-
-### Example: FX Provider
-
-```python
-# src/plugins/fx_ecb/provider.py
-from typing import Iterable
-
-from apps.modular_accounting.domain import FXRate, Money
-from plugins.provider_limits import get_bounded_json
-
-class ECBProvider:
-    def get_rates(self, base_currency: str) -> Iterable[FXRate]:
-        data = get_bounded_json(
-            "https://api.example.com/rates",
-            provider_key="fx:example",
-            operation="get-rates",
-        )
-
-        for currency, rate in data.items():
-            yield FXRate(
-                currency=currency,
-                rate=Money(amount=rate, currency=base_currency),
-                as_of=datetime.now()
-            )
-
-def provider() -> ECBProvider:
-    return ECBProvider()
+```powershell
+python -m cli.macli provider-sdk validate --all-configured --format json
 ```
 
-### Example: Commodity Provider
+Inspect an importable module without adding it to the allowlist:
 
-```python
-# src/plugins/commodity_gold/provider.py
-from apps.modular_accounting.domain import CommodityQuote, Money
-
-class GoldPriceProvider:
-    def get_quotes(self, symbols: list[str]) -> Iterable[CommodityQuote]:
-        for symbol in symbols:
-            if symbol == "XAU":
-                # Fetch gold price
-                price = self._fetch_gold_price()
-                yield CommodityQuote(
-                    symbol=symbol,
-                    price=Money(amount=price, currency="USD"),
-                    as_of=datetime.now()
-                )
-
-def provider() -> GoldPriceProvider:
-    return GoldPriceProvider()
+```powershell
+python -m cli.macli provider-sdk validate --module plugins.market_example_demo.provider
 ```
 
-## Plugin Registration
+Scaffold a provider package:
 
-Plugins are automatically discovered and loaded by the plugin loader. The loader:
-
-1. Reads the configured provider keys from settings
-2. Imports each configured plugin's `provider.py` module
-3. Calls the `provider()` function to get the provider instance
-4. Registers the provider with the appropriate service
-
-## Configuration
-
-Configure which plugins to use in your settings:
-
-```python
-# In config.py or environment variables
-DEFAULT_ALLOWED_PROVIDERS = {
-    "fx": ["ecb"],
-    "commodity": ["gold"],
-    "tax": ["oecd"]
-}
+```powershell
+python -m cli.macli provider-sdk scaffold market:example_demo --capability market
 ```
 
-## Best Practices
+During isolated SDK development, the command group can also be invoked with `python -m cli.provider_sdk`.
 
-- **Outbound boundaries**: Network-backed HTTP providers must use
-  `plugins.provider_limits.get_bounded_json` rather than unbounded
-  `response.json()` calls.
-- **Error Handling**: Return the sanitized provider-domain exceptions from
-  `plugins.provider_limits`; never place response bodies, credentials, request
-  parameters, or raw upstream URLs in messages or logs.
-- **Caching**: Consider implementing caching to avoid excessive API calls
-- **Logging**: Use structured logging for debugging and monitoring
-- **Testing**: Use deterministic stubs; repository tests must not contact live
-  providers or use live credentials.
-- **Documentation**: Document your plugin's capabilities, limitations, and configuration
+See:
 
-## Network-backed versus demo providers
+- [`guides/provider_sdk.md`](guides/provider_sdk.md) for the author workflow;
+- [`provider-compatibility.md`](provider-compatibility.md) for the bundled contract matrix; and
+- [`architecture/provider-sdk.md`](architecture/provider-sdk.md) for the trust boundary.
 
-The live outbound-provider inventory is deliberately small:
+## Bundled provider catalog
 
-- `fx_ecb` and `fx_openexchangerates` make HTTPS GET requests through the shared
-  bounded JSON reader.
-- `market_yfinance` makes one high-level `yfinance.download` call.
+The default configuration includes controlled-sample and bounded external-service adapters across bank, FX, macro, market, and tax capabilities. The compatibility matrix is the readable inventory; `apps.api.config.DEFAULT_ALLOWED_PROVIDERS` remains the authoritative configured list.
 
-The remaining provider packages currently generate local fixture/reference data
-or act as demo adapters and perform no external I/O. Adding network I/O to one
-of those packages requires the same boundary review and tests.
+Bundled provider tests prove that:
 
-The shared HTTP policy permits at most 1 MiB of response bytes and 512 FX rate
-records, uses separate 5-second connect and 20-second read timeouts, and permits
-at most two attempts for selected transient failures. Responses are streamed,
-checked against declared `Content-Length`, independently byte-counted, parsed
-only after the size check, and required to contain a top-level JSON mapping.
+- every configured key has a corresponding manifest;
+- manifest keys and capabilities match configuration;
+- structural conformance does not call network entry points;
+- provider descriptors expose manifest and conformance evidence; and
+- network policy, credential environment-variable names, and data classification remain explicit.
 
-YFinance is limited to a single application-level download call with
-`threads=False`, a 20-second timeout, at most 10,000 requested days, and at most
-10,000 returned price rows. Its high-level API returns an already materialized
-DataFrame, so the application cannot independently stream or byte-count the
-library's internal HTTP response. Any retry performed inside `yfinance` is
-library-controlled; the application does not stack another retry loop.
+Credential values, tenant identifiers, local paths, raw upstream responses, and provider exception text must not appear in manifests or conformance evidence.
 
-## Reference Implementations
+## Provider development rules
 
-- `src/plugins/fx_ecb/`: ECB foreign exchange rates
-- `src/plugins/market_yfinance/`: Yahoo Finance market data
-- `src/plugins/tax_oecd_stub/`: OECD-style tax data reference implementation retained under its legacy package path
+A provider contribution must:
 
-See [Adapter Contracts](adapters.md) for detailed interface specifications.
+1. preserve the configuration allowlist as the installation boundary;
+2. keep the factory free of data/network work;
+3. use deterministic tests without live credentials or uncontrolled network calls;
+4. preserve established byte, record, date-range, timeout, retry, validation, and sanitization limits;
+5. add provider-specific success and failure-path tests;
+6. update the compatibility matrix and author documentation; and
+7. pass the exact-head Python, accounting, coverage, dependency, secret, and container gates.
+
+Do not auto-enable a provider because its module imports or its manifest validates.
+
+## Operational extensions
+
+Operational extensions remain under `apps.extensions` and the extension loader. They are suitable for optional reporting, scenarios, analytics, observability, and operations behavior that does not belong in an accounting-data provider.
+
+Current configuration may include enabled or disabled extension entries. Extension discovery and lifecycle are documented in [`guides/extension_guide.md`](guides/extension_guide.md). An extension must not bypass authentication, tenant scope, audit identity, accounting services, or provider limits.
+
+## Choosing the correct boundary
+
+Use a **provider** when the component supplies bounded source records consumed by accounting services.
+
+Use an **extension** when the component adds optional application behavior without acting as a source-data adapter.
+
+Use neither when the proposal requires arbitrary package installation, public marketplace operations, credential brokering, code execution from user uploads, a certification program, or production deployment claims. Those require separate design, threat modeling, operating controls, and explicit owner authorization.
+
+## Security and deployment limits
+
+- Required tests are hermetic and non-networked.
+- Network-backed providers must use HTTPS and preserve the shared bounded transport policy.
+- Manifests may list credential environment-variable names only.
+- Providers do not receive authenticated sessions or tenant context through the SDK contract.
+- Provider results still pass through application services, tenant controls, accounting integrity checks, provenance, and audit boundaries.
+- A passing conformance report is structural evidence, not proof of data accuracy, legal compliance, upstream security, production readiness, or regulatory certification.
+- The default application and containers remain loopback-only and locally demonstrated.
