@@ -9,7 +9,7 @@ import re
 from contextlib import suppress
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Any, Literal, get_type_hints
+from typing import Any, Literal
 
 from .contracts import CAPABILITY_PARAMETERS, PROVIDER_SDK_VERSION, ProviderManifest
 
@@ -150,7 +150,13 @@ def _validate_manifest(
     api_version: str,
 ) -> bool:
     assert evaluation.module is not None
-    manifest = getattr(evaluation.module, "PROVIDER_MANIFEST", None)
+    try:
+        manifest = getattr(evaluation.module, "PROVIDER_MANIFEST", None)
+    except Exception as exc:
+        evaluation.checks.append(
+            _check("manifest.present", "fail", _safe_failure("provider manifest lookup", exc))
+        )
+        return False
     if not isinstance(manifest, ProviderManifest):
         evaluation.checks.append(
             _check("manifest.present", "fail", "PROVIDER_MANIFEST must be a ProviderManifest")
@@ -206,7 +212,13 @@ def _validate_manifest(
             )
         )
 
-    declared_version = getattr(evaluation.module, "__version__", None)
+    try:
+        declared_version = getattr(evaluation.module, "__version__", None)
+    except Exception as exc:
+        evaluation.checks.append(
+            _check("manifest.version", "fail", _safe_failure("module version lookup", exc))
+        )
+        return True
     if declared_version is None:
         evaluation.checks.append(_check("manifest.version", "pass", "manifest version is authoritative"))
     elif isinstance(declared_version, str) and declared_version.strip() == manifest.version:
@@ -223,7 +235,13 @@ def _validate_manifest(
 
 def _factory(evaluation: _Evaluation, *, factory_name: str, instantiate: bool) -> bool:
     assert evaluation.module is not None
-    factory = getattr(evaluation.module, factory_name, None)
+    try:
+        factory = getattr(evaluation.module, factory_name, None)
+    except Exception as exc:
+        evaluation.checks.append(
+            _check("factory.callable", "fail", _safe_failure("provider factory lookup", exc))
+        )
+        return False
     if not callable(factory):
         evaluation.checks.append(
             _check("factory.callable", "fail", "configured provider factory is not callable")
@@ -240,9 +258,9 @@ def _factory(evaluation: _Evaluation, *, factory_name: str, instantiate: bool) -
 
     try:
         signature = inspect.signature(factory)
-    except (TypeError, ValueError):
+    except Exception as exc:
         evaluation.checks.append(
-            _check("factory.signature", "fail", "provider factory signature is unavailable")
+            _check("factory.signature", "fail", _safe_failure("provider factory signature inspection", exc))
         )
         return False
     required = tuple(
@@ -296,15 +314,19 @@ def _method_signature(
     expected_parameters: tuple[str, ...],
     checks: list[ConformanceCheck],
 ) -> None:
-    method = getattr(instance, method_name, None)
     code = f"capability.{capability}.{method_name}"
+    try:
+        method = getattr(instance, method_name, None)
+    except Exception as exc:
+        checks.append(_check(code, "fail", _safe_failure(f"method '{method_name}' lookup", exc)))
+        return
     if not callable(method):
         checks.append(_check(code, "fail", f"required method '{method_name}' is missing"))
         return
     try:
         signature = inspect.signature(method)
-    except (TypeError, ValueError):
-        checks.append(_check(code, "fail", f"method '{method_name}' signature is unavailable"))
+    except Exception as exc:
+        checks.append(_check(code, "fail", _safe_failure(f"method '{method_name}' signature inspection", exc)))
         return
 
     parameters = signature.parameters
@@ -326,11 +348,18 @@ def _validate_instance(evaluation: _Evaluation) -> None:
     assert evaluation.manifest is not None
     assert evaluation.instance is not None
 
-    name = getattr(evaluation.instance, "name", None)
-    if not isinstance(name, str) or not name.strip():
+    try:
+        name = getattr(evaluation.instance, "name", None)
+    except Exception as exc:
         evaluation.checks.append(
-            _check("provider.name", "fail", "provider instance must define a non-empty name")
+            _check("provider.name", "fail", _safe_failure("provider name lookup", exc))
         )
+        name = None
+    if not isinstance(name, str) or not name.strip():
+        if not any(check.code == "provider.name" for check in evaluation.checks):
+            evaluation.checks.append(
+                _check("provider.name", "fail", "provider instance must define a non-empty name")
+            )
     else:
         evaluation.checks.append(_check("provider.name", "pass", "provider name is present"))
 
@@ -347,12 +376,25 @@ def _validate_instance(evaluation: _Evaluation) -> None:
 
 def _inspect_structural_instance(evaluation: _Evaluation, factory_name: str) -> None:
     assert evaluation.module is not None
-    factory = getattr(evaluation.module, factory_name)
     try:
-        return_annotation = get_type_hints(factory, globalns=vars(evaluation.module)).get("return")
-    except (AttributeError, NameError, TypeError):
-        return_annotation = None
-    provider_type = return_annotation if isinstance(return_annotation, type) else None
+        factory = getattr(evaluation.module, factory_name)
+        return_annotation = inspect.signature(factory).return_annotation
+    except Exception as exc:
+        evaluation.checks.append(
+            _check("provider.structure", "warning", _safe_failure("provider type inspection", exc))
+        )
+        return
+
+    provider_type: type[Any] | None = None
+    if return_annotation is inspect.Signature.empty:
+        provider_type = None
+    elif isinstance(return_annotation, type):
+        provider_type = return_annotation
+    elif isinstance(return_annotation, str) and return_annotation.isidentifier():
+        candidate = vars(evaluation.module).get(return_annotation)
+        if isinstance(candidate, type):
+            provider_type = candidate
+
     if provider_type is None:
         evaluation.checks.append(
             _check(
@@ -364,13 +406,9 @@ def _inspect_structural_instance(evaluation: _Evaluation, factory_name: str) -> 
         return
     try:
         structural_instance = object.__new__(provider_type)
-    except TypeError:
+    except Exception as exc:
         evaluation.checks.append(
-            _check(
-                "provider.structure",
-                "warning",
-                "provider type cannot be inspected without runtime construction",
-            )
+            _check("provider.structure", "warning", _safe_failure("provider type construction", exc))
         )
         return
     evaluation.instance = structural_instance
