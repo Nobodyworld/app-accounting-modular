@@ -5,8 +5,11 @@ import sys
 from pathlib import Path
 
 import pytest
-
-from apps.provider_sdk import inspect_provider_module, normalise_provider_package, scaffold_provider
+from apps.provider_sdk import (
+    inspect_provider_module,
+    normalise_provider_package,
+    scaffold_provider,
+)
 
 
 def snapshot(root: Path) -> dict[str, str]:
@@ -37,7 +40,7 @@ def test_scaffold_is_deterministic_path_safe_and_lf_normalized(tmp_path: Path) -
     }
 
     result_one = scaffold_provider(first, **kwargs)
-    result_two = scaffold_provider(second, **kwargs)
+    scaffold_provider(second, **kwargs)
 
     assert result_one.module == "plugins.bank_sample_demo.provider"
     assert result_one.package == "bank_sample_demo"
@@ -61,6 +64,9 @@ def test_generated_provider_imports_and_conforms_without_calling_data_methods(
         version="0.3.0",
     )
     (source_root / "plugins" / "__init__.py").write_text("", encoding="utf-8")
+    for module_name in tuple(sys.modules):
+        if module_name == "plugins" or module_name.startswith("plugins."):
+            monkeypatch.delitem(sys.modules, module_name, raising=False)
     monkeypatch.syspath_prepend(str(source_root))
     importlib.invalidate_caches()
 
@@ -72,7 +78,9 @@ def test_generated_provider_imports_and_conforms_without_calling_data_methods(
     )
 
     assert report.passed, report.to_json()
-    sys.modules.pop(result.module, None)
+    for module_name in tuple(sys.modules):
+        if module_name == "plugins" or module_name.startswith("plugins."):
+            sys.modules.pop(module_name, None)
 
 
 def test_scaffold_refuses_known_file_overwrite_without_force(tmp_path: Path) -> None:
