@@ -85,7 +85,11 @@ files = [
   "src/apps/modular_accounting/application/scenarios.py",
   "src/apps/modular_accounting/application/snapshots.py",
   "src/apps/modular_accounting/application/telemetry.py",
+  "src/apps/provider_sdk/contracts.py",
+  "src/apps/provider_sdk/conformance.py",
+  "src/apps/provider_sdk/scaffold.py",
   "src/cli/macli.py",
+  "src/cli/provider_sdk.py",
 ]
 
 [[tool.mypy.overrides]]
