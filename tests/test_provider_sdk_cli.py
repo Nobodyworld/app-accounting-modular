@@ -5,10 +5,11 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
+from click.testing import CliRunner
+
 from apps.api.config import ProviderInfo
 from apps.provider_sdk import ProviderManifest
 from cli import provider_sdk as sdk_cli
-from click.testing import CliRunner
 
 
 class TaxProvider:
