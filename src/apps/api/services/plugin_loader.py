@@ -56,12 +56,12 @@ class ProviderMetadata:
 
 @dataclass(frozen=True)
 class ProviderHandle:
-    """A loaded provider instance and its validated public evidence."""
+    """A loaded provider instance and, when available, validated SDK evidence."""
 
     instance: Any
     metadata: ProviderMetadata
-    manifest: ProviderManifest
-    conformance: ProviderConformanceReport
+    manifest: ProviderManifest | None = None
+    conformance: ProviderConformanceReport | None = None
 
 
 @dataclass(frozen=True)
@@ -279,7 +279,7 @@ def _cached_provider_descriptors(
     incompatible = [descriptor for descriptor in descriptors if descriptor.compatibility.status == "incompatible"]
     if incompatible:
         logger.warning(
-            "Incompatible or nonconforming providers detected",
+            "Incompatible providers detected",
             extra={
                 "providers": [
                     {
