@@ -14,11 +14,11 @@ def _pyproject() -> dict[str, object]:
     return tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
 
-def test_ruff_requirement_is_exactly_0162() -> None:
+def test_ruff_requirement_is_exactly_0163() -> None:
     requirements = (REPO_ROOT / "requirements-dev.txt").read_text(encoding="utf-8").splitlines()
     ruff_requirements = [line for line in requirements if line.strip().lower().startswith("ruff")]
 
-    assert ruff_requirements == ["ruff==0.16.2"]
+    assert ruff_requirements == ["ruff==0.16.3"]
 
     result = subprocess.run(
         [sys.executable, "-m", "ruff", "--version"],
@@ -29,7 +29,7 @@ def test_ruff_requirement_is_exactly_0162() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "ruff 0.16.2"
+    assert result.stdout.strip() == "ruff 0.16.3"
 
 
 def test_ruff_rule_selection_and_discovery_are_explicit() -> None:

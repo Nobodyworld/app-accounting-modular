@@ -21,13 +21,15 @@ product or security branch is in progress.
 The current exact development pin is:
 
 ```text
-ruff==0.16.2
+ruff==0.16.3
 ```
 
-The 2026-08-12 maintenance closeout reviewed and adopted the 0.16.2 patch.
-That patch did not change the repository's lint families, discovery boundary,
-preview settings, formatter policy, or normal commands. The original 0.16.0
-migration statements above remain the historical policy baseline.
+The 2026-08-19 maintenance update advances the reviewed patch level from
+0.16.2 to 0.16.3 after the v0.3 provider-SDK tranche merged. This patch must
+preserve the repository's lint families, discovery boundary, preview settings,
+formatter policy, normal commands, runtime dependencies, and container lock.
+The original 0.16.0 migration statements above remain the historical policy
+baseline.
 
 `pyproject.toml` makes the repository contract explicit:
 
@@ -48,8 +50,8 @@ python -m ruff check .
 python -m ruff format --check .
 ```
 
-Their target set is now controlled by explicit repository configuration rather
-than Ruff release defaults.
+Their target set is controlled by explicit repository configuration rather than
+Ruff release defaults.
 
 ## Markdown policy
 
