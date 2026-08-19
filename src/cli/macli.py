@@ -37,6 +37,8 @@ from apps.observability.logging import configure_logging, logging_context
 from apps.observability.tracing import configure_tracing, traced
 from sqlmodel import Session, select
 
+from cli.provider_sdk import provider_sdk_group
+
 
 def _bootstrap_observability() -> None:
     """Initialise logging and tracing for CLI invocations."""
@@ -216,6 +218,9 @@ def cli() -> None:
     """Modular Accounting CLI."""
 
     _bootstrap_observability()
+
+
+cli.add_command(provider_sdk_group)
 
 
 @cli.command("inspect-extensions")

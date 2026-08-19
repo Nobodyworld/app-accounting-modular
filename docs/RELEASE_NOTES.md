@@ -1,6 +1,30 @@
 # Release Notes
 
-## Current Candidate
+## Unreleased v0.3 Provider SDK Candidate
+
+Starting `main`: `63da968fcc10c531427a2a58296cb979482d6579`
+Draft PR: #141
+Issue: #140
+
+The v0.3 candidate adds a dependency-light provider SDK and conformance kit while preserving the repository’s explicit provider allowlist, tenant boundaries, bounded transport controls, and Early Beta / Portfolio Preview claim.
+
+Candidate scope includes:
+
+- immutable bounded provider manifests with SDK/API compatibility, capabilities, factory, network policy, credential environment-variable names, data classification, and public metadata;
+- structural contracts for bank, FX, macro, market, and tax providers;
+- deterministic fail-closed conformance reports with stable sanitized check codes;
+- structural inspection that does not invoke provider data/network methods;
+- allowlist-enforced runtime loading with manifest/configuration drift detection;
+- manifests and policy evidence for all nine configured bundled providers;
+- deterministic provider scaffolding and table/JSON CLI validation;
+- targeted mypy and explicit critical line/branch coverage enrollment; and
+- a provider author guide, bundled compatibility matrix, architecture record, and corrected provider/extension boundary documentation.
+
+This candidate does not create a marketplace, install arbitrary packages, auto-enable providers, store credentials, broaden network exposure, alter tenant authorization order, rewrite accounting behavior, create a tag/release, or claim production certification.
+
+Exact-head local quality, accounting, changed-production, dependency, secret, Python-matrix, and container validation remains required before the draft PR can be described as merge-ready. Connector-authored branch updates do not by themselves establish hosted CI evidence.
+
+## Last Validated Candidate
 
 Version candidate: `0.2.0`
 Pre-maintenance main baseline: `6742be345b3e30635e475392d48cdb3fbeb3f676`
@@ -13,7 +37,7 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - Deterministic evidence ZIP with canonical JSON, LF spreadsheet-safe CSV, normalized entry timestamps, per-file SHA-256 values, one non-self-referential manifest hash across bytes/metadata/audit, and typed safe policy output.
 - Recorded-evidence download enforcement: generation builds once, while download requires a current persisted manifest and returns a typed conflict for missing, stale, reclassified, or mismatched evidence.
 - Bounded close collections with 100-record defaults, 500-record maximum pages, separately paged immutable journal decisions, and a 500-approval per-cycle cap.
-- Repository-owned changed-production coverage and 17 independent critical-module line/branch policies so aggregate coverage cannot mask accounting, session, background, provider, or forecast regressions.
+- Repository-owned changed-production coverage and independent critical-module line/branch policies so aggregate coverage cannot mask accounting, session, background, provider, forecast, or provider-SDK regressions.
 - Forecast finite-value, cadence, timezone/DST, regressor-alignment, output, metric, and sanitized-error contracts.
 - Deliberate Ruff 0.16 tooling policy with a current exact 0.16.2 pin, explicit lint families, preview disabled, Python/stub-only discovery, and Markdown/notebook exclusion.
 - Public/local Streamlit review flow for financial snapshots, source evidence, freshness, and journal-control status.
@@ -42,7 +66,8 @@ This public repository is an Early Beta / Portfolio Preview accounting-controls 
 - PR #130 delivered deterministic changed-production coverage, the completed critical-module policy, and forecast robustness.
 - PR #132 completed the isolated Ruff 0.16 migration without Markdown-wide formatting or product changes.
 - PR #135 consolidated the PyJWT and Streamlit compatibility floors, regenerated hashed runtime graph, `actions/attest` update, and pip Dependabot policy.
-- PR #139 coordinates the reviewed Python 3.14.7 slim-trixie base, yfinance 1.5.2 compatibility, deterministic runtime-lock refresh, and Ruff 0.16.2 patch. GitHub records its final review and merge disposition.
+- PR #139 merged the reviewed Python 3.14.7 slim-trixie base, yfinance 1.5.2 compatibility, deterministic runtime-lock refresh, and Ruff 0.16.2 patch.
+- PR #141 is the draft v0.3 provider-SDK and conformance candidate; its merge disposition remains pending exact-head evidence and owner authorization.
 
 ## Validation
 
@@ -58,13 +83,13 @@ The quality gate runs:
 - current-tree secret scanning; and
 - verified full-history Gitleaks scanning.
 
-The v0.2 maintenance candidate passed 695 tests with 88.00% line coverage
+The validated v0.2 maintenance candidate passed 695 tests with 88.00% line coverage
 (9,384/10,664) and 71.64% branch coverage (1,927/2,690). All 17 configured
 critical-module floors, the 52-test accounting-control subset, `pip check`,
 the hashed runtime-lock audit, the development dependency audit, and the
 current-tree secret scan passed. Ruff 0.16.2 lint and formatting passed across
 247 files, and mypy passed across 69 source files. Changed-production coverage
-reported an explicit not-applicable pass because the candidate changes no
+reported an explicit not-applicable pass because that candidate changed no
 configured production source line.
 
 A checksum-verified Gitleaks 8.30.0 binary first detected a runtime-generated
@@ -80,6 +105,8 @@ health checks, missing-secret rejection, installed-lock conformance, UID/GID
 intended writable paths, SPDX SBOM/checksum evidence, and teardown. PR-event
 attestations remain skipped by design; trusted-main attestations run only after
 an authorized merge.
+
+These validation figures describe the stated v0.2 maintenance candidate, not the unvalidated v0.3 draft head.
 
 The merged v0.2 browser acceptance remains valid: literal Microsoft Edge 200%
 zoom passed in Edge 151.0.4129.72 on Windows 25H2 build 26200.8894 across all
@@ -103,7 +130,7 @@ Use [`setup.md`](setup.md) for supported local and container workflows. The prim
 - Streamlit public/local Snapshot Review plus authenticated Scenario Plan Review, Review Utilities, and Accountant Close Workspace; and
 - `cli.macli` operational commands.
 
-Demo providers use controlled sample data unless external credentials are configured.
+Provider authoring and structural review are documented in [`guides/provider_sdk.md`](guides/provider_sdk.md). Demo providers use controlled sample data unless external credentials are configured.
 
 ## Known Limits
 
@@ -112,8 +139,9 @@ Demo providers use controlled sample data unless external credentials are config
 - The React directory is experimental and is not part of the validated runtime.
 - OTLP export remains optional and requires the OpenTelemetry extras described in the operations documentation.
 - Provider catalog persistence and several legacy TODOs remain future work.
+- Provider SDK conformance is structural; it is not a marketplace, external-service security review, data-accuracy certification, or production approval.
 - The retained primary screenshot represents the public Snapshot Review flow; it does not depict every authenticated workspace.
 
 ## Release Decision
 
-The project remains an Early Beta / Portfolio Preview. Local demonstration is the validated deployment boundary. The v0.2 close workspace is not ERP completeness, automatic bank reconciliation, production close certification, public-hosting approval, or regulatory compliance. Trusted-team, LAN, reverse-proxied, or public hosting claims require a separate deployment review.
+The project remains an Early Beta / Portfolio Preview. Local demonstration is the validated deployment boundary. The v0.2 close workspace and v0.3 provider-SDK candidate are not ERP completeness, automatic bank reconciliation, production close certification, public-hosting approval, marketplace certification, or regulatory compliance. Trusted-team, LAN, reverse-proxied, or public hosting claims require a separate deployment review.

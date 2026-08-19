@@ -1,15 +1,34 @@
+"""ECB reference foreign-exchange provider."""
+
+from __future__ import annotations
+
 import math
 import re
 from collections.abc import Mapping
 from datetime import date
 
 from apps.api.models.models import Rate
+from apps.provider_sdk import ProviderManifest
 
 from plugins.provider_limits import (
     MAX_FX_RATE_RECORDS,
     ProviderPayloadError,
     ProviderResponseLimitError,
     get_bounded_json,
+)
+
+__version__ = "0.3.0"
+
+PROVIDER_MANIFEST = ProviderManifest(
+    key="fx:ecb",
+    name="European Central Bank FX",
+    version=__version__,
+    api_major=0,
+    capabilities=("fx",),
+    description="Bounded HTTPS adapter for ECB-style reference exchange rates.",
+    license="Apache-2.0",
+    network_policy="https",
+    data_classification="public-reference",
 )
 
 _CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")

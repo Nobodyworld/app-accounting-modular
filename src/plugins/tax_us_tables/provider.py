@@ -6,6 +6,21 @@ from collections.abc import Iterable
 from datetime import date
 
 from apps.api.models.models import TaxRule
+from apps.provider_sdk import ProviderManifest
+
+__version__ = "0.3.0"
+
+PROVIDER_MANIFEST = ProviderManifest(
+    key="tax:us_tables",
+    name="Illustrative US Tax Tables",
+    version=__version__,
+    api_major=0,
+    capabilities=("tax",),
+    description="Deterministic illustrative US tax-table sample adapter.",
+    license="Apache-2.0",
+    network_policy="none",
+    data_classification="controlled-sample",
+)
 
 
 class USTaxTableProvider:

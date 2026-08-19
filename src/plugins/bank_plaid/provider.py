@@ -9,6 +9,22 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date, timedelta
 
+from apps.provider_sdk import ProviderManifest
+
+__version__ = "0.3.0"
+
+PROVIDER_MANIFEST = ProviderManifest(
+    key="bank:plaid_demo",
+    name="Plaid-style Bank Feed Demo",
+    version=__version__,
+    api_major=0,
+    capabilities=("bank",),
+    description="Deterministic Plaid-like accounts and transactions sample adapter.",
+    license="Apache-2.0",
+    network_policy="none",
+    data_classification="controlled-sample",
+)
+
 
 class PlaidBankProvider:
     """Return stubbed accounts and transactions for reconciliation flows."""
@@ -17,7 +33,13 @@ class PlaidBankProvider:
 
     def list_accounts(self) -> list[dict[str, str | float]]:
         return [
-            {"id": "acc_001", "name": "Operating Checking", "mask": "1234", "type": "depository", "balance": 125000.50},
+            {
+                "id": "acc_001",
+                "name": "Operating Checking",
+                "mask": "1234",
+                "type": "depository",
+                "balance": 125000.50,
+            },
             {"id": "acc_002", "name": "Savings", "mask": "9876", "type": "savings", "balance": 50000.00},
         ]
 
