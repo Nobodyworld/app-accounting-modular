@@ -24,7 +24,7 @@ from src.tools.diff_coverage import (
 def _policy() -> DiffCoveragePolicy:
     return DiffCoveragePolicy(
         include_roots=("src/apps", "src/plugins", "src/cli"),
-        exclude=(),
+        exclude=("**/*.md",),
         minimum_changed_line_percent=85.0,
     )
 
@@ -65,6 +65,20 @@ def test_load_policy_requires_explicit_roots_and_floor(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="at least the repository 85% line floor"):
         load_policy(policy_path)
+
+
+def test_repository_policy_excludes_colocated_markdown_only() -> None:
+    policy, _fingerprint = load_policy(Path("config/diff-coverage.toml"))
+
+    assert policy.exclude == ("**/*.md",)
+    with pytest.raises(ValueError, match="absent from coverage evidence"):
+        evaluate(
+            _context(),
+            policy,
+            "d" * 64,
+            {"src/apps/new.py": {1}},
+            {},
+        )
 
 
 def test_parse_changed_lines_handles_modified_new_renamed_and_deleted_files() -> None:
@@ -253,6 +267,9 @@ def test_git_context_and_changed_lines_use_merge_base(tmp_path: Path) -> None:
     _git(repo, "commit", "-m", "base")
     base_sha = _git(repo, "rev-parse", "HEAD")
     source.write_text("value = 2\nother = 3\n", encoding="utf-8")
+    readme = repo / "src" / "cli" / "README.md"
+    readme.parent.mkdir(parents=True)
+    readme.write_text("# CLI documentation\n", encoding="utf-8")
     _git(repo, "add", ".")
     _git(repo, "commit", "-m", "head")
 

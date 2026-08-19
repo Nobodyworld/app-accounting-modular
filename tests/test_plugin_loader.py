@@ -13,6 +13,17 @@ from apps.api.services.plugin_loader import (
     provider_descriptors,
     refresh_provider_cache,
 )
+from apps.provider_sdk import ProviderManifest
+
+
+def _manifest(key: str, capabilities: tuple[str, ...]) -> ProviderManifest:
+    return ProviderManifest(
+        key=key,
+        name=f"Test provider {key}",
+        version="0.0.0",
+        api_major=0,
+        capabilities=capabilities,
+    )
 
 
 def test_available_providers_returns_metadata() -> None:
@@ -73,28 +84,30 @@ def test_load_provider_rejects_non_callable(monkeypatch) -> None:
     """Provider factories should be callable objects."""
     refresh_provider_cache()
     module = types.ModuleType("plugins.dummy_module")
+    module.PROVIDER_MANIFEST = _manifest("test:dummy", ("fx",))
     module.provider = "not-callable"
     monkeypatch.setitem(sys.modules, "plugins.dummy_module", module)
     monkeypatch.setattr(
         settings,
         "allowed_providers",
         {
-            "dummy": ProviderInfo(
+            "test:dummy": ProviderInfo(
                 module="plugins.dummy_module",
                 name="Dummy",
-                capabilities=(),
+                capabilities=("fx",),
             )
         },
     )
 
     with pytest.raises(ValueError):
-        load_provider("dummy")
+        load_provider("test:dummy")
 
 
 def test_load_provider_rejects_none(monkeypatch) -> None:
     """Factories returning ``None`` should be rejected early."""
     refresh_provider_cache()
     module = types.ModuleType("plugins.dummy_none")
+    module.PROVIDER_MANIFEST = _manifest("test:none", ("fx",))
 
     def factory():
         return None
@@ -105,16 +118,16 @@ def test_load_provider_rejects_none(monkeypatch) -> None:
         settings,
         "allowed_providers",
         {
-            "dummy": ProviderInfo(
+            "test:none": ProviderInfo(
                 module="plugins.dummy_none",
                 name="Dummy",
-                capabilities=(),
+                capabilities=("fx",),
             )
         },
     )
 
     with pytest.raises(ValueError):
-        load_provider("dummy")
+        load_provider("test:none")
 
 
 def test_available_providers_cache_invalidation(monkeypatch) -> None:
@@ -144,6 +157,7 @@ def test_load_provider_validates_required_methods(monkeypatch) -> None:
     """Providers lacking capability-specific methods must raise errors."""
     refresh_provider_cache()
     module = types.ModuleType("plugins.invalid_fx")
+    module.PROVIDER_MANIFEST = _manifest("test:invalid_fx", ("fx",))
 
     class InvalidProvider:
         name = "invalid"
@@ -157,7 +171,7 @@ def test_load_provider_validates_required_methods(monkeypatch) -> None:
         settings,
         "allowed_providers",
         {
-            "invalid": ProviderInfo(
+            "test:invalid_fx": ProviderInfo(
                 module="plugins.invalid_fx",
                 name="Invalid",
                 capabilities=("fx",),
@@ -167,7 +181,7 @@ def test_load_provider_validates_required_methods(monkeypatch) -> None:
 
     refresh_provider_cache()
     with pytest.raises(ValueError) as excinfo:
-        load_provider("invalid")
+        load_provider("test:invalid_fx")
     assert "sync_daily_rates" in str(excinfo.value)
 
 
@@ -177,6 +191,7 @@ def test_load_provider_validates_required_methods(monkeypatch) -> None:
 def test_load_provider_requires_name_attribute(monkeypatch) -> None:
     refresh_provider_cache()
     module = types.ModuleType("plugins.nameless")
+    module.PROVIDER_MANIFEST = _manifest("test:nameless", ("fx",))
 
     class NamelessProvider:
         def sync_daily_rates(self, *args: object, **kwargs: object) -> None:  # type: ignore[unused-argument]
@@ -191,7 +206,7 @@ def test_load_provider_requires_name_attribute(monkeypatch) -> None:
         settings,
         "allowed_providers",
         {
-            "nameless": ProviderInfo(
+            "test:nameless": ProviderInfo(
                 module="plugins.nameless",
                 name="Nameless",
                 capabilities=("fx",),
@@ -201,7 +216,7 @@ def test_load_provider_requires_name_attribute(monkeypatch) -> None:
 
     refresh_provider_cache()
     with pytest.raises(ValueError) as excinfo:
-        load_provider("nameless")
+        load_provider("test:nameless")
     assert "name" in str(excinfo.value)
 
 
@@ -269,6 +284,7 @@ def test_load_provider_handles_async_factory(monkeypatch) -> None:
 
     refresh_provider_cache()
     module = types.ModuleType("plugins.async_factory")
+    module.PROVIDER_MANIFEST = _manifest("test:async", ("fx",))
 
     async def factory():
         return object()
@@ -279,7 +295,7 @@ def test_load_provider_handles_async_factory(monkeypatch) -> None:
         settings,
         "allowed_providers",
         {
-            "async": ProviderInfo(
+            "test:async": ProviderInfo(
                 module="plugins.async_factory",
                 name="AsyncProvider",
                 capabilities=("fx",),
@@ -288,4 +304,4 @@ def test_load_provider_handles_async_factory(monkeypatch) -> None:
     )
 
     with pytest.raises(ValueError):
-        load_provider("async")
+        load_provider("test:async")

@@ -1,29 +1,34 @@
-"""Plugin discovery and loading helpers."""
+"""Provider discovery and fail-closed loading helpers."""
 
 from __future__ import annotations
 
 import importlib
-import inspect
 import logging
 import re
-from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Literal
 
 from apps.api.version import API_VERSION
+from apps.provider_sdk import (
+    ProviderConformanceError,
+    ProviderConformanceReport,
+    ProviderManifest,
+    inspect_provider_module,
+    load_conforming_provider,
+)
 
 from ..config import ProviderInfo, settings
 
 __all__ = [
-    "ProviderHandle",
-    "ProviderMetadata",
     "ProviderCompatibility",
     "ProviderDescriptor",
+    "ProviderHandle",
+    "ProviderMetadata",
     "available_providers",
     "load_provider",
-    "refresh_provider_cache",
     "provider_descriptors",
+    "refresh_provider_cache",
 ]
 
 logger = logging.getLogger(__name__)
@@ -31,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ProviderMetadata:
-    """Publicly exposable metadata describing a provider."""
+    """Publicly exposable metadata describing a configured provider."""
 
     key: str
     name: str
@@ -51,15 +56,17 @@ class ProviderMetadata:
 
 @dataclass(frozen=True)
 class ProviderHandle:
-    """A loaded provider instance along with its metadata."""
+    """A loaded provider instance and, when available, validated SDK evidence."""
 
     instance: Any
     metadata: ProviderMetadata
+    manifest: ProviderManifest | None = None
+    conformance: ProviderConformanceReport | None = None
 
 
 @dataclass(frozen=True)
 class ProviderCompatibility:
-    """Compatibility status between a provider and the API."""
+    """Compatibility status between a provider and the application API."""
 
     api_version: str
     provider_version: str | None
@@ -79,15 +86,17 @@ class ProviderCompatibility:
 
 @dataclass(frozen=True)
 class ProviderDescriptor:
-    """Extended view of provider metadata used in public endpoints."""
+    """Extended public view of configured provider metadata."""
 
     metadata: ProviderMetadata
     module: str
     version: str | None
     compatibility: ProviderCompatibility
+    manifest: ProviderManifest | None
+    conformance: ProviderConformanceReport
 
     def to_dict(self) -> dict[str, object]:
-        """Return a serialisable representation including compatibility data."""
+        """Return serialisable compatibility and conformance evidence."""
 
         payload = self.metadata.to_dict()
         payload.update(
@@ -95,24 +104,27 @@ class ProviderDescriptor:
                 "module": self.module,
                 "version": self.version,
                 "compatibility": self.compatibility.to_dict(),
+                "manifest": self.manifest.to_dict() if self.manifest is not None else None,
+                "conformance": self.conformance.to_dict(),
             }
         )
         return payload
 
 
-CapabilitySignature = tuple[str, str, str | None, tuple[str, ...]]
+ProviderSignature = tuple[str, str, str, str | None, tuple[str, ...]]
 _VERSION_PATTERN = re.compile(r"^(?P<major>\d+)")
 
 
-def _provider_signature() -> tuple[CapabilitySignature, ...]:
-    """Return a hashable snapshot of allowed providers."""
+def _provider_signature() -> tuple[ProviderSignature, ...]:
+    """Return a hashable snapshot of the configured provider allowlist."""
 
-    snapshot: list[CapabilitySignature] = []
+    snapshot: list[ProviderSignature] = []
     for key, info in settings.allowed_providers.items():
         snapshot.append(
             (
                 key,
                 info.module,
+                info.name,
                 info.description,
                 tuple(info.capabilities),
             )
@@ -131,15 +143,14 @@ def _metadata_from_info(key: str, info: ProviderInfo) -> ProviderMetadata:
 
 @lru_cache(maxsize=32)
 def _cached_provider_metadata(
-    signature: tuple[CapabilitySignature, ...], capability: str | None
+    signature: tuple[ProviderSignature, ...], capability: str | None
 ) -> tuple[ProviderMetadata, ...]:
     """Build provider metadata lists keyed by capability filters."""
 
     metadata: list[ProviderMetadata] = []
-    for key, _, _, _capabilities in signature:
+    for key, _, _, _, _capabilities in signature:
         info = settings.allowed_providers.get(key)
         if info is None:
-            # Configuration changed after cache key generation; ignore entry.
             continue
         provider_metadata = _metadata_from_info(key, info)
         if capability and capability not in provider_metadata.capabilities:
@@ -158,14 +169,14 @@ def available_providers(capability: str | None = None) -> list[ProviderMetadata]
 
 
 def _provider_version(module_path: str) -> str | None:
-    """Extract a declared provider version if available."""
+    """Extract a declared provider version without exposing import details."""
 
     try:
         module = importlib.import_module(module_path)
     except Exception as exc:  # pragma: no cover - defensive log path
         logger.debug(
             "Unable to import provider module for version detection",
-            extra={"module": module_path, "error": str(exc)},
+            extra={"module": module_path, "error_type": type(exc).__name__},
         )
         return None
 
@@ -182,13 +193,22 @@ def _major(version: str | None) -> int | None:
     match = _VERSION_PATTERN.match(version)
     if match is None:
         return None
-    try:
-        return int(match.group("major"))
-    except ValueError:
-        return None
+    return int(match.group("major"))
 
 
-def _compatibility(provider_version: str | None) -> ProviderCompatibility:
+def _compatibility(
+    provider_version: str | None,
+    conformance: ProviderConformanceReport,
+) -> ProviderCompatibility:
+    if not conformance.passed:
+        codes = ", ".join(conformance.failure_codes) or "unknown"
+        return ProviderCompatibility(
+            api_version=API_VERSION,
+            provider_version=provider_version,
+            status="incompatible",
+            reason=f"provider conformance failed: {codes}",
+        )
+
     api_major = _major(API_VERSION)
     provider_major = _major(provider_version)
 
@@ -222,26 +242,35 @@ def _compatibility(provider_version: str | None) -> ProviderCompatibility:
 
 @lru_cache(maxsize=32)
 def _cached_provider_descriptors(
-    signature: tuple[CapabilitySignature, ...],
+    signature: tuple[ProviderSignature, ...],
     capability: str | None,
 ) -> tuple[ProviderDescriptor, ...]:
-    """Build provider descriptors, caching the expensive version lookups."""
+    """Build provider descriptors with structural conformance evidence."""
 
     descriptors: list[ProviderDescriptor] = []
-    for key, module, _, _capabilities in signature:
+    for key, module, _, _, _capabilities in signature:
         info = settings.allowed_providers.get(key)
         if info is None:
             continue
         metadata = _metadata_from_info(key, info)
         if capability and capability not in metadata.capabilities:
             continue
-        version = _provider_version(module)
+        conformance = inspect_provider_module(
+            module,
+            expected_key=key,
+            expected_capabilities=metadata.capabilities,
+            api_version=API_VERSION,
+        )
+        manifest = conformance.manifest
+        version = manifest.version if manifest is not None else _provider_version(module)
         descriptors.append(
             ProviderDescriptor(
                 metadata=metadata,
                 module=module,
                 version=version,
-                compatibility=_compatibility(version),
+                compatibility=_compatibility(version, conformance),
+                manifest=manifest,
+                conformance=conformance,
             )
         )
 
@@ -254,12 +283,12 @@ def _cached_provider_descriptors(
             extra={
                 "providers": [
                     {
-                        "key": d.metadata.key,
-                        "module": d.module,
-                        "provider_version": d.version,
-                        "reason": d.compatibility.reason,
+                        "key": descriptor.metadata.key,
+                        "module": descriptor.module,
+                        "provider_version": descriptor.version,
+                        "reason": descriptor.compatibility.reason,
                     }
-                    for d in incompatible
+                    for descriptor in incompatible
                 ]
             },
         )
@@ -268,46 +297,14 @@ def _cached_provider_descriptors(
 
 
 def provider_descriptors(capability: str | None = None) -> list[ProviderDescriptor]:
-    """Return provider descriptors including compatibility summaries."""
+    """Return provider descriptors including conformance summaries."""
 
     signature = _provider_signature()
     return list(_cached_provider_descriptors(signature, capability))
 
 
-CAPABILITY_METHODS: dict[str, tuple[str, ...]] = {
-    "fx": ("sync_daily_rates",),
-    "market": ("fetch_prices",),
-    "tax": ("upsert_rules",),
-}
-
-
-def _expected_methods(capabilities: Iterable[str]) -> tuple[str, ...]:
-    methods: set[str] = set()
-    for capability in capabilities:
-        methods.update(CAPABILITY_METHODS.get(capability, ()))
-    return tuple(sorted(methods))
-
-
-def _validate_provider_interface(provider: Any, metadata: ProviderMetadata) -> None:
-    """Ensure provider instances expose expected attributes for their capabilities."""
-
-    name = getattr(provider, "name", None)
-    if not isinstance(name, str) or not name.strip():
-        raise ValueError(f"Provider '{metadata.key}' must define a non-empty 'name' attribute")
-
-    missing: list[str] = []
-    for method_name in _expected_methods(metadata.capabilities):
-        attr = getattr(provider, method_name, None)
-        if not callable(attr):
-            missing.append(method_name)
-
-    if missing:
-        methods = ", ".join(sorted(missing))
-        raise ValueError(f"Provider '{metadata.key}' is missing required callable methods: {methods}")
-
-
 def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
-    """Load and instantiate an allowed provider referenced by ``key``."""
+    """Load an allowlisted provider through the conformance boundary."""
 
     if not key:
         raise ValueError("Provider key is required")
@@ -317,36 +314,29 @@ def load_provider(key: str, factory: str = "provider") -> ProviderHandle:
     except KeyError as exc:  # pragma: no cover - defensive
         raise ValueError(f"Provider '{key}' is not allowed") from exc
 
-    module_path = info.module
-
-    try:
-        mod = importlib.import_module(module_path)
-    except (ModuleNotFoundError, ImportError) as exc:
-        raise ValueError(f"Unable to import provider module '{module_path}' for key '{key}'") from exc
-
-    if not hasattr(mod, factory):
-        raise ValueError(f"Factory '{factory}' not found in {module_path}")
-    factory_fn = getattr(mod, factory)
-    if not callable(factory_fn):  # pragma: no cover - defensive
-        raise ValueError(f"Factory '{factory}' in {module_path} is not callable")
-
-    provider = factory_fn()
-    if inspect.iscoroutine(provider):
-        try:
-            provider.close()
-        except Exception:
-            pass
-        raise ValueError("Async provider factories are not supported; use synchronous factories")
-    if provider is None:
-        raise ValueError(f"Factory '{factory}' in {module_path} returned None")
-
     metadata = _metadata_from_info(key, info)
-    _validate_provider_interface(provider, metadata)
-    return ProviderHandle(instance=provider, metadata=metadata)
+    try:
+        conforming = load_conforming_provider(
+            info.module,
+            expected_key=key,
+            expected_capabilities=metadata.capabilities,
+            api_version=API_VERSION,
+            factory_name=factory,
+        )
+    except ProviderConformanceError as exc:
+        codes = ", ".join(exc.report.failure_codes) or "unknown"
+        raise ValueError(f"Provider '{key}' failed conformance: {codes}") from exc
+
+    return ProviderHandle(
+        instance=conforming.instance,
+        metadata=metadata,
+        manifest=conforming.manifest,
+        conformance=conforming.report,
+    )
 
 
 def refresh_provider_cache() -> None:
-    """Invalidate cached provider metadata snapshots."""
+    """Invalidate cached provider metadata and conformance snapshots."""
 
     _cached_provider_metadata.cache_clear()
     _cached_provider_descriptors.cache_clear()

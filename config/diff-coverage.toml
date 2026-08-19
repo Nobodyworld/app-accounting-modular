@@ -3,9 +3,10 @@
 # Coverage.py currently records the validated runtime under src/apps, src/plugins,
 # and src/cli. Development tooling under src/tools is validated by focused tests
 # but is not part of the release-authoritative runtime coverage denominator.
+# Documentation colocated with runtime modules is not executable coverage input.
 
 [diff_coverage]
 include_roots = ["src/apps", "src/plugins", "src/cli"]
-exclude = []
+exclude = ["**/*.md"]
 minimum_changed_line_percent = 85.0
 allow_no_changed_executable_lines = true

@@ -16,12 +16,28 @@ from datetime import date
 
 from apps.api.config import settings
 from apps.api.models.models import Rate
+from apps.provider_sdk import ProviderManifest
 
 from plugins.provider_limits import (
     MAX_FX_RATE_RECORDS,
     ProviderPayloadError,
     ProviderResponseLimitError,
     get_bounded_json,
+)
+
+__version__ = "0.3.0"
+
+PROVIDER_MANIFEST = ProviderManifest(
+    key="fx:openexchangerates",
+    name="OpenExchangeRates FX",
+    version=__version__,
+    api_major=0,
+    capabilities=("fx",),
+    description="Credentialed bounded HTTPS adapter for OpenExchangeRates.",
+    license="Apache-2.0",
+    network_policy="https",
+    credential_env=("OPENEXCHANGERATES_APP_ID",),
+    data_classification="external-service",
 )
 
 logger = logging.getLogger(__name__)
