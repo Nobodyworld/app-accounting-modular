@@ -132,11 +132,7 @@ class ProviderManifest:
             raise ProviderManifestError("sdk_version must use '<major>.<minor>'")
         if _FACTORY_PATTERN.fullmatch(factory) is None:
             raise ProviderManifestError("factory must be a Python identifier")
-        if (
-            not isinstance(self.api_major, int)
-            or isinstance(self.api_major, bool)
-            or not 0 <= self.api_major <= 999
-        ):
+        if not isinstance(self.api_major, int) or isinstance(self.api_major, bool) or not 0 <= self.api_major <= 999:
             raise ProviderManifestError("api_major must be an integer between 0 and 999")
 
         capabilities = _normalise_values(self.capabilities, field_name="capabilities")
@@ -160,9 +156,7 @@ class ProviderManifest:
             raise ProviderManifestError("credential_env names must be unique")
         for variable_name in credential_env:
             if _ENV_PATTERN.fullmatch(variable_name) is None:
-                raise ProviderManifestError(
-                    "credential_env entries must be uppercase environment-variable names"
-                )
+                raise ProviderManifestError("credential_env entries must be uppercase environment-variable names")
         if credential_env and self.network_policy == "none":
             raise ProviderManifestError("credential_env requires network_policy='https'")
 

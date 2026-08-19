@@ -5,11 +5,11 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from click.testing import CliRunner
-
 from apps.api.config import ProviderInfo
 from apps.provider_sdk import ProviderManifest
+from cli import macli as main_cli
 from cli import provider_sdk as sdk_cli
+from click.testing import CliRunner
 
 
 class TaxProvider:
@@ -195,3 +195,7 @@ def test_scaffold_table_and_overwrite_error(tmp_path: Path) -> None:
     assert "Scaffolded provider: fx:cli_sample" in first.output
     assert second.exit_code == 1
     assert "already contains generated files" in second.output
+
+
+def test_provider_sdk_is_registered_on_main_cli() -> None:
+    assert main_cli.cli.commands.get("provider-sdk") is sdk_cli.provider_sdk_group

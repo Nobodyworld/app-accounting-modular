@@ -51,7 +51,7 @@ def _tuple_literal(values: Iterable[str]) -> str:
 def _method_lines(capability: str) -> list[str]:
     if capability == "fx":
         return [
-            "    def sync_daily_rates(self, base: str = \"USD\", date_: date | None = None) -> list[object]:",
+            '    def sync_daily_rates(self, base: str = "USD", date_: date | None = None) -> list[object]:',
             '        """Return provider-specific FX records after implementing the adapter."""',
             "",
             "        return []",
@@ -221,7 +221,7 @@ def scaffold_provider(
     ).lstrip()
     provider_source = _provider_source(manifest, class_name)
     readme_source = dedent(
-        f'''\
+        f"""\
         # {manifest.name}
 
         Generated with `python -m cli.macli provider-sdk scaffold`.
@@ -237,7 +237,7 @@ def scaffold_provider(
         The generated implementation is intentionally non-networked and returns
         empty result collections. Replace those method bodies with bounded,
         sanitized adapter logic and retain the conformance test.
-        '''
+        """
     ).lstrip()
     test_source = dedent(
         f'''\

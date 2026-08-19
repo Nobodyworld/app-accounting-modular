@@ -4,7 +4,6 @@ import importlib
 from types import ModuleType
 
 import pytest
-
 from apps.api.config import settings
 from apps.api.services.plugin_loader import provider_descriptors, refresh_provider_cache
 from apps.api.version import API_VERSION

@@ -6,7 +6,6 @@ from types import ModuleType
 from typing import Any
 
 import pytest
-
 from apps.provider_sdk import (
     ConformanceCheck,
     ProviderConformanceError,

@@ -153,14 +153,10 @@ def _validate_manifest(
     try:
         manifest = getattr(evaluation.module, "PROVIDER_MANIFEST", None)
     except Exception as exc:
-        evaluation.checks.append(
-            _check("manifest.present", "fail", _safe_failure("provider manifest lookup", exc))
-        )
+        evaluation.checks.append(_check("manifest.present", "fail", _safe_failure("provider manifest lookup", exc)))
         return False
     if not isinstance(manifest, ProviderManifest):
-        evaluation.checks.append(
-            _check("manifest.present", "fail", "PROVIDER_MANIFEST must be a ProviderManifest")
-        )
+        evaluation.checks.append(_check("manifest.present", "fail", "PROVIDER_MANIFEST must be a ProviderManifest"))
         return False
 
     evaluation.manifest = manifest
@@ -194,15 +190,11 @@ def _validate_manifest(
     if expected_key is None or manifest.key == expected_key:
         evaluation.checks.append(_check("manifest.key", "pass", "provider key matches configuration"))
     else:
-        evaluation.checks.append(
-            _check("manifest.key", "fail", "provider key does not match configuration")
-        )
+        evaluation.checks.append(_check("manifest.key", "fail", "provider key does not match configuration"))
 
     configured = tuple(sorted(expected_capabilities)) if expected_capabilities is not None else None
     if configured is None or manifest.capabilities == configured:
-        evaluation.checks.append(
-            _check("manifest.capabilities", "pass", "provider capabilities match configuration")
-        )
+        evaluation.checks.append(_check("manifest.capabilities", "pass", "provider capabilities match configuration"))
     else:
         evaluation.checks.append(
             _check(
@@ -215,20 +207,14 @@ def _validate_manifest(
     try:
         declared_version = getattr(evaluation.module, "__version__", None)
     except Exception as exc:
-        evaluation.checks.append(
-            _check("manifest.version", "fail", _safe_failure("module version lookup", exc))
-        )
+        evaluation.checks.append(_check("manifest.version", "fail", _safe_failure("module version lookup", exc)))
         return True
     if declared_version is None:
         evaluation.checks.append(_check("manifest.version", "pass", "manifest version is authoritative"))
     elif isinstance(declared_version, str) and declared_version.strip() == manifest.version:
-        evaluation.checks.append(
-            _check("manifest.version", "pass", "module and manifest versions match")
-        )
+        evaluation.checks.append(_check("manifest.version", "pass", "module and manifest versions match"))
     else:
-        evaluation.checks.append(
-            _check("manifest.version", "fail", "module and manifest versions differ")
-        )
+        evaluation.checks.append(_check("manifest.version", "fail", "module and manifest versions differ"))
 
     return True
 
@@ -238,21 +224,15 @@ def _factory(evaluation: _Evaluation, *, factory_name: str, instantiate: bool) -
     try:
         factory = getattr(evaluation.module, factory_name, None)
     except Exception as exc:
-        evaluation.checks.append(
-            _check("factory.callable", "fail", _safe_failure("provider factory lookup", exc))
-        )
+        evaluation.checks.append(_check("factory.callable", "fail", _safe_failure("provider factory lookup", exc)))
         return False
     if not callable(factory):
-        evaluation.checks.append(
-            _check("factory.callable", "fail", "configured provider factory is not callable")
-        )
+        evaluation.checks.append(_check("factory.callable", "fail", "configured provider factory is not callable"))
         return False
     evaluation.checks.append(_check("factory.callable", "pass", "provider factory is callable"))
 
     if inspect.iscoroutinefunction(factory):
-        evaluation.checks.append(
-            _check("factory.sync", "fail", "asynchronous provider factories are unsupported")
-        )
+        evaluation.checks.append(_check("factory.sync", "fail", "asynchronous provider factories are unsupported"))
         return False
     evaluation.checks.append(_check("factory.sync", "pass", "provider factory is synchronous"))
 
@@ -270,18 +250,12 @@ def _factory(evaluation: _Evaluation, *, factory_name: str, instantiate: bool) -
         and parameter.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
     )
     if required:
-        evaluation.checks.append(
-            _check("factory.signature", "fail", "provider factory must not require arguments")
-        )
+        evaluation.checks.append(_check("factory.signature", "fail", "provider factory must not require arguments"))
         return False
-    evaluation.checks.append(
-        _check("factory.signature", "pass", "provider factory requires no arguments")
-    )
+    evaluation.checks.append(_check("factory.signature", "pass", "provider factory requires no arguments"))
 
     if not instantiate:
-        evaluation.checks.append(
-            _check("factory.result", "pass", "factory invocation deferred to runtime loading")
-        )
+        evaluation.checks.append(_check("factory.result", "pass", "factory invocation deferred to runtime loading"))
         return True
 
     try:
@@ -294,9 +268,7 @@ def _factory(evaluation: _Evaluation, *, factory_name: str, instantiate: bool) -
         if callable(close):
             with suppress(Exception):
                 close()
-        evaluation.checks.append(
-            _check("factory.result", "fail", "provider factory returned an awaitable")
-        )
+        evaluation.checks.append(_check("factory.result", "fail", "provider factory returned an awaitable"))
         return False
     if instance is None:
         evaluation.checks.append(_check("factory.result", "fail", "provider factory returned None"))
@@ -351,15 +323,11 @@ def _validate_instance(evaluation: _Evaluation) -> None:
     try:
         name = getattr(evaluation.instance, "name", None)
     except Exception as exc:
-        evaluation.checks.append(
-            _check("provider.name", "fail", _safe_failure("provider name lookup", exc))
-        )
+        evaluation.checks.append(_check("provider.name", "fail", _safe_failure("provider name lookup", exc)))
         name = None
     if not isinstance(name, str) or not name.strip():
         if not any(check.code == "provider.name" for check in evaluation.checks):
-            evaluation.checks.append(
-                _check("provider.name", "fail", "provider instance must define a non-empty name")
-            )
+            evaluation.checks.append(_check("provider.name", "fail", "provider instance must define a non-empty name"))
     else:
         evaluation.checks.append(_check("provider.name", "pass", "provider name is present"))
 
@@ -438,9 +406,7 @@ def _evaluate_provider(
     assert evaluation.manifest is not None
     selected_factory = factory_name or evaluation.manifest.factory
     if selected_factory != evaluation.manifest.factory:
-        evaluation.checks.append(
-            _check("factory.manifest", "fail", "requested factory differs from provider manifest")
-        )
+        evaluation.checks.append(_check("factory.manifest", "fail", "requested factory differs from provider manifest"))
         return evaluation
     evaluation.checks.append(_check("factory.manifest", "pass", "provider factory matches manifest"))
     if not _factory(evaluation, factory_name=selected_factory, instantiate=instantiate):

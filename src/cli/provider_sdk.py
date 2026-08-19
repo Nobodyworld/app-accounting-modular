@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import click
-
 from apps.api.config import settings
 from apps.api.version import API_VERSION
 from apps.provider_sdk import (

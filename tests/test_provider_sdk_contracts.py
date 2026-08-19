@@ -1,7 +1,6 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
-
 from apps.provider_sdk import ProviderManifest, ProviderManifestError, required_methods
 
 
