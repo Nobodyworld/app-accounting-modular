@@ -7,25 +7,26 @@ This roadmap reflects the repository state as of August 2026. Dates from the ori
 | Workstream | Status | Current state | Next meaningful step |
 | --- | --- | --- | --- |
 | Accounting-control demonstration | Complete for portfolio release | Snapshot orchestration, provenance, journal controls, CLI/API/Streamlit review surfaces, examples, and regression coverage are present. | Maintain release evidence and improve reviewer onboarding. |
-| Provider SDK and conformance kit | v0.3 candidate in validation | Draft PR #141 adds a public dependency-light SDK, bounded immutable manifests, bank/FX/macro/market/tax structural contracts, fail-closed conformance, allowlist-enforced loading, bundled-provider adoption, deterministic scaffolding, CLI evidence, explicit critical coverage, an author guide, and a compatibility matrix. | Complete exact-head local and hosted validation, resolve any gate findings, and retain the draft/unmerged boundary until owner authorization. |
-| Provider marketplace | Not implemented | The SDK describes and validates explicitly configured adapters. It does not install packages, auto-enable manifests, distribute providers, or certify third parties. | Define signing, distribution, trust, review, revocation, vulnerability-response, and operating policy before any marketplace work. |
+| Provider SDK and conformance kit | Complete for v0.3 Early Beta | PR #141 merged a public dependency-light SDK, bounded immutable manifests, bank/FX/macro/market/tax structural contracts, fail-closed conformance, allowlist-enforced loading, bundled-provider adoption, deterministic scaffolding, CLI evidence, explicit critical coverage, an author guide, and a compatibility matrix. | Exercise the scaffold from a clean checkout as an external-author onboarding trial and improve compatibility/deprecation guidance from measured evidence. |
+| Provider catalog governance | v0.4 planned in issue #145 | The trusted provider set is still process-configured; organization administrators do not yet have durable provider enablement/default policy or a cohesive governance workspace. The v0.3 SDK already supplies the structural trust/conformance boundary that v0.4 will reuse. | Deliver one persistent, tenant-aware governance tranche while preserving the process allowlist as the executable-code trust boundary. |
+| Provider marketplace | Not implemented | The SDK describes and validates explicitly configured adapters. It does not install packages, auto-enable manifests, distribute providers, or certify third parties. | Keep marketplace/certification out of v0.4; define signing, distribution, trust, review, revocation, vulnerability-response, and operating policy separately before any marketplace work. |
 | Workflow recipes | Foundation complete | Scenario plans, preview/inspection commands, sample workflows, orchestration helpers, and an accountant close walkthrough exist. | Add more accountant-oriented recipes only when they reuse validated service contracts and deterministic evidence. |
 | Accountant close workspace | Complete for v0.2 Early Beta | Immutable lifecycle states, serialized SQLite period/posting/close gates, authoritative ledger-activity revisions, typed administrator policy exceptions, current variance runs, CAS revisions, bounded evidence, API routes, Streamlit workflow, and literal 200% browser acceptance are present. | Maintain the control boundary; evaluate database-native locks before any multi-writer deployment; do not expand the claim to ERP or production close certification. |
 | Quality and forecast robustness | Complete | Repository-owned changed-production coverage, independent critical-module floors, forecast finite-value/cadence/timezone hardening, DST coverage, sanitized API errors, and exact-head Python/container evidence are present. | Maintain the policy and increase floors only when measured evidence supports a deliberate review. |
-| Ruff tooling policy | Complete | Ruff 0.16.2 is deliberately pinned with explicit lint selection, Python-only discovery, Markdown exclusion, and executable regression coverage. | Evaluate future updates only through the same explicit policy and exact-head validation boundary. |
+| Ruff tooling policy | Complete on main; patch maintenance in draft PR #142 | `main` deliberately pins Ruff 0.16.2 with explicit lint selection, Python-only discovery, Markdown exclusion, and executable regression coverage. Draft PR #142 evaluates 0.16.3 under the same policy. | Keep the patch update isolated from product work and unmerged until its remaining local evidence boundary is satisfied and owner authorization is explicit. |
 | Observability pack | Foundation complete | Metrics, tracing hooks, health/readiness endpoints, startup diagnostics, scheduler state, and CLI observability commands exist. | Add deployment examples, alerting guidance, and optional OTLP collector integration. |
 | Container onboarding | Validated for local demonstration | Digest-pinned API and Streamlit images, hash-locked dependencies, Compose configuration, least-privilege checks, SBOMs, checksums, and trusted-event attestations are present. PR #139 merged the coordinated Python-base, runtime-provider, and tooling maintenance contract. | Maintain one coherent base-image, generator, verifier, lock, test, and documentation contract for every future runtime or image update. |
 | Public portfolio release | Public Early Beta | The repository is public with an explicit Early Beta / Portfolio Preview boundary and a completed post-UX code audit. | Maintain accurate release evidence; do not infer LAN or public-hosting approval from repository visibility. |
 
 ## Near-term Priorities
 
-1. Complete the v0.3 provider-SDK exact-head quality, accounting, changed-production, Python-matrix, and container evidence before merge consideration.
-2. Exercise the provider scaffold from a clean checkout and use the generated package as an external-author onboarding trial.
-3. Keep dependency, base-image, provider, and tooling updates coherent with generated locks, permanent policy tests, and exact-head Python/container evidence.
-4. Keep setup instructions executable from a clean clone on Windows, macOS, Linux, and Docker.
-5. Convert the current source-layout application into a conventionally installable Python project when packaging work begins.
-6. Expand strict typing beyond the current targeted modules.
-7. Persist provider-catalog administration rather than relying only on process configuration.
+1. Deliver issue #145 as the next large product tranche: persistent provider catalog governance, organization policy/defaults, API/Streamlit administration, deterministic evidence, and runtime policy integration without broadening executable trust.
+2. Exercise the v0.3 provider scaffold from a clean checkout as part of external-author onboarding evidence and ensure a generated provider can enter the trusted operator workflow only through explicit process configuration plus conformance.
+3. Keep maintenance PR #142 isolated from product work; finish its local clean-environment Ruff 0.16.3 evidence before merge consideration.
+4. Consolidate future development-tool dependency changes into deliberate maintenance slices rather than merging partial bot-only major-range proposals without policy/compatibility evidence.
+5. Keep setup instructions executable from a clean clone on Windows, macOS, Linux, and Docker.
+6. Convert the current source-layout application into a conventionally installable Python project when packaging work begins.
+7. Expand strict typing beyond the current targeted modules.
 8. Extend the validated v0.2 close controls only through explicit policy decisions and measured critical-module coverage.
 
 ## Future Opportunities
@@ -35,6 +36,7 @@ This roadmap reflects the repository state as of August 2026. Dates from the ori
 - A separately governed marketplace or certification program only after distribution, trust, review, revocation, and incident-response design.
 - Additional jurisdiction-aware tax demonstrations with explicit non-production disclaimers.
 - Deployment examples for PostgreSQL, OTLP collectors, and Prometheus/Grafana.
+- Database-native close/posting locks before any multi-writer deployment claim.
 - A production-grade web client only after the accounting-control workflows and API contracts stabilize.
 
 Roadmap items are directional, not release commitments. Production financial, tax, treasury, market-data, bank-feed, and regulated-data use would require separate control design, security review, compliance assessment, and operational support.
