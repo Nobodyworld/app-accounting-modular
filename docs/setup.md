@@ -136,7 +136,12 @@ python -m cli.macli health
 python -m cli.macli observe
 python -m cli.macli inspect-extensions
 python -m cli.macli inspect-contracts
+python -m cli.macli provider-sdk governance-reconcile --format table
+python -m cli.macli provider-sdk governance-validate --format table
+python -m cli.macli provider-sdk governance-export --organization-id 1 --format json
 ```
+
+Provider governance reconciliation is structural and network-free. `settings.allowed_providers` remains the only executable trust source. The first reconcile records safe metadata; later identity drift is quarantined and requires explicit operator review before `--accept-drift`. Organization administrators manage only already-trusted keys through the authenticated API or Streamlit workspace. Credential readiness reports manifest-declared environment-variable names and booleans, never their values.
 
 ## Docker Compose
 

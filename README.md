@@ -11,6 +11,8 @@ The project demonstrates how accounting workflows can be broken into auditable m
 
 Version 0.2 adds an authenticated Accountant Close Workspace. A controlled close cycle coordinates inclusive accounting periods, serialized posting gates, required balance-sheet reconciliation scope, current-run variance review, explicit journal-approval modes, one effective checklist, and evidence bound to both close content and authoritative ledger activity. Posting is frozen while a cycle awaits approval; administrator-only, reasoned policy exceptions are typed and audited. Final close and a deterministic `CLOSED` evidence record commit atomically. These controls remain an Early Beta demonstration; they are not automatic bank reconciliation, production close certification, or regulatory compliance.
 
+Version 0.4 adds persistent, tenant-aware provider governance. Operators reconcile the current `settings.allowed_providers` trust set into safe registration evidence; organization administrators may only narrow that set through enablement policy and deterministic capability defaults. Members can inspect effective state, conformance, compatibility, provenance, and credential-variable presence through authenticated API and Streamlit surfaces. Persisted rows never authorize Python modules, credential values are never stored or returned, and this workspace is not a provider marketplace or certification program.
+
 ## Streamlit demonstration interface using controlled sample data
 
 ![Streamlit demonstration interface using controlled sample data](docs/examples/assets/streamlit-demo-snapshot.png)
@@ -49,6 +51,7 @@ Demo providers use controlled sample data unless external API credentials are co
 - Operational CLI and API surfaces for snapshot, scenario plans, and diagnostics.
 - Regression-tested Streamlit interface focused on snapshot controls for portfolio review.
 - Authenticated close-cycle workspace with tenant-scoped lifecycle, readiness, evidence, and explicit separation of duties.
+- Authenticated provider-governance workspace with persistent organization policy, revision-protected defaults, audit evidence, and allowlist-enforced runtime resolution.
 
 ## Architecture Diagram
 
@@ -102,6 +105,7 @@ To create the deterministic three-user close example in a fresh local database, 
 python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table
 python -m cli.macli inspect-plan --plan docs/examples/scenario-plan.json
 python -m cli.macli snapshot-scenarios --plan docs/examples/scenario-plan.json --format table
+python -m cli.macli provider-sdk governance-validate --format table
 ```
 
 For Docker Compose, configuration, validation, and troubleshooting, use the [setup guide](docs/setup.md).
@@ -110,6 +114,7 @@ For Docker Compose, configuration, validation, and troubleshooting, use the [set
 
 - [Foreign-currency accounting case study](docs/examples/foreign_currency_accounting_case_study.md)
 - [End-to-end snapshot and control demonstration](docs/examples/end_to_end_snapshot_demo.md)
+- [Provider governance controlled walkthrough](docs/examples/provider_governance_walkthrough.md)
 - [Public release audit evidence](PUBLIC_RELEASE_AUDIT.md)
 - [Latest audit metrics snapshot](docs/reports/audit-latest.md) - technical supporting evidence only; see the public audit for the release verdict.
 

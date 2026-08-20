@@ -1,6 +1,6 @@
 # Provider Catalog Governance Architecture
 
-Status: design contract for issue #145; implementation is not complete until the issue acceptance gates pass.
+Status: implemented v0.4 contract for issue #145; release acceptance remains subject to exact-head validation.
 
 ## Purpose
 
@@ -29,7 +29,7 @@ A provider is eligible for runtime resolution only when all of the following are
 
 Persistence is therefore a **narrowing control plane**, not a second allowlist that can broaden executable code.
 
-## Proposed layers
+## Implemented layers
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────┐
@@ -78,7 +78,13 @@ Persistence is therefore a **narrowing control plane**, not a second allowlist t
 
 ## Persistent model responsibilities
 
-Exact class/table names may change during implementation, but the responsibilities should remain distinct.
+The implementation uses three separate SQLModel tables and preserves their distinct responsibilities.
+
+- `TrustedProviderRegistration` stores bounded configuration/manifest fingerprints, capabilities, provider/SDK/API versions, conformance/compatibility and lifecycle state, revision, and UTC reconciliation timestamps. It stores no importable module path.
+- `OrganizationProviderPolicy` is unique on organization/provider, records explicit enablement, a bounded note, revision, timestamps, actor, and audit reference.
+- `OrganizationCapabilityDefault` is unique on organization/capability and records the selected provider plus revision, timestamps, actor, and audit reference.
+
+`ProviderGovernanceService` is the authoritative intersection of those rows with the current process allowlist and the v0.3 conformance loader. Runtime fallback is the lexicographically first effective provider key after an explicit request and a valid organization default have been considered. Invalid persisted defaults remain visible as ineffective evidence but are never executed.
 
 ### Trusted provider registration
 

@@ -1,5 +1,19 @@
 # Release Notes
 
+## Unreleased v0.4 Provider Catalog Governance Candidate
+
+The v0.4 candidate adds persistent tenant-aware administration on top of the v0.3 provider SDK while keeping the operator process allowlist authoritative for executable code.
+
+- separate SQLModel records for safe trusted-registration evidence, unique organization provider policy, and unique organization capability defaults;
+- deterministic network-free startup/operator reconciliation with drift quarantine, allowlist-removal handling, validation, and secret-free evidence export;
+- authenticated member reads and administrator-only revision-protected policy/default mutations with atomic audit evidence;
+- allowlist, conformance, compatibility, capability, enablement, and deterministic-default enforcement across FX, market, tax, and snapshot paths;
+- credential readiness limited to manifest variable names and booleans;
+- an accountant/admin Streamlit workspace backed by authoritative API results, with conflict guidance and tenant-state clearing; and
+- explicit critical line/branch coverage for the new service, API router, and workspace.
+
+This candidate is not a marketplace, package installer, remote registry, provider certification program, credential store, production data certification, ERP expansion, or public/LAN deployment approval. It remains an **Early Beta / Portfolio Preview** for local demonstration.
+
 ## Unreleased v0.3 Provider SDK Candidate
 
 Starting `main`: `63da968fcc10c531427a2a58296cb979482d6579`
