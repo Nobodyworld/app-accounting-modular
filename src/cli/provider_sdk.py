@@ -8,6 +8,12 @@ from typing import Any
 
 import click
 from apps.api.config import settings
+from apps.api.db import engine, init_db
+from apps.api.services.provider_governance_service import (
+    ProviderGovernanceService,
+    reconcile_trusted_catalog,
+    validate_trusted_catalog,
+)
 from apps.api.version import API_VERSION
 from apps.provider_sdk import (
     DATA_CLASSIFICATIONS,
@@ -17,6 +23,7 @@ from apps.provider_sdk import (
     inspect_provider_module,
     scaffold_provider,
 )
+from sqlmodel import Session
 
 
 def _render_report(report: ProviderConformanceReport) -> str:
@@ -77,6 +84,89 @@ def _json_reports(reports: tuple[ProviderConformanceReport, ...]) -> dict[str, A
 @click.group("provider-sdk")
 def provider_sdk_group() -> None:
     """Validate and scaffold provider adapter packages."""
+
+
+@provider_sdk_group.command("governance-reconcile")
+@click.option("--accept-drift", is_flag=True, help="Accept reviewed process-trust or manifest identity drift.")
+@click.option(
+    "--format",
+    "format_",
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    default="table",
+    show_default=True,
+)
+def reconcile_governance(accept_drift: bool, format_: str) -> None:
+    """Reconcile configured trusted providers into persistent safe evidence."""
+
+    init_db()
+    with Session(engine, expire_on_commit=False) as session:
+        result = reconcile_trusted_catalog(session, accept_drift=accept_drift)
+    payload = result.to_dict()
+    if format_.lower() == "json":
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    click.echo(f"Changed: {', '.join(result.changed) or '-'}")
+    click.echo(f"Unchanged: {', '.join(result.unchanged) or '-'}")
+    click.echo(f"Drifted: {', '.join(result.drifted) or '-'}")
+    click.echo(f"Removed from process trust: {', '.join(result.removed) or '-'}")
+
+
+@provider_sdk_group.command("governance-validate")
+@click.option(
+    "--format",
+    "format_",
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    default="table",
+    show_default=True,
+)
+def validate_governance(format_: str) -> None:
+    """Validate persisted registrations against current process trust."""
+
+    init_db()
+    with Session(engine, expire_on_commit=False) as session:
+        payload = validate_trusted_catalog(session)
+    if format_.lower() == "json":
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        reports = payload["reports"]
+        assert isinstance(reports, list)
+        for report in reports:
+            assert isinstance(report, dict)
+            codes = report.get("codes") or []
+            click.echo(
+                f"{report['provider_key']}: {'PASS' if report['valid'] else 'FAIL'}"
+                f" ({', '.join(str(code) for code in codes) or 'current'})"
+            )
+    if not payload["valid"]:
+        raise click.exceptions.Exit(1)
+
+
+@provider_sdk_group.command("governance-export")
+@click.option("--organization-id", type=click.IntRange(min=1), required=True)
+@click.option(
+    "--format",
+    "format_",
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    default="json",
+    show_default=True,
+)
+def export_governance(organization_id: int, format_: str) -> None:
+    """Export deterministic, credential-value-free organization evidence."""
+
+    init_db()
+    with Session(engine, expire_on_commit=False) as session:
+        service = ProviderGovernanceService(session, organization_id, actor_user_id=0)
+        payload = service.evidence()
+    if format_.lower() == "json":
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    click.echo(f"Organization: {organization_id}")
+    click.echo(f"Evidence SHA-256: {payload['evidence_sha256']}")
+    providers = payload["providers"]
+    assert isinstance(providers, list)
+    for provider in providers:
+        assert isinstance(provider, dict)
+        click.echo(f"{provider['provider_key']}: {'EFFECTIVE' if provider['effective'] else 'BLOCKED'}")
 
 
 @provider_sdk_group.command("validate")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
@@ -173,6 +173,7 @@ class SnapshotResult:
     diagnostics: SnapshotDiagnostics
     providers: dict[str, str]
     cache_stats: dict[str, CacheStats]
+    provider_governance: dict[str, dict[str, object]] = field(default_factory=dict)
 
     def as_payload(self) -> dict[str, object]:
         """Return a serialisable payload with snapshot data and metadata."""
@@ -185,6 +186,7 @@ class SnapshotResult:
                 "jurisdictions": (list(self.request.jurisdictions) if self.request.jurisdictions is not None else None),
             },
             "providers": dict(self.providers),
+            "provider_governance": dict(self.provider_governance),
             "cache_stats": {key: asdict(stats) for key, stats in self.cache_stats.items()},
         }
 
@@ -200,11 +202,13 @@ class SnapshotOrchestrator:
         tax_provider_key: str | None = None,
         provider_loader: Callable[[str], ProviderHandle] = load_provider,
         provider_catalog: Callable[[str | None], Sequence[ProviderMetadata]] = available_providers,
+        provider_resolver: Callable[[str, str | None], ProviderHandle] | None = None,
         commodity_currency: str = "USD",
         commodity_lookback_days: int = 30,
     ) -> None:
         self._provider_loader = provider_loader
         self._provider_catalog = provider_catalog
+        self._provider_resolver = provider_resolver
         self._fx_handle = self._load_handle("fx", fx_provider_key)
         self._commodity_handle = self._load_handle("market", commodity_provider_key)
         self._tax_handle = self._load_handle("tax", tax_provider_key)
@@ -223,8 +227,19 @@ class SnapshotOrchestrator:
             "commodity": self._commodity_handle.metadata.key,
             "tax": self._tax_handle.metadata.key,
         }
+        self._provider_governance = {
+            capability: dict(handle.governance)
+            for capability, handle in (
+                ("fx", self._fx_handle),
+                ("commodity", self._commodity_handle),
+                ("tax", self._tax_handle),
+            )
+            if handle.governance is not None
+        }
 
     def _load_handle(self, capability: str, key: str | None) -> ProviderHandle:
+        if self._provider_resolver is not None:
+            return self._provider_resolver(capability, key)
         resolved_key = key or self._default_key(capability)
         handle = self._provider_loader(resolved_key)
         if capability not in handle.metadata.capabilities:
@@ -257,6 +272,7 @@ class SnapshotOrchestrator:
             snapshot=snapshot,
             diagnostics=diagnostics,
             providers=dict(self._providers),
+            provider_governance=dict(self._provider_governance),
             cache_stats=cache_stats,
         )
 

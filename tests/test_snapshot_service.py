@@ -120,6 +120,49 @@ def test_snapshot_orchestrator_builds_snapshot() -> None:
     assert payload["diagnostics"]["commodity_quote_count"] == 1
 
 
+def test_snapshot_orchestrator_records_governed_provider_provenance() -> None:
+    load, _catalog = _resolver()
+    selected = {
+        "fx": "fx:stub",
+        "market": "market:stub",
+        "tax": "tax:stub",
+    }
+
+    def governed_resolver(capability: str, explicit_key: str | None) -> ProviderHandle:
+        key = explicit_key or selected[capability]
+        handle = load(key)
+        return ProviderHandle(
+            instance=handle.instance,
+            metadata=handle.metadata,
+            governance={
+                "provider_key": key,
+                "capability": capability,
+                "selection_source": "organization_default",
+                "registration_revision": 3,
+                "policy_revision": 2,
+            },
+        )
+
+    orchestrator = SnapshotOrchestrator(
+        provider_resolver=governed_resolver,
+        commodity_lookback_days=2,
+    )
+    result = orchestrator.build_snapshot(
+        base_currency="USD",
+        commodity_symbols=("XAU",),
+        jurisdictions=("US",),
+    )
+    payload = result.as_payload()
+
+    assert payload["providers"] == {
+        "fx": "fx:stub",
+        "commodity": "market:stub",
+        "tax": "tax:stub",
+    }
+    assert payload["provider_governance"]["fx"]["registration_revision"] == 3
+    assert payload["provider_governance"]["commodity"]["provider_key"] == "market:stub"
+
+
 def test_snapshot_orchestrator_runs_scenarios() -> None:
     load, catalog = _resolver()
     orchestrator = SnapshotOrchestrator(

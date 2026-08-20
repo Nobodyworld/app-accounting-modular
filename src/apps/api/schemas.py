@@ -916,6 +916,7 @@ class SnapshotResponse(BaseModel):
 
     request: SnapshotRequestSchema
     providers: dict[str, str]
+    provider_governance: dict[str, dict[str, object]] = Field(default_factory=dict)
     fx_rates: list[FXRateSchema]
     commodity_quotes: list[CommodityQuoteSchema]
     tax_rules: list[TaxRuleSchema]
@@ -961,6 +962,7 @@ class SnapshotResponse(BaseModel):
         return cls(
             request=request_schema,
             providers=dict(result.providers),
+            provider_governance=dict(result.provider_governance),
             fx_rates=fx_rates,
             commodity_quotes=commodity_quotes,
             tax_rules=tax_rules,

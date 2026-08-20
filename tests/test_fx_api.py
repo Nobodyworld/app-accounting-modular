@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -103,11 +104,31 @@ def _create_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[TestClient
             ),
         )
 
+    class StubGovernanceService:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def resolve_provider(self, capability: str, key: str) -> ProviderHandle:
+            assert capability == "fx"
+            handle = fake_load_provider(key)
+            if "fx" not in handle.metadata.capabilities:
+                from apps.api.services.provider_governance_service import (
+                    ProviderGovernanceValidationError,
+                )
+
+                raise ProviderGovernanceValidationError("Provider does not support the requested capability")
+            return handle
+
     monkeypatch.setattr(api_main, "init_db", lambda: None)
+    monkeypatch.setattr(
+        api_main,
+        "reconcile_trusted_catalog",
+        lambda _session: SimpleNamespace(to_dict=lambda: {}),
+    )
     monkeypatch.setattr(api_main, "start_scheduler", lambda: None)
     monkeypatch.setattr(api_main, "shutdown_scheduler", lambda: None)
     monkeypatch.setattr(fx_router, "FXService", SpyFXService)
-    monkeypatch.setattr(fx_router, "load_provider", fake_load_provider)
+    monkeypatch.setattr(fx_router, "ProviderGovernanceService", StubGovernanceService)
 
     app = api_main.create_app()
     app.dependency_overrides[get_current_user] = lambda: selected_user["value"]
@@ -182,8 +203,11 @@ def test_fx_rejects_wrong_provider_capability(monkeypatch: pytest.MonkeyPatch) -
                 "provider_key": "market:wrong",
             },
         )
-        assert response.status_code == 400
-        assert response.json()["detail"] == "Provider 'market:wrong' does not support FX synchronization"
+        assert response.status_code == 409
+        assert response.json()["detail"] == {
+            "code": "PROVIDER_GOVERNANCE_VALIDATION",
+            "message": "Provider does not support the requested capability",
+        }
         assert state["service_sessions"] == []
 
 

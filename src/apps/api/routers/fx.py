@@ -15,7 +15,7 @@ from ..dependencies import session_with_audit_context
 from ..models.models import User
 from ..security import get_current_organization, get_current_user
 from ..services.fx_service import FXService
-from ..services.plugin_loader import load_provider
+from ..services.provider_governance_service import ProviderGovernanceError, ProviderGovernanceService
 
 router = APIRouter(prefix="/fx", tags=["fx"])
 _MAX_BACKFILL_DAYS = 31
@@ -30,11 +30,12 @@ def _sync_backfill_date(
 ) -> None:
     """Run one backfill date with an isolated provider and database session."""
 
-    handle = load_provider(provider_key)
-    if "fx" not in handle.metadata.capabilities:
-        raise ValueError(f"Provider '{provider_key}' does not support FX synchronization")
-
     with Session(db.engine, expire_on_commit=False) as session:
+        handle = ProviderGovernanceService(
+            session,
+            organization_id,
+            actor.user_id or 0,
+        ).resolve_provider("fx", provider_key)
         service = FXService(
             session,
             handle.instance,
@@ -98,11 +99,15 @@ def sync_fx(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     try:
-        handle = load_provider(provider_key)
-    except ValueError as exc:  # pragma: no cover - FastAPI integration
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if "fx" not in handle.metadata.capabilities:
-        raise HTTPException(status_code=400, detail=f"Provider '{provider_key}' does not support FX synchronization")
+        if current_user.id is None or org_ctx.organization.id is None:
+            raise HTTPException(status_code=500, detail="Organization context unavailable")
+        handle = ProviderGovernanceService(
+            session,
+            org_ctx.organization.id,
+            current_user.id,
+        ).resolve_provider("fx", provider_key)
+    except ProviderGovernanceError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
 
     if org_ctx.organization.id is None:
         raise HTTPException(status_code=500, detail="Organization id is missing")

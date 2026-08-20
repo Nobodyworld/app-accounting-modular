@@ -76,6 +76,8 @@ files = [
   "src/apps/api/routers/core.py",
   "src/apps/api/security.py",
   "src/apps/api/services/plugin_loader.py",
+  "src/apps/api/services/provider_governance_service.py",
+  "src/apps/api/routers/providers.py",
   "src/apps/api/services/extension_loader.py",
   "src/apps/api/services/health.py",
   "src/apps/extensions/registry.py",
@@ -90,6 +92,7 @@ files = [
   "src/apps/provider_sdk/scaffold.py",
   "src/cli/macli.py",
   "src/cli/provider_sdk.py",
+  "src/apps/web/provider_governance_workspace.py",
 ]
 
 [[tool.mypy.overrides]]

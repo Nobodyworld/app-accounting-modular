@@ -2,6 +2,7 @@ import json
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 from apps.api import main as api_main
 from apps.api.models.models import User
@@ -106,6 +107,11 @@ def _batch() -> ScenarioBatchResult:
 
 def _create_app_without_db(monkeypatch):
     monkeypatch.setattr(api_main, "init_db", lambda: None)
+    monkeypatch.setattr(
+        api_main,
+        "reconcile_trusted_catalog",
+        lambda _session: SimpleNamespace(to_dict=lambda: {}),
+    )
     return api_main.create_app()
 
 
@@ -129,11 +135,16 @@ def test_snapshot_endpoint_returns_payload(monkeypatch) -> None:
             return _result()
 
     orchestrator = DummyOrchestrator()
-    app.dependency_overrides[snapshot_router.get_snapshot_orchestrator] = lambda: orchestrator
+    monkeypatch.setattr(
+        snapshot_router,
+        "get_current_organization",
+        lambda *_args, **_kwargs: SimpleNamespace(organization=SimpleNamespace(id=1)),
+    )
+    app.dependency_overrides[snapshot_router.get_snapshot_orchestrator_factory] = lambda: lambda **_kwargs: orchestrator
     app.dependency_overrides[get_current_user] = _stub_user
 
     with TestClient(app) as client:
-        response = client.get("/snapshot")
+        response = client.get("/snapshot", params={"organization_id": 1})
         assert response.status_code == 200
         payload = response.json()
         assert payload["providers"]["fx"] == "fx:stub"
@@ -143,7 +154,7 @@ def test_snapshot_endpoint_returns_payload(monkeypatch) -> None:
 
         response = client.get(
             "/snapshot",
-            params={"commodity": ["XAG"], "jurisdiction": ["EU"]},
+            params={"organization_id": 1, "commodity": ["XAG"], "jurisdiction": ["EU"]},
         )
         assert response.status_code == 200
         assert orchestrator.calls[-1]["commodity_symbols"] == ["XAG"]
@@ -172,12 +183,18 @@ def test_snapshot_scenarios_endpoint(monkeypatch) -> None:
             return _batch()
 
     orchestrator = DummyOrchestrator()
-    app.dependency_overrides[snapshot_router.get_snapshot_orchestrator] = lambda: orchestrator
+    monkeypatch.setattr(
+        snapshot_router,
+        "get_current_organization",
+        lambda *_args, **_kwargs: SimpleNamespace(organization=SimpleNamespace(id=1)),
+    )
+    app.dependency_overrides[snapshot_router.get_snapshot_orchestrator_factory] = lambda: lambda **_kwargs: orchestrator
     app.dependency_overrides[get_current_user] = _stub_user
 
     with TestClient(app) as client:
         response = client.post(
             "/snapshot/scenarios",
+            params={"organization_id": 1},
             json={
                 "reset_cache_between_runs": True,
                 "scenarios": [

@@ -11,7 +11,7 @@ from ..dependencies import session_with_audit_context
 from ..models.models import User
 from ..security import get_current_organization, get_current_user
 from ..services.market_service import MarketService
-from ..services.plugin_loader import load_provider
+from ..services.provider_governance_service import ProviderGovernanceError, ProviderGovernanceService
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -41,9 +41,15 @@ def sync_prices(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     try:
-        handle = load_provider(provider_key)
-    except ValueError as exc:  # pragma: no cover - FastAPI integration
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if current_user.id is None or org_ctx.organization.id is None:
+            raise HTTPException(status_code=500, detail="Organization context unavailable")
+        handle = ProviderGovernanceService(
+            session,
+            org_ctx.organization.id,
+            current_user.id,
+        ).resolve_provider("market", provider_key)
+    except ProviderGovernanceError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
 
     service = MarketService(
         session,

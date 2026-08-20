@@ -93,14 +93,6 @@ def test_telemetry_endpoint() -> None:
     assert isinstance(payload["extensions"], list)
 
 
-def test_providers_endpoint_exposes_compatibility() -> None:
+def test_health_surface_does_not_expose_public_provider_catalog() -> None:
     response = client.get("/providers")
-    assert response.status_code == 200
-    payload = response.json()
-    assert "providers" in payload
-    providers = payload["providers"]
-    assert isinstance(providers, list)
-    if providers:
-        compat = providers[0]["compatibility"]
-        assert "api_version" in compat
-        assert "status" in compat
+    assert response.status_code == 404

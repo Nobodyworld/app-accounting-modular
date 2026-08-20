@@ -118,10 +118,3 @@ async def health() -> dict[str, Any]:
         "database": database,
         "scheduler": scheduler,
     }
-
-
-@router.get("/providers")
-def providers() -> dict[str, list[dict[str, object]]]:
-    """List provider plugins exposed via the configuration allowlist."""
-
-    return {"providers": list(_provider_snapshot())}
