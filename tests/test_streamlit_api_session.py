@@ -89,10 +89,22 @@ def test_login_requires_refresh_and_session_id_and_never_stores_password() -> No
 def test_refresh_atomically_replaces_both_tokens_and_clears_protected_results() -> None:
     state = _state()
     state["budget_report_payload"] = {"sensitive": "old session"}
+    state["provider_governance_catalog"] = {"organization_id": 7}
     replace_rotated_api_session(state, _result("access-two", "refresh-two"))
     assert state[ACCESS_TOKEN_KEY] == "access-two"
     assert state[REFRESH_TOKEN_KEY] == "refresh-two"
     assert "budget_report_payload" not in state
+    assert "provider_governance_catalog" not in state
+
+
+def test_session_replacement_and_organization_change_clear_provider_governance_state() -> None:
+    state = _state()
+    state["provider_governance_catalog"] = {"organization_id": 7}
+    state["provider_governance_confirmation"] = "old organization"
+    store_api_session(state, _result("access-two", "refresh-two"), email="user@example.com", organization_id=8)
+    assert state[ORGANIZATION_ID_KEY] == 8
+    assert "provider_governance_catalog" not in state
+    assert "provider_governance_confirmation" not in state
 
 
 def test_mismatched_rotated_session_leaves_credentials_unchanged() -> None:
@@ -150,6 +162,7 @@ def test_protected_request_refreshes_and_retries_at_most_once() -> None:
 def test_failed_refresh_clears_authentication_and_protected_state() -> None:
     state = _state()
     state["cashflow_report_payload"] = {"tenant": 7}
+    state["provider_governance_catalog"] = {"organization_id": 7}
     calls = 0
 
     def protected(_headers: dict[str, str]) -> DummyResponse:
@@ -169,6 +182,7 @@ def test_failed_refresh_clears_authentication_and_protected_state() -> None:
     for key in (ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_ID_KEY, AUTH_EMAIL_KEY, ORGANIZATION_ID_KEY):
         assert key not in state
     assert "cashflow_report_payload" not in state
+    assert "provider_governance_catalog" not in state
 
 
 def test_logout_failure_is_sanitized_and_local_clear_removes_all_session_state() -> None:

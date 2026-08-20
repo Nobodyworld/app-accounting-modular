@@ -84,23 +84,58 @@ def fake_runtime(monkeypatch):
     outbound_calls: list[RequestCall] = []
     get_responses: dict[str, DummyResponse] = {}
     post_responses: dict[str, DummyResponse] = {}
+    put_responses: dict[str, DummyResponse] = {}
+    delete_responses: dict[str, DummyResponse] = {}
     token_value = "-".join(("streamlit", "session", "token"))
 
     providers = [
         {
-            "key": "fx:ecb",
+            "provider_key": "fx:ecb",
             "name": "ECB FX",
             "capabilities": ["fx"],
+            "effective": True,
+            "enabled": True,
+            "conforming": True,
+            "credential_ready": True,
+            "credential_requirements": [],
+            "compatibility": {"status": "compatible"},
+            "source": "operator_process_allowlist",
+            "default_capabilities": ["fx"],
+            "policy_revision": 0,
+            "technical": {"checks": []},
+            "next_action": "Provider is available for governed use.",
         },
         {
-            "key": "market:commodities_stub",
+            "provider_key": "market:commodities_stub",
             "name": "Commodity Stub",
             "capabilities": ["market"],
+            "effective": True,
+            "enabled": True,
+            "conforming": True,
+            "credential_ready": True,
+            "credential_requirements": [],
+            "compatibility": {"status": "compatible"},
+            "source": "operator_process_allowlist",
+            "default_capabilities": [],
+            "policy_revision": 0,
+            "technical": {"checks": []},
+            "next_action": "Provider is available for governed use.",
         },
         {
-            "key": "tax:oecd_stub",
+            "provider_key": "tax:oecd_stub",
             "name": "Tax Stub",
             "capabilities": ["tax"],
+            "effective": True,
+            "enabled": True,
+            "conforming": True,
+            "credential_ready": True,
+            "credential_requirements": [],
+            "compatibility": {"status": "compatible"},
+            "source": "operator_process_allowlist",
+            "default_capabilities": [],
+            "policy_revision": 0,
+            "technical": {"checks": []},
+            "next_action": "Provider is available for governed use.",
         },
     ]
 
@@ -135,8 +170,19 @@ def fake_runtime(monkeypatch):
                     "reports": [{"name": "database", "healthy": True, "severity": "critical"}],
                 }
             )
+        if url.endswith("/providers/policies"):
+            return DummyResponse({"organization_id": 7, "policies": [], "defaults": []})
         if url.endswith("/providers"):
-            return DummyResponse({"providers": providers})
+            return DummyResponse({"organization_id": 7, "can_manage": True, "providers": providers})
+        if url.endswith("/snapshot"):
+            calls.append(
+                SnapshotCall(
+                    base_currency=str((params or {}).get("base", "USD")),
+                    commodity_symbols=list((params or {}).get("commodity", [])),
+                    jurisdictions=list((params or {}).get("jurisdiction", [])),
+                )
+            )
+            return DummyResponse(FakeSnapshotResult().as_payload())
         if url.endswith("/reports/budget-vs-actual"):
             return DummyResponse({"summary": {"total_actual": 120.0}})
         if url.endswith("/reports/cashflow-forecast"):
@@ -179,6 +225,34 @@ def fake_runtime(monkeypatch):
         if url.endswith("/snapshot/plans/preview"):
             return DummyResponse({"summary": {"scenario_count": 1}, "plan": {"metadata": {}}})
         return DummyResponse({"ok": True})
+
+    def fake_put(
+        url: str,
+        timeout: int = 5,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        data: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> DummyResponse:
+        outbound_calls.append(RequestCall("PUT", url, headers, data, params, json, timeout))
+        for path, response in put_responses.items():
+            if url.endswith(path):
+                return response
+        return DummyResponse({"revision": 1})
+
+    def fake_delete(
+        url: str,
+        timeout: int = 5,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        data: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> DummyResponse:
+        outbound_calls.append(RequestCall("DELETE", url, headers, data, params, json, timeout))
+        for path, response in delete_responses.items():
+            if url.endswith(path):
+                return response
+        return DummyResponse({"cleared": True})
 
     class FakeSnapshotResult:
         def as_payload(self) -> dict[str, Any]:
@@ -255,6 +329,8 @@ def fake_runtime(monkeypatch):
 
     monkeypatch.setattr("requests.get", fake_get)
     monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.setattr("requests.put", fake_put)
+    monkeypatch.setattr("requests.delete", fake_delete)
     monkeypatch.setattr(snapshot_service, "SnapshotOrchestrator", FakeSnapshotOrchestrator)
     monkeypatch.setenv("API_BASE", "http://fake")
     monkeypatch.setenv("STREAMLIT_TESTING", "1")
@@ -263,6 +339,8 @@ def fake_runtime(monkeypatch):
         outbound_calls=outbound_calls,
         get_responses=get_responses,
         post_responses=post_responses,
+        put_responses=put_responses,
+        delete_responses=delete_responses,
         token_value=token_value,
     )
 
@@ -370,20 +448,23 @@ def test_primary_snapshot_tab_renders(fake_runtime):
     info_content = [el.value for el in at.info]
     assert any("provider catalog" in str(el).lower() for el in info_content + markdown_content)
 
-    # Validate provider controls are present and selectable.
+    assert at.selectbox(key="snapshot_fx_provider_select").disabled is True
+    _login(at)
+
+    # Authenticated provider controls are populated from effective tenant policy.
     assert at.selectbox(key="snapshot_fx_provider_select").value == "fx:ecb"
     assert at.selectbox(key="snapshot_commodity_provider_select").value == "market:commodities_stub"
     assert at.selectbox(key="snapshot_tax_provider_select").value == "tax:oecd_stub"
 
 
-def test_snapshot_remains_public_while_protected_workflows_start_locked(fake_runtime):
-    """Snapshot review remains usable while Scenario Plan Review and utilities are gated."""
+def test_provider_backed_workflows_start_locked(fake_runtime):
+    """Provider-backed workflows remain locked until tenant authentication."""
 
     at = _app_test()
     at.run(timeout=15)
     _store_scenario_plan(at, {"metadata": {"name": "Retained anonymous input"}, "scenarios": []})
 
-    assert at.button(key="snapshot_generate_button").disabled is False
+    assert at.button(key="snapshot_generate_button").disabled is True
     assert at.button(key="scenario_plan_preview_button").disabled is True
     at.button(key="scenario_plan_preview_button").click()
     at.run(timeout=15)
@@ -391,11 +472,12 @@ def test_snapshot_remains_public_while_protected_workflows_start_locked(fake_run
         assert at.button(key=key).disabled is True
 
     public_status = " ".join(str(element.value) for element in [*at.info, *at.caption, *at.warning])
-    assert "Snapshot Review is a public/local evidence workflow" in public_status
-    assert "Scenario Plan Review and Review Utilities require an authenticated API session" in public_status
+    assert "All provider-backed workspaces use the authenticated organization policy" in public_status
     assert "Scenario Plan Review locked" in public_status
     assert "positive organization ID" in public_status
     protected_paths = (
+        "/providers",
+        "/snapshot",
         "/snapshot/plans/preview",
         "/reports/budget-vs-actual",
         "/reports/cashflow-forecast",
@@ -432,6 +514,89 @@ def test_successful_sidebar_login_normalizes_and_unlocks_protected_actions(fake_
     assert at.button(key="scenario_plan_preview_button").disabled is False
 
 
+def test_provider_governance_admin_mutation_confirms_and_uses_revision(fake_runtime):
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+
+    # A newer catalog fetch must not silently replace the revision that was
+    # presented to the administrator's open editor.
+    newer_catalog = dict(at.session_state["provider_governance_catalog"])
+    newer_providers = [dict(provider) for provider in newer_catalog["providers"]]
+    newer_providers[0]["policy_revision"] = 9
+    newer_catalog["providers"] = newer_providers
+    fake_runtime.get_responses["/providers"] = DummyResponse(newer_catalog)
+
+    assert at.button(key="provider_governance_policy_save").disabled is False
+    at.checkbox(key="provider_governance_policy_enabled").set_value(False)
+    at.text_area(key="provider_governance_policy_note").set_value("Bounded administrator review")
+    at.button(key="provider_governance_policy_save").click()
+    at.run(timeout=15)
+
+    mutation = next(call for call in fake_runtime.outbound_calls if call.method == "PUT")
+    assert mutation.url.endswith("/providers/fx:ecb/policy")
+    assert mutation.headers == {"Authorization": f"Bearer {fake_runtime.token_value}"}
+    assert mutation.params == {"organization_id": 7}
+    assert mutation.json == {
+        "enabled": False,
+        "note": "Bounded administrator review",
+        "revision": 0,
+    }
+    assert any("Policy saved for fx:ecb" in str(item.value) for item in at.success)
+
+
+def test_provider_governance_stale_revision_shows_conflict_guidance(fake_runtime):
+    fake_runtime.put_responses["/providers/fx:ecb/policy"] = DummyResponse(
+        {"detail": {"code": "PROVIDER_GOVERNANCE_CONFLICT", "message": "Provider policy revision is stale"}},
+        status_code=409,
+    )
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.button(key="provider_governance_policy_save").click()
+    at.run(timeout=15)
+
+    rendered = _utility_text(at)
+    assert "Revision conflict" in rendered
+    assert "The catalog was refreshed; review and retry" in rendered
+    assert at.session_state["provider_governance_policy_edit_revisions"]["fx:ecb"] == 0
+    assert "traceback" not in rendered.lower()
+
+
+def test_provider_governance_member_view_has_no_mutation_controls(fake_runtime):
+    member_catalog = fake_runtime.get_responses["/providers"] = DummyResponse(
+        {
+            "organization_id": 7,
+            "can_manage": False,
+            "providers": [
+                {
+                    "provider_key": "fx:ecb",
+                    "name": "ECB FX",
+                    "capabilities": ["fx"],
+                    "effective": True,
+                    "enabled": True,
+                    "conforming": True,
+                    "credential_ready": True,
+                    "credential_requirements": [],
+                    "compatibility": {"status": "compatible"},
+                    "source": "operator_process_allowlist",
+                    "default_capabilities": [],
+                    "policy_revision": 0,
+                    "technical": {"checks": []},
+                    "next_action": "Provider is available for governed use.",
+                }
+            ],
+        }
+    )
+    assert member_catalog.status_code == 200
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+
+    assert "provider_governance_policy_save" not in [button.key for button in at.button]
+    assert "Read-only organization member view" in _utility_text(at)
+
+
 def test_failed_sidebar_login_shows_api_detail_and_keeps_utilities_locked(fake_runtime):
     """Failed credentials clear any partial state and retain the actionable API message."""
 
@@ -451,15 +616,15 @@ def test_failed_sidebar_login_shows_api_detail_and_keeps_utilities_locked(fake_r
 
 
 def test_logout_clears_only_api_session_and_relocks_protected_actions(fake_runtime):
-    """Logout uses the shared clear helper without losing public workflow state."""
+    """Logout clears protected provider state while retaining local form inputs."""
 
     at = _app_test()
     at.run(timeout=15)
     at.text_input(key="snapshot_base_input").set_value("EUR")
     at.run(timeout=15)
+    _login(at)
     at.button(key="snapshot_generate_button").click()
     at.run(timeout=20)
-    _login(at)
     plan_bytes = _store_scenario_plan(at, {"metadata": {"name": "Retained plan"}, "scenarios": []})
     at.session_state["scenario_plan_preview"] = {"summary": {"scenario_count": 1}, "plan": {"metadata": {}}}
     at.run(timeout=15)
@@ -472,6 +637,7 @@ def test_logout_clears_only_api_session_and_relocks_protected_actions(fake_runti
         assert key not in at.session_state
     assert at.session_state["snapshot_base_input"] == "EUR"
     assert "snapshot_controls_payload" in at.session_state
+    assert "provider_governance_catalog" not in at.session_state
     assert "scenario_plan_preview" not in at.session_state
     assert at.session_state["scenario_plan_bytes"] == plan_bytes
     assert at.session_state["scenario_plan_name"] == "scenario-plan.json"
@@ -869,6 +1035,7 @@ def test_failed_sync_requests_clear_stale_payloads_and_logout_isolates_tenants(f
 def test_snapshot_request_execution_and_diagnostics(fake_runtime):
     at = _app_test()
     at.run(timeout=15)
+    _login(at)
 
     at.text_input(key="snapshot_base_input").set_value("USD")
     at.run(timeout=10)
@@ -936,25 +1103,16 @@ def test_missing_provider_capability_shows_warning(monkeypatch):
     assert any("Missing provider capabilities" in warning.value for warning in at.warning)
 
 
-def test_provider_loading_failure_is_reported(monkeypatch):
+def test_provider_loading_failure_is_reported(fake_runtime):
     """Providers API failure should surface a clear primary-flow error state."""
 
-    def fake_get(url: str, timeout: int = 5, params: dict[str, Any] | None = None):
-        if url.endswith("/providers"):
-            raise RuntimeError("providers unavailable")
-        if url.endswith("/health"):
-            return DummyResponse({"status": "ok"})
-        if url.endswith("/health/ready"):
-            return DummyResponse({"status": "ok", "reports": []})
-        return DummyResponse({"ok": True})
-
-    monkeypatch.setattr("requests.get", fake_get)
-    monkeypatch.setattr("requests.post", lambda *args, **kwargs: DummyResponse({"ok": True}))
-    monkeypatch.setenv("API_BASE", "http://fake")
-    monkeypatch.setenv("STREAMLIT_TESTING", "1")
+    fake_runtime.get_responses["/providers"] = DummyResponse(
+        {"detail": "Provider catalog unavailable"}, status_code=503
+    )
 
     at = _app_test()
     at.run(timeout=15)
+    _login(at)
 
     assert any("Unable to load provider catalog" in err.value for err in at.error)
 
@@ -963,6 +1121,7 @@ def test_snapshot_tables_render_with_correct_columns(fake_runtime):
     """After successful snapshot, verify FX, commodity, and tax tables render with expected columns."""
     at = _app_test()
     at.run(timeout=15)
+    _login(at)
 
     at.text_input(key="snapshot_base_input").set_value("USD")
     at.run(timeout=10)
@@ -978,27 +1137,23 @@ def test_snapshot_tables_render_with_correct_columns(fake_runtime):
     # Verify that dataframes were rendered (AppTest captures dataframe elements).
     # The app uses st.dataframe() for FX, commodity, and tax tables.
     dataframes = at.dataframe
-    # Provider catalog is shown first (index 0), then FX (1), commodity (2), tax (3), provenance (4), cache (5)
     assert len(dataframes) >= 6, f"Expected at least 6 dataframes, got {len(dataframes)}"
 
-    # Verify the second dataframe (FX table) has expected columns (index 1 after provider catalog).
-    fx_df = dataframes[1].value
+    fx_df = next(frame.value for frame in dataframes if "Base" in frame.value.columns)
     assert "Base" in fx_df.columns
     assert "Quote" in fx_df.columns
     assert "Rate" in fx_df.columns
     assert "As Of" in fx_df.columns
     assert len(fx_df) == 1
 
-    # Verify the third dataframe (commodity table) has expected columns (index 2).
-    commodity_df = dataframes[2].value
+    commodity_df = next(frame.value for frame in dataframes if "Symbol" in frame.value.columns)
     assert "Symbol" in commodity_df.columns
     assert "Price" in commodity_df.columns
     assert "Currency" in commodity_df.columns
     assert "As Of" in commodity_df.columns
     assert len(commodity_df) == 1
 
-    # Verify the fourth dataframe (tax table) has expected columns (index 3).
-    tax_df = dataframes[3].value
+    tax_df = next(frame.value for frame in dataframes if "Jurisdiction" in frame.value.columns)
     assert "Jurisdiction" in tax_df.columns
     assert "Rate" in tax_df.columns
     assert "Description" in tax_df.columns
@@ -1011,6 +1166,7 @@ def test_snapshot_provenance_and_diagnostics_rendered(fake_runtime):
     """Verify provider provenance, cache diagnostics, health/readiness, and journal control are visible."""
     at = _app_test()
     at.run(timeout=15)
+    _login(at)
 
     at.text_input(key="snapshot_base_input").set_value("USD")
     at.run(timeout=10)
@@ -1037,10 +1193,9 @@ def test_snapshot_provenance_and_diagnostics_rendered(fake_runtime):
         "Journal control section should be rendered"
     )
 
-    # Verify cache stats dataframe is present (index 5: provider table, FX, commodity, tax, provenance, cache).
     dataframes = at.dataframe
     assert len(dataframes) >= 6, f"Expected at least 6 dataframes, got {len(dataframes)}"
-    cache_df = dataframes[5].value
+    cache_df = next(frame.value for frame in dataframes if "Cache" in frame.value.columns)
     assert "Cache" in cache_df.columns
     assert "Size" in cache_df.columns
     assert "Hits" in cache_df.columns
@@ -1051,6 +1206,7 @@ def test_case_study_link_is_visible(fake_runtime):
     """Verify the foreign-currency case-study link is rendered after successful snapshot."""
     at = _app_test()
     at.run(timeout=15)
+    _login(at)
 
     at.text_input(key="snapshot_base_input").set_value("USD")
     at.run(timeout=10)
@@ -1067,52 +1223,16 @@ def test_case_study_link_is_visible(fake_runtime):
     assert case_study_present, "Case study link should be visible after successful snapshot"
 
 
-def test_snapshot_generation_failure_shows_error_state(fake_runtime, monkeypatch):
-    """When SnapshotOrchestrator.build_snapshot() raises, UI should display error state and clear prior success."""
+def test_snapshot_generation_failure_shows_error_state(fake_runtime):
+    """A sanitized governed snapshot API failure clears prior success."""
 
-    import sys
-    from pathlib import Path
-
-    src_path = str(Path(__file__).parent.parent / "src")
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
-
-    # Patch the orchestrator to raise on build_snapshot.
-    from apps.api.services import snapshot_service
-
-    class FailingSnapshotOrchestrator:
-        def __init__(self, **_: Any) -> None:
-            pass
-
-        def build_snapshot(self, **_: Any) -> None:
-            raise RuntimeError("Orchestrator failed: provider connectivity lost")
-
-    monkeypatch.setattr(snapshot_service, "SnapshotOrchestrator", FailingSnapshotOrchestrator)
-
-    def fake_get(url: str, timeout: int = 5, params: dict[str, Any] | None = None):
-        if url.endswith("/health"):
-            return DummyResponse({"status": "ok"})
-        if url.endswith("/health/ready"):
-            return DummyResponse({"status": "ok", "reports": []})
-        if url.endswith("/providers"):
-            return DummyResponse(
-                {
-                    "providers": [
-                        {"key": "fx:ecb", "name": "ECB FX", "capabilities": ["fx"]},
-                        {"key": "market:commodities_stub", "name": "Commodity Stub", "capabilities": ["market"]},
-                        {"key": "tax:oecd_stub", "name": "Tax Stub", "capabilities": ["tax"]},
-                    ]
-                }
-            )
-        return DummyResponse({"ok": True})
-
-    monkeypatch.setattr("requests.get", fake_get)
-    monkeypatch.setattr("requests.post", lambda *args, **kwargs: DummyResponse({"ok": True}))
-    monkeypatch.setenv("API_BASE", "http://fake")
-    monkeypatch.setenv("STREAMLIT_TESTING", "1")
-
+    fake_runtime.get_responses["/snapshot"] = DummyResponse(
+        {"detail": {"code": "PROVIDER_GOVERNANCE_CONFLICT", "message": "Provider construction failed"}},
+        status_code=409,
+    )
     at = _app_test()
     at.run(timeout=15)
+    _login(at)
 
     at.text_input(key="snapshot_base_input").set_value("USD")
     at.run(timeout=10)
@@ -1135,43 +1255,12 @@ def test_snapshot_generation_failure_shows_error_state(fake_runtime, monkeypatch
     )
 
 
-def test_stale_success_cleared_after_failed_snapshot(fake_runtime, monkeypatch):
-    """After a successful snapshot followed by a failed snapshot, stale success state should be cleared."""
-
-    import sys
-    from pathlib import Path
-
-    src_path = str(Path(__file__).parent.parent / "src")
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
-
-    from apps.api.services import snapshot_service
-
-    # First run succeeds with normal orchestrator.
-    def fake_get_success(url: str, timeout: int = 5, params: dict[str, Any] | None = None):
-        if url.endswith("/health"):
-            return DummyResponse({"status": "ok"})
-        if url.endswith("/health/ready"):
-            return DummyResponse({"status": "ok", "reports": []})
-        if url.endswith("/providers"):
-            return DummyResponse(
-                {
-                    "providers": [
-                        {"key": "fx:ecb", "name": "ECB FX", "capabilities": ["fx"]},
-                        {"key": "market:commodities_stub", "name": "Commodity Stub", "capabilities": ["market"]},
-                        {"key": "tax:oecd_stub", "name": "Tax Stub", "capabilities": ["tax"]},
-                    ]
-                }
-            )
-        return DummyResponse({"ok": True})
-
-    monkeypatch.setattr("requests.get", fake_get_success)
-    monkeypatch.setattr("requests.post", lambda *args, **kwargs: DummyResponse({"ok": True}))
-    monkeypatch.setenv("API_BASE", "http://fake")
-    monkeypatch.setenv("STREAMLIT_TESTING", "1")
+def test_stale_success_cleared_after_failed_snapshot(fake_runtime):
+    """After a successful API snapshot, a failed rerun clears stale success."""
 
     at = _app_test()
     at.run(timeout=15)
+    _login(at)
 
     # First successful run.
     at.text_input(key="snapshot_base_input").set_value("USD")
@@ -1187,15 +1276,10 @@ def test_stale_success_cleared_after_failed_snapshot(fake_runtime, monkeypatch):
     success_msgs = [el.value for el in at.success]
     assert any("Snapshot review generated" in str(el) for el in success_msgs), "First snapshot should succeed"
 
-    # Now patch orchestrator to fail.
-    class FailingSnapshotOrchestrator:
-        def __init__(self, **_: Any) -> None:
-            pass
-
-        def build_snapshot(self, **_: Any) -> None:
-            raise RuntimeError("Provider failure")
-
-    monkeypatch.setattr(snapshot_service, "SnapshotOrchestrator", FailingSnapshotOrchestrator)
+    fake_runtime.get_responses["/snapshot"] = DummyResponse(
+        {"detail": {"code": "PROVIDER_GOVERNANCE_CONFLICT", "message": "Provider construction failed"}},
+        status_code=409,
+    )
 
     # Second run fails.
     at.button(key="snapshot_generate_button").click()

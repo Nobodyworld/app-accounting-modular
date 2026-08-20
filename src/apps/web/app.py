@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tomllib
+from collections.abc import MutableMapping
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import BytesIO
@@ -17,13 +18,13 @@ import requests
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-from apps.api.services.snapshot_service import SnapshotOrchestrator
 from apps.modular_accounting.domain import LedgerEntry, Money, Transaction
 from apps.web.api_session import (
     ACCESS_TOKEN_KEY,
     AUTH_EMAIL_KEY,
     ORGANIZATION_ID_KEY,
     api_error_detail,
+    auth_headers,
     authenticated_workspace_ready,
     clear_api_session,
     request_access_token,
@@ -32,6 +33,7 @@ from apps.web.api_session import (
     store_api_session,
 )
 from apps.web.close_workspace import render_close_workspace
+from apps.web.provider_governance_workspace import render_provider_governance_workspace
 from apps.web.upload_limits import (
     clear_budget_upload_state,
     clear_scenario_upload_state,
@@ -85,14 +87,20 @@ def _load_readiness() -> tuple[dict[str, Any] | None, str | None]:
         return None, str(exc)
 
 
-@st.cache_data(show_spinner=False)
-def _load_providers() -> tuple[list[dict[str, Any]], str | None]:
+def _load_providers(access_token: str | None, organization_id: int | None) -> tuple[list[dict[str, Any]], str | None]:
+    if not authenticated_workspace_ready(access_token, organization_id):
+        return [], None
     try:
-        response = requests.get(f"{API}/providers", timeout=5)
+        response = requests.get(
+            f"{API}/providers",
+            params={"organization_id": int(organization_id or 0)},
+            headers=auth_headers(access_token),
+            timeout=5,
+        )
         response.raise_for_status()
         payload = response.json()
         providers = payload.get("providers", []) if isinstance(payload, dict) else []
-        return providers, None
+        return [provider for provider in providers if isinstance(provider, dict) and provider.get("effective")], None
     except Exception as exc:  # pragma: no cover - runtime diagnostics
         return [], str(exc)
 
@@ -142,6 +150,8 @@ def _format_age(seconds_value: Any) -> str:
 
 def _build_snapshot(
     *,
+    state: MutableMapping[str, Any],
+    organization_id: int,
     base_currency: str,
     commodity_symbols: list[str],
     jurisdictions: list[str],
@@ -150,19 +160,32 @@ def _build_snapshot(
     tax_provider_key: str,
 ) -> tuple[dict[str, Any] | None, str | None]:
     try:
-        orchestrator = SnapshotOrchestrator(
-            fx_provider_key=fx_provider_key,
-            commodity_provider_key=commodity_provider_key,
-            tax_provider_key=tax_provider_key,
+        response, session_error = request_with_one_refresh(
+            state,
+            API,
+            lambda request_headers: requests.get(
+                f"{API}/snapshot",
+                params={
+                    "organization_id": organization_id,
+                    "base": base_currency,
+                    "commodity": commodity_symbols,
+                    "jurisdiction": jurisdictions,
+                    "fx_provider_key": fx_provider_key,
+                    "commodity_provider_key": commodity_provider_key,
+                    "tax_provider_key": tax_provider_key,
+                },
+                headers=request_headers,
+                timeout=60,
+            ),
+            post=requests.post,
         )
-        result = orchestrator.build_snapshot(
-            base_currency=base_currency,
-            commodity_symbols=commodity_symbols,
-            jurisdictions=jurisdictions,
-        )
-        return result.as_payload(), None
-    except Exception as exc:  # pragma: no cover - runtime diagnostics
-        return None, str(exc)
+        if session_error:
+            return None, session_error
+        return _protected_response_payload(response)
+    except requests.RequestException:
+        return None, "Snapshot service unavailable."
+    except Exception:  # pragma: no cover - defensive UI boundary
+        return None, "Snapshot request could not be completed."
 
 
 def _journal_control_status() -> dict[str, Any]:
@@ -460,7 +483,7 @@ with st.sidebar:
         if isinstance(logout_warning, str) and logout_warning:
             st.warning(logout_warning)
         st.caption(
-            "Snapshot Review remains public/local. Scenario Plan Review and Review Utilities "
+            "Provider Governance, Snapshot Review, Scenario Plan Review, and Review Utilities "
             "require sign-in and a positive organization ID."
         )
         login_error = st.session_state.get("api_login_error")
@@ -481,27 +504,33 @@ protected_action_help = (
     else None
 )
 
-st.info(
-    "Snapshot Review is a public/local evidence workflow. Scenario Plan Review and Review "
-    "Utilities require an authenticated API session and positive organization ID."
-)
+st.info("All provider-backed workspaces use the authenticated organization policy enforced by the API.")
 
 health_data, health_error = _load_health()
 ready_data, ready_error = _load_readiness()
-providers_payload, providers_error = _load_providers()
-providers_by_key = {entry["key"]: entry for entry in providers_payload if isinstance(entry, dict) and entry.get("key")}
+providers_payload, providers_error = _load_providers(access_token, organization_id)
+providers_by_key = {
+    entry["provider_key"]: entry for entry in providers_payload if isinstance(entry, dict) and entry.get("provider_key")
+}
 
-close_tab, snapshot_tab, utility_tab, plan_tab = st.tabs(
-    ["Close Workspace", "Snapshot Review", "Review Utilities", "Scenario Plans"]
+close_tab, provider_tab, snapshot_tab, utility_tab, plan_tab = st.tabs(
+    ["Close Workspace", "Provider Governance", "Snapshot Review", "Review Utilities", "Scenario Plans"]
 )
 
 with close_tab:
     render_close_workspace(access_token=access_token, organization_id=organization_id)
 
+with provider_tab:
+    render_provider_governance_workspace(
+        api_base=API,
+        access_token=access_token,
+        organization_id=organization_id,
+    )
+
 with snapshot_tab:
     st.subheader("Snapshot Review")
     st.caption(
-        "Evidence-first flow: choose controlled providers, generate a financial snapshot, "
+        "Evidence-first flow: choose organization-effective providers, generate a financial snapshot, "
         "then review source provenance, freshness, readiness, and journal-control status."
     )
     st.info(
@@ -512,6 +541,8 @@ with snapshot_tab:
     if providers_error:
         st.error(f"Unable to load provider catalog from {API}/providers: {providers_error}")
         st.info("Snapshot generation is disabled until provider metadata can be loaded.")
+    elif not protected_ready:
+        st.warning("Snapshot Review is locked until an authenticated organization session is available.")
 
     if providers_by_key:
         provider_frame = pd.DataFrame(
@@ -578,6 +609,14 @@ with snapshot_tab:
         commodity_options = _provider_options("market", providers_by_key)
         tax_options = _provider_options("tax", providers_by_key)
 
+        for widget_key, options in (
+            ("snapshot_fx_provider_select", fx_options),
+            ("snapshot_commodity_provider_select", commodity_options),
+            ("snapshot_tax_provider_select", tax_options),
+        ):
+            if options and st.session_state.get(widget_key) not in options:
+                st.session_state[widget_key] = options[0]
+
         fx_provider = st.selectbox(
             "FX provider",
             options=fx_options,
@@ -614,7 +653,7 @@ with snapshot_tab:
         if missing_capabilities:
             st.warning(f"Missing provider capabilities: {', '.join(missing_capabilities)}")
 
-        can_generate = not currency_error and not missing_capabilities and bool(providers_by_key)
+        can_generate = protected_ready and not currency_error and not missing_capabilities and bool(providers_by_key)
         if st.button(
             "Generate consolidated snapshot",
             key="snapshot_generate_button",
@@ -626,6 +665,8 @@ with snapshot_tab:
                 st.session_state.pop("snapshot_controls_payload", None)
             else:
                 built_snapshot_payload, snapshot_error = _build_snapshot(
+                    state=st.session_state,
+                    organization_id=int(organization_id),
                     base_currency=base_currency,
                     commodity_symbols=commodity_symbols,
                     jurisdictions=jurisdictions,
