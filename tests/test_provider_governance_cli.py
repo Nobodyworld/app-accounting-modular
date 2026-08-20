@@ -69,3 +69,47 @@ def test_operator_commands_expose_no_tenant_module_registration_option(cli_engin
     )
     assert result.exit_code == 2
     assert "No such option" in result.output
+
+
+def test_operator_human_readable_reports_cover_current_and_drift_states(
+    cli_engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CliRunner()
+    reconciled = runner.invoke(sdk_cli.provider_sdk_group, ["governance-reconcile"])
+    assert reconciled.exit_code == 0, reconciled.output
+    assert "Changed:" in reconciled.output
+    assert "Unchanged:" in reconciled.output
+    assert "Drifted: -" in reconciled.output
+    assert "Removed from process trust: -" in reconciled.output
+
+    current = runner.invoke(sdk_cli.provider_sdk_group, ["governance-validate"])
+    assert current.exit_code == 0, current.output
+    assert "fx:ecb: PASS (current)" in current.output
+
+    monkeypatch.setattr(
+        sdk_cli,
+        "validate_trusted_catalog",
+        lambda _session: {
+            "valid": False,
+            "reports": [
+                {
+                    "provider_key": "fx:ecb",
+                    "valid": False,
+                    "codes": ["registration.configuration_drift"],
+                }
+            ],
+        },
+    )
+    drifted = runner.invoke(sdk_cli.provider_sdk_group, ["governance-validate"])
+    assert drifted.exit_code == 1
+    assert "fx:ecb: FAIL (registration.configuration_drift)" in drifted.output
+
+    exported = runner.invoke(
+        sdk_cli.provider_sdk_group,
+        ["governance-export", "--organization-id", "17", "--format", "table"],
+    )
+    assert exported.exit_code == 0, exported.output
+    assert "Organization: 17" in exported.output
+    assert "Evidence SHA-256:" in exported.output
+    assert "fx:ecb: EFFECTIVE" in exported.output

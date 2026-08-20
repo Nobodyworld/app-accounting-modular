@@ -156,6 +156,50 @@ def test_admin_policy_default_cas_and_atomic_audit(governance_api) -> None:
         json={"provider_key": "fx:ecb", "revision": 0},
     )
     assert selected.status_code == 200, selected.text
+    assert selected.json()["revision"] == 1
+
+    unsupported = client.put(
+        "/providers/defaults/not-a-capability",
+        params=params,
+        headers=headers,
+        json={"provider_key": "fx:ecb", "revision": 0},
+    )
+    assert unsupported.status_code == 422
+    assert unsupported.json()["detail"]["code"] == "PROVIDER_GOVERNANCE_VALIDATION"
+
+    changed = client.put(
+        "/providers/defaults/fx",
+        params=params,
+        headers=headers,
+        json={"provider_key": "fx:openexchangerates", "revision": 1},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["revision"] == 2
+    assert changed.json()["provider_key"] == "fx:openexchangerates"
+
+    stale_clear = client.delete(
+        "/providers/defaults/fx",
+        params={**params, "revision": 1},
+        headers=headers,
+    )
+    assert stale_clear.status_code == 409
+    assert stale_clear.json()["detail"]["code"] == "PROVIDER_GOVERNANCE_CONFLICT"
+
+    cleared = client.delete(
+        "/providers/defaults/fx",
+        params={**params, "revision": 2},
+        headers=headers,
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json() == {"capability": "fx", "cleared": True, "revision": 2}
+
+    reselected = client.put(
+        "/providers/defaults/fx",
+        params=params,
+        headers=headers,
+        json={"provider_key": "fx:ecb", "revision": 0},
+    )
+    assert reselected.status_code == 200, reselected.text
     disabled = client.put(
         "/providers/fx:ecb/policy",
         params=params,
@@ -178,7 +222,7 @@ def test_admin_policy_default_cas_and_atomic_audit(governance_api) -> None:
         )
         assert policy.enabled is False
         assert policy.revision == 2
-        assert len(audits) == 3
+        assert len(audits) == 6
         assert policy.audit_reference == str(audits[-1].id)
 
 

@@ -563,6 +563,81 @@ def test_provider_governance_stale_revision_shows_conflict_guidance(fake_runtime
     assert "traceback" not in rendered.lower()
 
 
+def test_provider_governance_admin_sets_capability_default(fake_runtime):
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.selectbox(key="provider_governance_default_capability").set_value("fx")
+    at.run(timeout=15)
+    at.button(key="provider_governance_default_set").click()
+    at.run(timeout=15)
+
+    mutation = next(
+        call
+        for call in fake_runtime.outbound_calls
+        if call.method == "PUT" and call.url.endswith("/providers/defaults/fx")
+    )
+    assert mutation.params == {"organization_id": 7}
+    assert mutation.json == {"provider_key": "fx:ecb", "revision": 0}
+    assert any("Default for fx set to fx:ecb" in str(item.value) for item in at.success)
+
+
+def test_provider_governance_admin_clears_capability_default(fake_runtime):
+    fake_runtime.get_responses["/providers/policies"] = DummyResponse(
+        {
+            "organization_id": 7,
+            "policies": [],
+            "defaults": [
+                {
+                    "capability": "fx",
+                    "provider_key": "fx:ecb",
+                    "revision": 4,
+                    "audit_reference": "41",
+                    "effective": True,
+                }
+            ],
+        }
+    )
+    fake_runtime.delete_responses["/providers/defaults/fx"] = DummyResponse(
+        {"capability": "fx", "cleared": True, "revision": 4}
+    )
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.selectbox(key="provider_governance_default_capability").set_value("fx")
+    at.run(timeout=15)
+    at.button(key="provider_governance_default_clear").click()
+    at.run(timeout=15)
+
+    mutation = next(
+        call
+        for call in fake_runtime.outbound_calls
+        if call.method == "DELETE" and call.url.endswith("/providers/defaults/fx")
+    )
+    assert mutation.params == {"organization_id": 7, "revision": 4}
+    assert any("Default for fx cleared" in str(item.value) for item in at.success)
+
+
+def test_provider_governance_default_conflict_refreshes_revision(fake_runtime):
+    fake_runtime.put_responses["/providers/defaults/fx"] = DummyResponse(
+        {"detail": {"code": "PROVIDER_GOVERNANCE_CONFLICT", "message": "Provider default revision is stale"}},
+        status_code=409,
+    )
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+    at.selectbox(key="provider_governance_default_capability").set_value("fx")
+    at.run(timeout=15)
+    at.button(key="provider_governance_default_set").click()
+    at.run(timeout=15)
+
+    rendered = _utility_text(at)
+    assert "Revision conflict" in rendered
+    assert "Provider default revision is stale" in rendered
+    assert at.session_state["provider_governance_default_edit_revisions"]["fx"] == 0
+    assert "traceback" not in rendered.lower()
+
+
 def test_provider_governance_member_view_has_no_mutation_controls(fake_runtime):
     member_catalog = fake_runtime.get_responses["/providers"] = DummyResponse(
         {
