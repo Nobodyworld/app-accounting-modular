@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-08-21: Corrected the v0.4 Streamlit boundary so Snapshot Review remains a public/local controlled demonstration backed by process-trusted conforming providers and the local orchestrator, while Provider Governance and authenticated tenant API provider resolution remain organization-scoped.
+
 - 2026-08-20: Implemented the v0.4 provider-catalog governance candidate for issue #145 / draft PR #146: safe persistent trusted-registration evidence; tenant policy and deterministic capability defaults; CAS/audit transactions; allowlist-enforced resolution; credential-presence-only readiness; protected API/Streamlit administration; operator reconciliation/validation/export; snapshot provenance; security regressions; and explicit critical coverage. Exact-head acceptance remains pending; this is not a marketplace or certification claim.
 
 ## Unreleased

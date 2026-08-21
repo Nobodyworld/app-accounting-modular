@@ -72,9 +72,11 @@ Persistence is therefore a **narrowing control plane**, not a second allowlist t
 └───────────────────────┬──────────────────────────┬────────────────────┘
                         │                          │
                         ▼                          ▼
-              FastAPI `/providers`       Existing provider-backed paths
-              + Streamlit workspace      FX / market / tax / snapshot / ...
+              FastAPI `/providers`       Protected tenant API paths
+              + governance workspace     FX / market / tax / snapshot / ...
 ```
+
+The public/local Streamlit **Snapshot Review** is deliberately outside that tenant-policy path. It derives a safe selector from current process-trusted provider descriptors, filters for structural conformance and compatibility, and constructs the selected provider through the existing allowlist/conformance loader. It does not call `/providers`, read persisted organization policy/defaults, or claim tenant-governed selection. Signing in unlocks protected workspaces but does not change Snapshot Review semantics.
 
 ## Persistent model responsibilities
 
@@ -243,6 +245,8 @@ Global/operator trust changes should remain CLI/local configuration work unless 
 ## Streamlit boundary
 
 The Provider Governance workspace should render API-derived state and must not independently recompute provider eligibility.
+
+Provider Governance is authenticated and organization-scoped. By contrast, Snapshot Review remains a public/local controlled demonstration backed only by current process trust and the local `SnapshotOrchestrator`. Anonymous users cannot inspect tenant governance state, and the local selector does not expose organization defaults. Authenticated tenant `/snapshot` requests remain governed by the server-side organization resolver; they are a separate path from the public Streamlit workflow.
 
 The UI should prioritize:
 

@@ -26,6 +26,8 @@ python -m cli.macli provider-sdk governance-export --organization-id 1 --format 
 
 A validation failure or quarantined drift is an operator review boundary. Correct the process configuration or review and explicitly accept the intended identity change; do not edit database fingerprints, inject module paths, or weaken conformance. A removed process-allowlist key is non-executable immediately. Governance export is bounded and secret-free; credential booleans do not prove remote service health.
 
+The public/local Streamlit Snapshot Review uses current process-trusted, conforming providers directly through the local orchestrator and is not an organization-governance operation. `/providers`, tenant `/snapshot`, FX, market, and tax API operations remain authenticated and organization-scoped. Operators should not interpret a local Snapshot Review selection as an organization default or policy decision.
+
 ## Tracing
 
 - Tracing is configured via `apps.observability.tracing.configure_tracing`.

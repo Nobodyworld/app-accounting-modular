@@ -78,9 +78,10 @@ def fake_runtime(monkeypatch):
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
 
-    from apps.api.services import snapshot_service
+    from apps.api.services import plugin_loader, snapshot_service
 
     calls: list[SnapshotCall] = []
+    snapshot_errors: list[Exception] = []
     outbound_calls: list[RequestCall] = []
     get_responses: dict[str, DummyResponse] = {}
     post_responses: dict[str, DummyResponse] = {}
@@ -138,6 +139,24 @@ def fake_runtime(monkeypatch):
             "next_action": "Provider is available for governed use.",
         },
     ]
+
+    def fake_provider_descriptors(capability: str | None = None) -> list[SimpleNamespace]:
+        descriptors = [
+            SimpleNamespace(
+                metadata=SimpleNamespace(
+                    key=provider["provider_key"],
+                    name=provider["name"],
+                    description=None,
+                    capabilities=tuple(provider["capabilities"]),
+                ),
+                version="0.3.0",
+                conformance=SimpleNamespace(passed=True),
+                compatibility=SimpleNamespace(status="compatible"),
+            )
+            for provider in providers
+            if capability is None or capability in provider["capabilities"]
+        ]
+        return descriptors
 
     def fake_get(
         url: str,
@@ -318,6 +337,8 @@ def fake_runtime(monkeypatch):
             commodity_symbols: list[str] | None = None,
             jurisdictions: list[str] | None = None,
         ) -> FakeSnapshotResult:
+            if snapshot_errors:
+                raise snapshot_errors.pop(0)
             calls.append(
                 SnapshotCall(
                     base_currency=base_currency,
@@ -331,11 +352,13 @@ def fake_runtime(monkeypatch):
     monkeypatch.setattr("requests.post", fake_post)
     monkeypatch.setattr("requests.put", fake_put)
     monkeypatch.setattr("requests.delete", fake_delete)
+    monkeypatch.setattr(plugin_loader, "provider_descriptors", fake_provider_descriptors)
     monkeypatch.setattr(snapshot_service, "SnapshotOrchestrator", FakeSnapshotOrchestrator)
     monkeypatch.setenv("API_BASE", "http://fake")
     monkeypatch.setenv("STREAMLIT_TESTING", "1")
     return SimpleNamespace(
         calls=calls,
+        snapshot_errors=snapshot_errors,
         outbound_calls=outbound_calls,
         get_responses=get_responses,
         post_responses=post_responses,
@@ -448,23 +471,36 @@ def test_primary_snapshot_tab_renders(fake_runtime):
     info_content = [el.value for el in at.info]
     assert any("provider catalog" in str(el).lower() for el in info_content + markdown_content)
 
-    assert at.selectbox(key="snapshot_fx_provider_select").disabled is True
+    assert at.selectbox(key="snapshot_fx_provider_select").disabled is False
+    public_values = (
+        at.selectbox(key="snapshot_fx_provider_select").value,
+        at.selectbox(key="snapshot_commodity_provider_select").value,
+        at.selectbox(key="snapshot_tax_provider_select").value,
+    )
     _login(at)
 
-    # Authenticated provider controls are populated from effective tenant policy.
-    assert at.selectbox(key="snapshot_fx_provider_select").value == "fx:ecb"
-    assert at.selectbox(key="snapshot_commodity_provider_select").value == "market:commodities_stub"
-    assert at.selectbox(key="snapshot_tax_provider_select").value == "tax:oecd_stub"
+    # Signing in unlocks governance but does not switch Snapshot Review to tenant semantics.
+    assert public_values == ("fx:ecb", "market:commodities_stub", "tax:oecd_stub")
+    assert (
+        at.selectbox(key="snapshot_fx_provider_select").value,
+        at.selectbox(key="snapshot_commodity_provider_select").value,
+        at.selectbox(key="snapshot_tax_provider_select").value,
+    ) == public_values
 
 
-def test_provider_backed_workflows_start_locked(fake_runtime):
-    """Provider-backed workflows remain locked until tenant authentication."""
+def test_snapshot_remains_public_while_protected_workflows_start_locked(fake_runtime):
+    """Public Snapshot Review never requires tenant discovery or construction."""
 
     at = _app_test()
     at.run(timeout=15)
     _store_scenario_plan(at, {"metadata": {"name": "Retained anonymous input"}, "scenarios": []})
 
-    assert at.button(key="snapshot_generate_button").disabled is True
+    assert at.button(key="snapshot_generate_button").disabled is False
+    assert at.selectbox(key="snapshot_fx_provider_select").disabled is False
+    at.button(key="snapshot_generate_button").click()
+    at.run(timeout=20)
+    assert "snapshot_controls_payload" in at.session_state
+    assert fake_runtime.calls
     assert at.button(key="scenario_plan_preview_button").disabled is True
     at.button(key="scenario_plan_preview_button").click()
     at.run(timeout=15)
@@ -472,7 +508,8 @@ def test_provider_backed_workflows_start_locked(fake_runtime):
         assert at.button(key=key).disabled is True
 
     public_status = " ".join(str(element.value) for element in [*at.info, *at.caption, *at.warning])
-    assert "All provider-backed workspaces use the authenticated organization policy" in public_status
+    assert "Snapshot Review remains public/local" in public_status
+    assert "Provider Governance is locked" in public_status
     assert "Scenario Plan Review locked" in public_status
     assert "positive organization ID" in public_status
     protected_paths = (
@@ -485,6 +522,21 @@ def test_provider_backed_workflows_start_locked(fake_runtime):
         "/market/sync",
     )
     assert not any(call.url.endswith(protected_paths) for call in fake_runtime.outbound_calls)
+
+
+def test_authenticated_snapshot_stays_local_while_governance_uses_tenant_api(fake_runtime):
+    at = _app_test()
+    at.run(timeout=15)
+    _login(at)
+
+    assert any(call.url.endswith("/providers") for call in fake_runtime.outbound_calls)
+    at.button(key="snapshot_generate_button").click()
+    at.run(timeout=20)
+
+    assert fake_runtime.calls
+    assert not any(call.url.endswith("/snapshot") for call in fake_runtime.outbound_calls)
+    assert at.session_state["snapshot_controls_params"]["selection_scope"] == "public_local_process_trust"
+    assert at.session_state["snapshot_controls_params"]["organization_policy_applied"] is False
 
 
 def test_successful_sidebar_login_normalizes_and_unlocks_protected_actions(fake_runtime):
@@ -1146,26 +1198,43 @@ def test_invalid_currency_blocks_snapshot(fake_runtime):
 def test_missing_provider_capability_shows_warning(monkeypatch):
     """When provider capabilities are missing, generation should be disabled with a warning."""
 
+    from apps.api.services import plugin_loader
+
+    def missing_descriptors(capability: str | None = None) -> list[SimpleNamespace]:
+        descriptors = [
+            SimpleNamespace(
+                metadata=SimpleNamespace(
+                    key="fx:ecb",
+                    name="ECB FX",
+                    description=None,
+                    capabilities=("fx",),
+                ),
+                version="0.3.0",
+                conformance=SimpleNamespace(passed=True),
+                compatibility=SimpleNamespace(status="compatible"),
+            ),
+            SimpleNamespace(
+                metadata=SimpleNamespace(
+                    key="market:commodities_stub",
+                    name="Commodity Stub",
+                    description=None,
+                    capabilities=("market",),
+                ),
+                version="0.3.0",
+                conformance=SimpleNamespace(passed=True),
+                compatibility=SimpleNamespace(status="compatible"),
+            ),
+        ]
+        return [item for item in descriptors if capability is None or capability in item.metadata.capabilities]
+
     def fake_get(url: str, timeout: int = 5, params: dict[str, Any] | None = None):
         if url.endswith("/health"):
             return DummyResponse({"status": "ok"})
         if url.endswith("/health/ready"):
             return DummyResponse({"status": "ok", "reports": []})
-        if url.endswith("/providers"):
-            return DummyResponse(
-                {
-                    "providers": [
-                        {"key": "fx:ecb", "name": "ECB FX", "capabilities": ["fx"]},
-                        {
-                            "key": "market:commodities_stub",
-                            "name": "Commodity Stub",
-                            "capabilities": ["market"],
-                        },
-                    ]
-                }
-            )
         return DummyResponse({"ok": True})
 
+    monkeypatch.setattr(plugin_loader, "provider_descriptors", missing_descriptors)
     monkeypatch.setattr("requests.get", fake_get)
     monkeypatch.setattr("requests.post", lambda *args, **kwargs: DummyResponse({"ok": True}))
     monkeypatch.setenv("API_BASE", "http://fake")
@@ -1178,18 +1247,24 @@ def test_missing_provider_capability_shows_warning(monkeypatch):
     assert any("Missing provider capabilities" in warning.value for warning in at.warning)
 
 
-def test_provider_loading_failure_is_reported(fake_runtime):
-    """Providers API failure should surface a clear primary-flow error state."""
+def test_local_provider_catalog_failure_is_sanitized(fake_runtime, monkeypatch):
+    """Local descriptor failure disables generation without leaking configuration details."""
 
-    fake_runtime.get_responses["/providers"] = DummyResponse(
-        {"detail": "Provider catalog unavailable"}, status_code=503
-    )
+    from apps.api.services import plugin_loader
+
+    def fail_descriptors(capability: str | None = None) -> list[SimpleNamespace]:
+        raise RuntimeError("C:\\private\\provider.py SECRET_PROVIDER_VALUE")
+
+    monkeypatch.setattr(plugin_loader, "provider_descriptors", fail_descriptors)
 
     at = _app_test()
     at.run(timeout=15)
-    _login(at)
 
-    assert any("Unable to load provider catalog" in err.value for err in at.error)
+    rendered = _utility_text(at)
+    assert "Unable to inspect the local process-trusted provider catalog" in rendered
+    assert "private" not in rendered
+    assert "SECRET_PROVIDER_VALUE" not in rendered
+    assert at.button(key="snapshot_generate_button").disabled is True
 
 
 def test_snapshot_tables_render_with_correct_columns(fake_runtime):
@@ -1299,15 +1374,11 @@ def test_case_study_link_is_visible(fake_runtime):
 
 
 def test_snapshot_generation_failure_shows_error_state(fake_runtime):
-    """A sanitized governed snapshot API failure clears prior success."""
+    """A sanitized local snapshot failure clears prior success."""
 
-    fake_runtime.get_responses["/snapshot"] = DummyResponse(
-        {"detail": {"code": "PROVIDER_GOVERNANCE_CONFLICT", "message": "Provider construction failed"}},
-        status_code=409,
-    )
+    fake_runtime.snapshot_errors.append(RuntimeError("private provider construction detail"))
     at = _app_test()
     at.run(timeout=15)
-    _login(at)
 
     at.text_input(key="snapshot_base_input").set_value("USD")
     at.run(timeout=10)
@@ -1322,6 +1393,7 @@ def test_snapshot_generation_failure_shows_error_state(fake_runtime):
     assert any("Snapshot request failed" in err.value for err in at.error), (
         "Error state should display 'Snapshot request failed' message"
     )
+    assert "private provider construction detail" not in _utility_text(at)
 
     # Verify that no success message is shown.
     success_msgs = [el.value for el in at.success]
@@ -1331,12 +1403,10 @@ def test_snapshot_generation_failure_shows_error_state(fake_runtime):
 
 
 def test_stale_success_cleared_after_failed_snapshot(fake_runtime):
-    """After a successful API snapshot, a failed rerun clears stale success."""
+    """After a successful local snapshot, a failed rerun clears stale success."""
 
     at = _app_test()
     at.run(timeout=15)
-    _login(at)
-
     # First successful run.
     at.text_input(key="snapshot_base_input").set_value("USD")
     at.run(timeout=10)
@@ -1351,10 +1421,7 @@ def test_stale_success_cleared_after_failed_snapshot(fake_runtime):
     success_msgs = [el.value for el in at.success]
     assert any("Snapshot review generated" in str(el) for el in success_msgs), "First snapshot should succeed"
 
-    fake_runtime.get_responses["/snapshot"] = DummyResponse(
-        {"detail": {"code": "PROVIDER_GOVERNANCE_CONFLICT", "message": "Provider construction failed"}},
-        status_code=409,
-    )
+    fake_runtime.snapshot_errors.append(RuntimeError("private provider construction detail"))
 
     # Second run fails.
     at.button(key="snapshot_generate_button").click()

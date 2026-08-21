@@ -95,7 +95,11 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    snapshot resolution first authenticates and authorizes the tenant, then
    intersects that persistence with the current process
    `settings.allowed_providers` configuration and the v0.3 structural
-   conformance/compatibility loader. Database state can narrow an operator's
+   conformance/compatibility loader for authenticated tenant API operations.
+   The Streamlit Snapshot Review remains a separate public/local demonstration:
+   it derives safe metadata from current process-trusted descriptors and uses
+   the local `SnapshotOrchestrator` without organization policy or defaults.
+   Database state can narrow an operator's
    trust set but cannot supply an import path, install code, or make a removed
    provider executable. Policy/default mutations use revision comparison and
    atomic audit writes; deterministic evidence contains credential variable

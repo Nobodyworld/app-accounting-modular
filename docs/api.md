@@ -50,6 +50,8 @@ Access and refresh credentials are not interchangeable. Refresh reuse revokes th
 
 Provider reads require a persisted session and organization membership; mutations require organization administrator authority. Tenant requests cannot submit module, factory, package, wheel, or registry paths. Explicit FX, market, tax, and snapshot provider keys are resolved only after tenant authorization and must be effective for that organization. Errors use bounded `404`, `409`, or validation responses without disclosing cross-tenant rows, environment values, loader exceptions, or raw provider bodies.
 
+These contracts describe authenticated tenant API operations. The public/local Streamlit Snapshot Review does not call `/providers` or the tenant `/snapshot` route; it uses only the local process-trusted catalog and `SnapshotOrchestrator`, without organization policy/defaults.
+
 ### Ledger
 - `POST /ledger/account` - Create a tenant account
 - `POST /ledger/post` - Record a balanced tenant transaction; dates in closed periods return `409` with `ACCOUNTING_PERIOD_CLOSED`, and dates in a cycle awaiting approval return `409` with `ACCOUNTING_PERIOD_CLOSE_READY`
