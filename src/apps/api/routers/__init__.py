@@ -20,6 +20,7 @@ __all__: list[str] = [
     "extensions",
     "ledger",
     "market",
+    "providers",
     "snapshot",
     "reports",
     "tax",

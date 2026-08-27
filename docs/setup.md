@@ -117,10 +117,13 @@ Budget CSV and scenario-plan uploads have a 1 MiB application limit.
 `.streamlit/config.toml` also configures Streamlit's framework cap at 2 decimal
 megabytes as defense in depth; the application check remains authoritative.
 
-Snapshot Review is a public/local evidence workflow. Scenario Plan Review and
-Review Utilities require an authenticated API session and a positive
-organization ID. Uploading a scenario-plan file remains local input, while
-requesting its rendered preview uses the protected FastAPI boundary.
+Snapshot Review is a public/local evidence workflow. Its provider controls come
+from conforming providers in current process configuration and snapshot
+generation stays in the local `SnapshotOrchestrator`; it does not query tenant
+policy or defaults. Provider Governance, Scenario Plan Review, and Review
+Utilities require an authenticated API session and a positive organization ID.
+Uploading a scenario-plan file remains local input, while requesting its
+rendered preview uses the protected FastAPI boundary.
 
 The retained primary repository screenshot represents the public Snapshot
 Review flow; it does not depict the authenticated Scenario Plan Review or
@@ -136,7 +139,12 @@ python -m cli.macli health
 python -m cli.macli observe
 python -m cli.macli inspect-extensions
 python -m cli.macli inspect-contracts
+python -m cli.macli provider-sdk governance-reconcile --format table
+python -m cli.macli provider-sdk governance-validate --format table
+python -m cli.macli provider-sdk governance-export --organization-id 1 --format json
 ```
+
+Provider governance reconciliation is structural and network-free. `settings.allowed_providers` remains the only executable trust source. The first reconcile records safe metadata; later identity drift is quarantined and requires explicit operator review before `--accept-drift`. Organization administrators manage only already-trusted keys through the authenticated API or Streamlit workspace. Credential readiness reports manifest-declared environment-variable names and booleans, never their values.
 
 ## Docker Compose
 

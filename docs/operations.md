@@ -14,6 +14,20 @@ so incidents can be triaged rapidly.
 
 Run `make health` or `macli health` for a CLI snapshot of the same probes.
 
+## Provider governance operations
+
+At startup the API reconciles the current process-trusted provider configuration into safe registration evidence without provider network calls. Operators can run the same deterministic workflow explicitly:
+
+```bash
+python -m cli.macli provider-sdk governance-reconcile --format json
+python -m cli.macli provider-sdk governance-validate --format table
+python -m cli.macli provider-sdk governance-export --organization-id 1 --format json
+```
+
+A validation failure or quarantined drift is an operator review boundary. Correct the process configuration or review and explicitly accept the intended identity change; do not edit database fingerprints, inject module paths, or weaken conformance. A removed process-allowlist key is non-executable immediately. Governance export is bounded and secret-free; credential booleans do not prove remote service health.
+
+The public/local Streamlit Snapshot Review uses current process-trusted, conforming providers directly through the local orchestrator and is not an organization-governance operation. `/providers`, tenant `/snapshot`, FX, market, and tax API operations remain authenticated and organization-scoped. Operators should not interpret a local Snapshot Review selection as an organization default or policy decision.
+
 ## Tracing
 
 - Tracing is configured via `apps.observability.tracing.configure_tracing`.

@@ -84,6 +84,24 @@ path = "src/apps/api/services/plugin_loader.py"
 line_floor = 85.0
 branch_floor = 70.0
 
+# v0.4 trust-boundary floors are based on the focused governance suite's
+# measured Windows/Python 3.14 evidence at introduction (82.76%/68.94%,
+# 81.05%/57.14%, and 76.58%/62.50%, respectively).
+[[module]]
+path = "src/apps/api/services/provider_governance_service.py"
+line_floor = 80.0
+branch_floor = 65.0
+
+[[module]]
+path = "src/apps/api/routers/providers.py"
+line_floor = 80.0
+branch_floor = 55.0
+
+[[module]]
+path = "src/apps/web/provider_governance_workspace.py"
+line_floor = 75.0
+branch_floor = 60.0
+
 [[module]]
 path = "src/apps/provider_sdk/contracts.py"
 line_floor = 85.0

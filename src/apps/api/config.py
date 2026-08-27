@@ -173,7 +173,8 @@ DEFAULT_ALLOWED_EXTENSIONS: dict[str, ExtensionInfo] = {
     ),
 }
 
-# TODO - Load provider catalog from persistence so admin edits survive restarts.
+# Process configuration remains the executable provider trust source; persistent
+# organization policy is reconciled and enforced by provider_governance_service.
 
 _SECRET_PROVENANCE: dict[str, bool] = {}
 

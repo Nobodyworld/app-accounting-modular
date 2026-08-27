@@ -90,6 +90,20 @@ touching the core. The diagram below illustrates the major runtime surfaces.
 4. **Domain ports and providers** continue to act as the integration boundary
    for external data. Providers are loaded via the existing plugin loader and
    the new extension registry complements rather than replaces this system.
+   The v0.4 provider-governance service persists only safe registration
+   fingerprints and organization policy/defaults. Runtime FX, market, tax, and
+   snapshot resolution first authenticates and authorizes the tenant, then
+   intersects that persistence with the current process
+   `settings.allowed_providers` configuration and the v0.3 structural
+   conformance/compatibility loader for authenticated tenant API operations.
+   The Streamlit Snapshot Review remains a separate public/local demonstration:
+   it derives safe metadata from current process-trusted descriptors and uses
+   the local `SnapshotOrchestrator` without organization policy or defaults.
+   Database state can narrow an operator's
+   trust set but cannot supply an import path, install code, or make a removed
+   provider executable. Policy/default mutations use revision comparison and
+   atomic audit writes; deterministic evidence contains credential variable
+   names and presence booleans only.
    The ECB and OpenExchangeRates adapters share a bounded HTTPS JSON transport:
    streamed reads, declared and measured 1 MiB byte enforcement, 5/20-second
    connect/read timeouts, two selected-transient attempts, sanitized domain

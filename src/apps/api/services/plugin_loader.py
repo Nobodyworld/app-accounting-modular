@@ -62,6 +62,7 @@ class ProviderHandle:
     metadata: ProviderMetadata
     manifest: ProviderManifest | None = None
     conformance: ProviderConformanceReport | None = None
+    governance: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)

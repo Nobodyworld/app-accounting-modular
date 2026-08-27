@@ -36,10 +36,21 @@ Access and refresh credentials are not interchangeable. Refresh reuse revokes th
 - `GET /extensions/contracts` - Get extension automation contracts
 
 ### Data Providers
+- `GET /providers?organization_id={id}` - Member-visible trusted/effective catalog
+- `GET /providers/{provider_key}?organization_id={id}` - Safe conformance and governance detail
+- `GET /providers/policies?organization_id={id}` - Organization policies and effective defaults
+- `PUT /providers/{provider_key}/policy?organization_id={id}` - Administrator enable/disable mutation with `expected_revision`
+- `PUT|DELETE /providers/defaults/{capability}?organization_id={id}` - Administrator default mutation/clearing with revision protection
+- `GET /providers/{provider_key}/credentials?organization_id={id}` - Manifest variable names plus presence booleans only
+- `GET /providers/evidence/{preview|export}?organization_id={id}` - Deterministic bounded governance evidence
 - `GET /fx/rates` - Foreign exchange rates
 - `GET /market/quotes` - Market data quotes
 - `GET /commodity/quotes` - Commodity price quotes
 - `GET /tax/rules` - Tax rules by jurisdiction
+
+Provider reads require a persisted session and organization membership; mutations require organization administrator authority. Tenant requests cannot submit module, factory, package, wheel, or registry paths. Explicit FX, market, tax, and snapshot provider keys are resolved only after tenant authorization and must be effective for that organization. Errors use bounded `404`, `409`, or validation responses without disclosing cross-tenant rows, environment values, loader exceptions, or raw provider bodies.
+
+These contracts describe authenticated tenant API operations. The public/local Streamlit Snapshot Review does not call `/providers` or the tenant `/snapshot` route; it uses only the local process-trusted catalog and `SnapshotOrchestrator`, without organization policy/defaults.
 
 ### Ledger
 - `POST /ledger/account` - Create a tenant account

@@ -38,12 +38,13 @@ def test_provider_discovery_waits_for_tenant_membership(monkeypatch, route, modu
         events.append("authorize")
         raise HTTPException(status_code=403, detail="Not authorized for this organization")
 
-    def resolve_provider(_provider_key: str):
-        events.append("provider")
-        raise AssertionError("provider discovery must not run before tenant authorization")
+    class ForbiddenGovernance:
+        def __init__(self, *_args, **_kwargs):
+            events.append("provider")
+            raise AssertionError("provider discovery must not run before tenant authorization")
 
     monkeypatch.setattr(module, "get_current_organization", deny_membership)
-    monkeypatch.setattr(module, "load_provider", resolve_provider)
+    monkeypatch.setattr(module, "ProviderGovernanceService", ForbiddenGovernance)
 
     with pytest.raises(HTTPException) as exc_info:
         _call_sync(route)
@@ -66,12 +67,13 @@ def test_provider_discovery_waits_for_manage_permission(monkeypatch, route, modu
         events.append("authorize")
         return SimpleNamespace(membership=membership, organization=organization)
 
-    def resolve_provider(_provider_key: str):
-        events.append("provider")
-        raise AssertionError("provider discovery must not run before role authorization")
+    class ForbiddenGovernance:
+        def __init__(self, *_args, **_kwargs):
+            events.append("provider")
+            raise AssertionError("provider discovery must not run before role authorization")
 
     monkeypatch.setattr(module, "get_current_organization", authorize)
-    monkeypatch.setattr(module, "load_provider", resolve_provider)
+    monkeypatch.setattr(module, "ProviderGovernanceService", ForbiddenGovernance)
 
     with pytest.raises(HTTPException) as exc_info:
         _call_sync(route)

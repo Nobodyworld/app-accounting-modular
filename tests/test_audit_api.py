@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from apps.api import db
@@ -114,6 +115,11 @@ def _create_client(
 
     selected = {"role": "admin"}
     monkeypatch.setattr(api_main, "init_db", lambda: None)
+    monkeypatch.setattr(
+        api_main,
+        "reconcile_trusted_catalog",
+        lambda _session: SimpleNamespace(to_dict=lambda: {}),
+    )
     monkeypatch.setattr(api_main, "start_scheduler", lambda: None)
     monkeypatch.setattr(api_main, "shutdown_scheduler", lambda: None)
     app = api_main.create_app()

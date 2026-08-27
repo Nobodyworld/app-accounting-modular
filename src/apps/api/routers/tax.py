@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
 from ..audit import AuditLogger
-from ..db import get_session
+from ..dependencies import session_with_audit_context
 from ..models.models import User
 from ..security import get_current_organization, get_current_user
-from ..services.plugin_loader import load_provider
+from ..services.provider_governance_service import ProviderGovernanceError, ProviderGovernanceService
 from ..services.tax_service import TaxService
 
 router = APIRouter(prefix="/tax", tags=["tax"])
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/tax", tags=["tax"])
 def sync_tax(
     organization_id: int,
     provider_key: str = "tax:oecd_demo",
-    session: Session = Depends(get_session),
+    session: Session = Depends(session_with_audit_context),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str | int]:
     """Fetch the latest tax rules from an upstream provider."""
@@ -29,9 +29,15 @@ def sync_tax(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     try:
-        handle = load_provider(provider_key)
-    except ValueError as exc:  # pragma: no cover - FastAPI integration
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if current_user.id is None or org_ctx.organization.id is None:
+            raise HTTPException(status_code=500, detail="Organization context unavailable")
+        handle = ProviderGovernanceService(
+            session,
+            org_ctx.organization.id,
+            current_user.id,
+        ).resolve_provider("tax", provider_key)
+    except ProviderGovernanceError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
 
     service = TaxService(
         session,

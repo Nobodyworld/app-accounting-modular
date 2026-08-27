@@ -37,6 +37,10 @@ PROTECTED_UTILITY_STATE_KEYS = (
     "close_evidence_result",
     "close_confirmation",
     "close_error",
+    "provider_governance_catalog",
+    "provider_governance_confirmation",
+    "provider_governance_conflict",
+    "provider_governance_error",
 )
 
 
@@ -95,6 +99,11 @@ def api_error_detail(response: HttpResponse) -> str:
         detail = payload.get("detail")
         if isinstance(detail, str) and detail.strip():
             return detail.strip()
+        if isinstance(detail, Mapping):
+            message = detail.get("message")
+            code = detail.get("code")
+            if isinstance(message, str) and message.strip():
+                return f"{code}: {message.strip()}" if isinstance(code, str) and code else message.strip()
         if isinstance(detail, list):
             messages = [
                 str(item.get("msg", "")).strip()
@@ -245,6 +254,7 @@ def clear_protected_utility_state(state: MutableMapping[str, Any]) -> None:
 
     protected_keys = set(PROTECTED_UTILITY_STATE_KEYS)
     protected_keys.update(key for key in list(state) if key.startswith("close_"))
+    protected_keys.update(key for key in list(state) if key.startswith("provider_governance_"))
     for key in protected_keys:
         state.pop(key, None)
 

@@ -1,5 +1,21 @@
 # Release Notes
 
+## Unreleased v0.4 Provider Catalog Governance Candidate
+
+The v0.4 candidate adds persistent tenant-aware administration on top of the v0.3 provider SDK while keeping the operator process allowlist authoritative for executable code.
+
+- separate SQLModel records for safe trusted-registration evidence, unique organization provider policy, and unique organization capability defaults;
+- deterministic network-free startup/operator reconciliation with drift quarantine, allowlist-removal handling, validation, and secret-free evidence export;
+- authenticated member reads and administrator-only revision-protected policy/default mutations with atomic audit evidence;
+- allowlist, conformance, compatibility, capability, enablement, and deterministic-default enforcement across authenticated tenant FX, market, tax, and snapshot API paths;
+- credential readiness limited to manifest variable names and booleans;
+- an accountant/admin Streamlit workspace backed by authoritative API results, with conflict guidance and tenant-state clearing; and
+- explicit critical line/branch coverage for the new service, API router, and workspace.
+
+The existing Streamlit Snapshot Review remains a public/local controlled demonstration using safe process-trusted provider descriptors and the local `SnapshotOrchestrator`. It does not consult organization policy/defaults or expose tenant governance, and signing in does not switch its semantics. Provider Governance, Scenario Plan Review, Review Utilities, and tenant API operations remain protected.
+
+This candidate is not a marketplace, package installer, remote registry, provider certification program, credential store, production data certification, ERP expansion, or public/LAN deployment approval. It remains an **Early Beta / Portfolio Preview** for local demonstration.
+
 ## Unreleased v0.3 Provider SDK Candidate
 
 Starting `main`: `63da968fcc10c531427a2a58296cb979482d6579`

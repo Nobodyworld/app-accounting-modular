@@ -296,6 +296,75 @@ class AuditLog(SQLModel, table=True):
     __table_args__ = TABLE_KWARGS
 
 
+class TrustedProviderRegistration(SQLModel, table=True):
+    """Secret-free evidence for one provider trusted by process configuration."""
+
+    provider_key: str = Field(primary_key=True, max_length=96)
+    provider_name: str = Field(max_length=128)
+    description: str | None = Field(default=None, max_length=512)
+    configuration_fingerprint: str = Field(max_length=64)
+    manifest_fingerprint: str | None = Field(default=None, max_length=64)
+    capabilities: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    provider_version: str | None = Field(default=None, max_length=64)
+    sdk_version: str | None = Field(default=None, max_length=16)
+    api_version: str = Field(max_length=64)
+    conformance_status: str = Field(max_length=32, index=True)
+    compatibility_status: str = Field(max_length=32, index=True)
+    conformance_codes: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    lifecycle_status: str = Field(default="ACTIVE", max_length=32, index=True)
+    revision: int = Field(default=1, ge=1, le=2_147_483_647)
+    first_seen_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    reconciled_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="ck_trusted_provider_registration_revision"),
+        TABLE_KWARGS,
+    )
+
+
+class OrganizationProviderPolicy(SQLModel, table=True):
+    """Tenant narrowing policy for an already process-trusted provider."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organization.id", index=True)
+    provider_key: str = Field(max_length=96, index=True)
+    enabled: bool = True
+    note: str | None = Field(default=None, max_length=1_000)
+    revision: int = Field(default=1, ge=1, le=2_147_483_647)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_by_id: int = Field(foreign_key="user.id")
+    updated_by_id: int = Field(foreign_key="user.id")
+    audit_reference: str | None = Field(default=None, max_length=64)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "provider_key", name="uq_org_provider_policy"),
+        CheckConstraint("revision >= 1", name="ck_org_provider_policy_revision"),
+        TABLE_KWARGS,
+    )
+
+
+class OrganizationCapabilityDefault(SQLModel, table=True):
+    """Tenant-selected provider default for one supported capability."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organization.id", index=True)
+    capability: str = Field(max_length=32, index=True)
+    provider_key: str = Field(max_length=96, index=True)
+    revision: int = Field(default=1, ge=1, le=2_147_483_647)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_by_id: int = Field(foreign_key="user.id")
+    updated_by_id: int = Field(foreign_key="user.id")
+    audit_reference: str | None = Field(default=None, max_length=64)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "capability", name="uq_org_provider_capability_default"),
+        CheckConstraint("revision >= 1", name="ck_org_provider_default_revision"),
+        TABLE_KWARGS,
+    )
+
+
 class Budget(SQLModel, table=True):
     """Budget header capturing scope and period."""
 

@@ -30,6 +30,7 @@ audit verdict.
   runtime lock, and the lightweight current-tree secret scanner.
 - The v0.2 close tranche adds reviewable per-critical-module line and branch floors for ledger, workflow, persisted-session security, period lock, close lifecycle, reconciliation, evidence, and router modules; missing modules or branch evidence fail closed instead of being masked by aggregate coverage.
 - Accountant close now has one server-derived readiness contract, inclusive service-level posting locks, explicit two-person approvals, deterministic spreadsheet-safe evidence, and a protected Streamlit workflow. These remain Early Beta controls rather than ERP, production close, compliance, or public-hosting claims.
+- Provider catalog governance now persists safe process-trust evidence and tenant policy/defaults, but executable trust remains exclusively in the operator process allowlist. Revision-protected administrator mutations, member reads, audit transactions, secret-free evidence, and governed FX/market/tax/snapshot resolution are implemented as a v0.4 candidate, not a marketplace or provider certification claim.
 - Central inbound resource policy bounds API bodies, expensive Pydantic
   collections, nested metadata, numeric controls, and retained Streamlit
   uploads while keeping rejected requests observable.

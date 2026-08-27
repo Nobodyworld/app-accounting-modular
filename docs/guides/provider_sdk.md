@@ -14,6 +14,17 @@ A provider participates in three separate decisions:
 
 A manifest is descriptive. It cannot add itself to the allowlist, authorize a tenant, obtain a database session, access an authenticated application session, or override network/request limits.
 
+## From operator trust to organization policy
+
+The v0.4 governance layer keeps process trust and tenant policy separate:
+
+1. an operator places a reviewed key/module/capability tuple in `settings.allowed_providers`;
+2. `provider-sdk governance-reconcile` runs structural conformance and persists only safe identity evidence;
+3. an organization administrator may enable/disable that already-trusted key and select a revision-protected capability default; and
+4. runtime resolution intersects current process trust, registration identity, conformance/compatibility, capability, and organization policy before constructing the provider.
+
+Use `provider-sdk governance-validate` to report current drift and `provider-sdk governance-export --organization-id ID` for deterministic secret-free evidence. Reconciliation does not call provider data methods or access a remote registry. Historical or tenant-provided persistence can never provide an import path. This workflow is governance for an operator-trusted catalog, not a marketplace or certification process.
+
 ## Supported capability contracts
 
 | Capability | Required methods | Required parameter names |

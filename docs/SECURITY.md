@@ -104,6 +104,16 @@ excluded. OpenExchangeRates credentials remain request parameters and are never
 interpolated into URL strings or diagnostics. Tests use deterministic stubs and
 no live provider credentials or network requests.
 
+### Provider catalog governance trust boundary
+
+Provider governance persistence is a narrowing control plane. Only keys and modules in the current process-level `settings.allowed_providers` configuration can reach the v0.3 conformance loader; database rows contain safe fingerprints and metadata but no executable module/factory path. Tenant API models reject additional registration fields and cannot install packages, discover a registry, or create trusted registrations. A removed allowlist key is historical and non-executable even if organization policy or defaults still reference it. Drifted registrations are quarantined until an operator explicitly reconciles reviewed process configuration.
+
+Provider-backed routes authenticate a persisted session and authorize organization membership/role before governance discovery, conformance inspection, provider construction, or data operations. Explicit and default selection require current process trust, persisted identity agreement, structural conformance, API compatibility, capability match, and organization enablement. Defaults that cease to satisfy those conditions become ineffective rather than silently falling back to the disabled key.
+
+The public/local Streamlit Snapshot Review is not one of those tenant routes. It exposes only safe metadata for conforming, compatible providers already present in `settings.allowed_providers`, then constructs through the same allowlist/conformance loader. It never queries anonymous tenant policy, exposes organization defaults, or accepts a module/factory path. Authentication unlocks Provider Governance and other tenant workflows but does not change the public Snapshot Review's provider semantics.
+
+Policy and default writes use organization-scoped revision comparison, trusted actor identity, atomic governance/audit commit, rollback on failure, and cache invalidation only after commit. Cross-tenant identifiers return nondisclosing responses. Credential readiness exposes only manifest-declared variable names and presence booleans; values are never stored, hashed, logged, placed in errors/URLs, or included in deterministic governance evidence. Presence is configuration readiness, not remote credential validation.
+
 YFinance is restricted to one application-level download call, `threads=False`,
 a 20-second timeout, a maximum 10,000-day requested range, and 10,000 returned
 rows. Because its high-level API returns an already materialized DataFrame, the

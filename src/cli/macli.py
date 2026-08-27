@@ -426,7 +426,7 @@ def observe(format_: str) -> None:
 
 @cli.command("sync-fx")
 @click.option("--base", default="USD")
-@click.option("--provider", default="plugins.fx_ecb.provider")
+@click.option("--provider", default="fx:ecb")
 def sync_fx(base: str, provider: str) -> None:
     """Synchronise FX rates using the configured provider."""
 
@@ -445,7 +445,7 @@ def sync_fx(base: str, provider: str) -> None:
 @click.argument("symbol")
 @click.option("--start", required=True)
 @click.option("--end", required=True)
-@click.option("--provider", default="plugins.market_yfinance.provider")
+@click.option("--provider", default="market:yfinance")
 def sync_prices(symbol: str, start: str, end: str, provider: str) -> None:
     """Synchronise market prices for ``symbol`` between ``start`` and ``end`` dates."""
 

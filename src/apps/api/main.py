@@ -7,11 +7,13 @@ from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI
+from sqlmodel import Session
 
 from apps.observability import RequestTraceMiddleware, configure_tracing
 from apps.observability.logging import RequestContextMiddleware, configure_logging
 from apps.observability.metrics import RequestMetricsMiddleware, metrics_registry
 
+from . import db
 from .config import settings
 from .db import init_db
 from .dependencies import authenticated_audit_context
@@ -27,6 +29,7 @@ from .routers import (
     health,
     ledger,
     market,
+    providers,
     reports,
     snapshot,
     tax,
@@ -35,6 +38,7 @@ from .routers import (
 from .scheduler import shutdown_scheduler, start_scheduler
 from .services.extension_loader import load_configured_extensions
 from .services.health import register_default_health_checks
+from .services.provider_governance_service import reconcile_trusted_catalog
 from .startup import StartupContext, StartupManager, StartupStep
 from .version import API_VERSION
 
@@ -71,6 +75,11 @@ def create_app() -> FastAPI:
     def _register_health(_: StartupContext) -> None:
         register_default_health_checks()
 
+    def _reconcile_provider_catalog(context: StartupContext) -> None:
+        with Session(db.engine, expire_on_commit=False) as session:
+            result = reconcile_trusted_catalog(session)
+        context["provider_catalog_reconciliation"] = result.to_dict()
+
     def _load_extensions(context: StartupContext) -> None:
         manifests = load_configured_extensions()
         context["extensions"] = tuple(manifests)
@@ -91,6 +100,7 @@ def create_app() -> FastAPI:
         StartupStep(name="configure_logging", action=_configure_logging),
         StartupStep(name="configure_tracing", action=_configure_tracing),
         StartupStep(name="initialise_database", action=_initialise_database),
+        StartupStep(name="reconcile_provider_catalog", action=_reconcile_provider_catalog),
         StartupStep(name="register_health_checks", action=_register_health),
         StartupStep(name="load_extensions", action=_load_extensions),
         StartupStep(name="warn_ephemeral_secret", action=_warn_ephemeral_secret, fatal=False),
@@ -126,6 +136,7 @@ def create_app() -> FastAPI:
         (ledger.router, True),
         (fx.router, True),
         (market.router, True),
+        (providers.router, True),
         (snapshot.router, True),
         (tax.router, True),
         (forecast.router, True),

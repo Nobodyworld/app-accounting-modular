@@ -17,6 +17,7 @@ import requests
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
+from apps.api.services.plugin_loader import provider_descriptors
 from apps.api.services.snapshot_service import SnapshotOrchestrator
 from apps.modular_accounting.domain import LedgerEntry, Money, Transaction
 from apps.web.api_session import (
@@ -32,6 +33,7 @@ from apps.web.api_session import (
     store_api_session,
 )
 from apps.web.close_workspace import render_close_workspace
+from apps.web.provider_governance_workspace import render_provider_governance_workspace
 from apps.web.upload_limits import (
     clear_budget_upload_state,
     clear_scenario_upload_state,
@@ -85,16 +87,26 @@ def _load_readiness() -> tuple[dict[str, Any] | None, str | None]:
         return None, str(exc)
 
 
-@st.cache_data(show_spinner=False)
-def _load_providers() -> tuple[list[dict[str, Any]], str | None]:
+def _load_local_snapshot_providers() -> tuple[list[dict[str, Any]], str | None]:
+    """Return safe conforming metadata from the process-trusted provider catalog."""
+
     try:
-        response = requests.get(f"{API}/providers", timeout=5)
-        response.raise_for_status()
-        payload = response.json()
-        providers = payload.get("providers", []) if isinstance(payload, dict) else []
+        providers = [
+            {
+                "key": descriptor.metadata.key,
+                "name": descriptor.metadata.name,
+                "description": descriptor.metadata.description,
+                "capabilities": list(descriptor.metadata.capabilities),
+                "version": descriptor.version,
+                "source": "process-trusted local configuration",
+            }
+            for descriptor in provider_descriptors()
+            if descriptor.conformance.passed and descriptor.compatibility.status == "compatible"
+        ]
+        providers.sort(key=lambda provider: str(provider["key"]))
         return providers, None
-    except Exception as exc:  # pragma: no cover - runtime diagnostics
-        return [], str(exc)
+    except Exception:  # pragma: no cover - defensive local catalog boundary
+        return [], "Local process-trusted provider catalog could not be inspected."
 
 
 def _provider_options(capability: str, providers: dict[str, dict[str, Any]]) -> list[str]:
@@ -161,8 +173,8 @@ def _build_snapshot(
             jurisdictions=jurisdictions,
         )
         return result.as_payload(), None
-    except Exception as exc:  # pragma: no cover - runtime diagnostics
-        return None, str(exc)
+    except Exception:  # pragma: no cover - defensive local provider boundary
+        return None, "Local snapshot generation failed. Review the process-trusted provider configuration."
 
 
 def _journal_control_status() -> dict[str, Any]:
@@ -460,7 +472,7 @@ with st.sidebar:
         if isinstance(logout_warning, str) and logout_warning:
             st.warning(logout_warning)
         st.caption(
-            "Snapshot Review remains public/local. Scenario Plan Review and Review Utilities "
+            "Snapshot Review remains public/local. Provider Governance, Scenario Plan Review, and Review Utilities "
             "require sign-in and a positive organization ID."
         )
         login_error = st.session_state.get("api_login_error")
@@ -482,36 +494,44 @@ protected_action_help = (
 )
 
 st.info(
-    "Snapshot Review is a public/local evidence workflow. Scenario Plan Review and Review "
-    "Utilities require an authenticated API session and positive organization ID."
+    "Snapshot Review remains public/local and uses only process-trusted providers. Provider Governance, "
+    "Scenario Plan Review, and Review Utilities require sign-in and a positive organization ID."
 )
 
 health_data, health_error = _load_health()
 ready_data, ready_error = _load_readiness()
-providers_payload, providers_error = _load_providers()
+providers_payload, providers_error = _load_local_snapshot_providers()
 providers_by_key = {entry["key"]: entry for entry in providers_payload if isinstance(entry, dict) and entry.get("key")}
 
-close_tab, snapshot_tab, utility_tab, plan_tab = st.tabs(
-    ["Close Workspace", "Snapshot Review", "Review Utilities", "Scenario Plans"]
+close_tab, provider_tab, snapshot_tab, utility_tab, plan_tab = st.tabs(
+    ["Close Workspace", "Provider Governance", "Snapshot Review", "Review Utilities", "Scenario Plans"]
 )
 
 with close_tab:
     render_close_workspace(access_token=access_token, organization_id=organization_id)
 
+with provider_tab:
+    render_provider_governance_workspace(
+        api_base=API,
+        access_token=access_token,
+        organization_id=organization_id,
+    )
+
 with snapshot_tab:
     st.subheader("Snapshot Review")
     st.caption(
-        "Evidence-first flow: choose controlled providers, generate a financial snapshot, "
+        "Public/local evidence flow: choose a process-trusted provider, generate a controlled financial snapshot, "
         "then review source provenance, freshness, readiness, and journal-control status."
     )
+    st.caption("These selections are local process configuration, not organization policy or capability defaults.")
     st.info(
         "Designed review order: provider catalog → snapshot results → provenance and freshness "
         "→ readiness checks → journal-control status → technical audit payload."
     )
 
     if providers_error:
-        st.error(f"Unable to load provider catalog from {API}/providers: {providers_error}")
-        st.info("Snapshot generation is disabled until provider metadata can be loaded.")
+        st.error(f"Unable to inspect the local process-trusted provider catalog: {providers_error}")
+        st.info("Snapshot generation is disabled until safe local provider metadata can be inspected.")
 
     if providers_by_key:
         provider_frame = pd.DataFrame(
@@ -520,6 +540,7 @@ with snapshot_tab:
                     "Provider Key": key,
                     "Provider Name": meta.get("name"),
                     "Capabilities": ", ".join(meta.get("capabilities", [])),
+                    "Source": meta.get("source"),
                 }
                 for key, meta in sorted(providers_by_key.items())
             ]
@@ -577,6 +598,14 @@ with snapshot_tab:
         fx_options = _provider_options("fx", providers_by_key)
         commodity_options = _provider_options("market", providers_by_key)
         tax_options = _provider_options("tax", providers_by_key)
+
+        for widget_key, options in (
+            ("snapshot_fx_provider_select", fx_options),
+            ("snapshot_commodity_provider_select", commodity_options),
+            ("snapshot_tax_provider_select", tax_options),
+        ):
+            if options and st.session_state.get(widget_key) not in options:
+                st.session_state[widget_key] = options[0]
 
         fx_provider = st.selectbox(
             "FX provider",
@@ -649,6 +678,8 @@ with snapshot_tab:
                             "tax": tax_provider,
                         },
                         "generated_at": datetime.now(tz=UTC).isoformat(),
+                        "selection_scope": "public_local_process_trust",
+                        "organization_policy_applied": False,
                     }
 
     if "snapshot_controls_error" in st.session_state:
@@ -674,6 +705,7 @@ with snapshot_tab:
                         "Capability": capability,
                         "Provider Key": key,
                         "Provider Name": providers_by_key.get(str(key), {}).get("name", str(key)),
+                        "Source": "process-trusted local configuration",
                     }
                 )
         if provider_rows:
