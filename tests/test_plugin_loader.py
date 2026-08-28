@@ -156,7 +156,7 @@ def test_available_providers_cache_invalidation(monkeypatch) -> None:
 def test_load_provider_validates_required_methods(monkeypatch) -> None:
     """Providers lacking capability-specific methods must raise errors."""
     refresh_provider_cache()
-    module = types.ModuleType("plugins.invalid_fx")
+    module = types.ModuleType("plugins.invalid_fx.provider")
     module.PROVIDER_MANIFEST = _manifest("test:invalid_fx", ("fx",))
 
     class InvalidProvider:
@@ -166,13 +166,13 @@ def test_load_provider_validates_required_methods(monkeypatch) -> None:
         return InvalidProvider()
 
     module.provider = factory
-    monkeypatch.setitem(sys.modules, "plugins.invalid_fx", module)
+    monkeypatch.setitem(sys.modules, "plugins.invalid_fx.provider", module)
     monkeypatch.setattr(
         settings,
         "allowed_providers",
         {
             "test:invalid_fx": ProviderInfo(
-                module="plugins.invalid_fx",
+                module="plugins.invalid_fx.provider",
                 name="Invalid",
                 capabilities=("fx",),
             )

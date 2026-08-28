@@ -12,6 +12,7 @@ from types import ModuleType
 from typing import Any, Literal
 
 from .contracts import CAPABILITY_PARAMETERS, PROVIDER_SDK_VERSION, ProviderManifest
+from .path_safety import AuthorKitBoundaryError, validate_provider_module
 
 CheckStatus = Literal["pass", "fail", "warning"]
 
@@ -118,7 +119,12 @@ def _safe_failure(action: str, exc: BaseException) -> str:
 
 
 def _module_name(module_or_name: str | ModuleType) -> str:
-    return module_or_name if isinstance(module_or_name, str) else module_or_name.__name__
+    if isinstance(module_or_name, ModuleType):
+        return module_or_name.__name__
+    try:
+        return validate_provider_module(module_or_name)
+    except AuthorKitBoundaryError:
+        return "invalid.provider"
 
 
 def _import_module(module_or_name: str | ModuleType, evaluation: _Evaluation) -> bool:
@@ -126,6 +132,11 @@ def _import_module(module_or_name: str | ModuleType, evaluation: _Evaluation) ->
         evaluation.module = module_or_name
         evaluation.checks.append(_check("module.import", "pass", "module supplied"))
         return True
+    try:
+        module_or_name = validate_provider_module(module_or_name)
+    except AuthorKitBoundaryError:
+        evaluation.checks.append(_check("module.name", "fail", "provider module name is invalid"))
+        return False
     try:
         evaluation.module = importlib.import_module(module_or_name)
     except Exception as exc:

@@ -34,7 +34,8 @@ from .contracts import (
     TaxProvider,
     required_methods,
 )
-from .evidence import ArtifactEvidence, artifact_evidence, sha256_file
+from .evidence import ArtifactEvidence, artifact_evidence, extract_sdist_safely, sha256_file, validate_wheel_record
+from .path_safety import AuthorKitBoundaryError, validate_provider_module
 from .scaffold import (
     ProviderProjectScaffold,
     ProviderScaffold,
@@ -54,6 +55,7 @@ __all__ = [
     "SDK_DISTRIBUTION_VERSION",
     "SUPPORTED_CAPABILITIES",
     "ArtifactEvidence",
+    "AuthorKitBoundaryError",
     "BankProvider",
     "CompatibilityResult",
     "ConformanceCheck",
@@ -74,6 +76,7 @@ __all__ = [
     "application_api_major",
     "artifact_evidence",
     "check_compatibility",
+    "extract_sdist_safely",
     "inspect_provider_module",
     "load_conforming_provider",
     "normalise_distribution_name",
@@ -82,4 +85,6 @@ __all__ = [
     "scaffold_project",
     "scaffold_provider",
     "sha256_file",
+    "validate_provider_module",
+    "validate_wheel_record",
 ]

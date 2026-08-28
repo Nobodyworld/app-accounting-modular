@@ -131,7 +131,7 @@ def test_load_provider_fails_closed_on_missing_module_without_raw_exception(
         monkeypatch,
         **{
             "market:missing": ProviderInfo(
-                module="plugins.missing.secret_module",
+                module="plugins.missing.provider",
                 name="Missing",
                 capabilities=("market",),
             )

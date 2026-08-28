@@ -13,6 +13,7 @@ from .build_backend import build_project_sdist, build_project_wheel
 from .conformance import ProviderConformanceReport, inspect_provider_module
 from .contracts import DATA_CLASSIFICATIONS, NETWORK_POLICIES, SUPPORTED_CAPABILITIES
 from .evidence import artifact_evidence
+from .path_safety import AuthorKitBoundaryError
 from .scaffold import scaffold_project
 
 
@@ -138,6 +139,15 @@ def _build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _failure(*, code: str, message: str, format_: str) -> int:
+    payload = {"code": code, "message": message}
+    if format_ == "json":
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(f"error[{code}]: {message}", file=sys.stderr)
+    return 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the author CLI with stable exit codes and sanitized failures."""
 
@@ -149,10 +159,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _validate(args)
         if args.command == "build":
             return _build(args)
-    except (FileExistsError, OSError, ValueError) as exc:
-        message = str(exc).strip()
-        if len(message) > 256:
-            message = message[:253] + "..."
-        print(f"error: {message or type(exc).__name__}", file=sys.stderr)
-        return 2
+    except AuthorKitBoundaryError as exc:
+        return _failure(code=exc.code, message=str(exc), format_=getattr(args, "format", "table"))
+    except FileExistsError:
+        return _failure(
+            code="project.exists",
+            message="generated project files already exist",
+            format_=getattr(args, "format", "table"),
+        )
+    except OSError:
+        return _failure(
+            code="artifact.build_failed" if args.command == "build" else "project.path_unsafe",
+            message="author-kit filesystem operation failed",
+            format_=getattr(args, "format", "table"),
+        )
+    except ValueError:
+        return _failure(
+            code="project.metadata_invalid",
+            message="author-kit input metadata is invalid",
+            format_=getattr(args, "format", "table"),
+        )
     return 2

@@ -1,6 +1,7 @@
 [build-system]
-requires = ["setuptools>=77,<84", "wheel>=0.45,<0.47"]
-build-backend = "setuptools.build_meta"
+requires = []
+build-backend = "modular_accounting_provider_sdk.build_backend"
+backend-path = ["src"]
 
 [project]
 name = "modular-accounting-provider-sdk"

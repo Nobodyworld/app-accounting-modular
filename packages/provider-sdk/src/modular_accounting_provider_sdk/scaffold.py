@@ -11,6 +11,7 @@ from textwrap import dedent
 from typing import cast
 
 from .contracts import DataClassification, NetworkPolicy, ProviderManifest
+from .path_safety import validate_generated_targets
 
 __all__ = [
     "ProviderProjectScaffold",
@@ -238,6 +239,7 @@ def scaffold_provider(
         target / "README.md",
         target / "tests" / "test_conformance.py",
     )
+    validate_generated_targets(target, known_paths)
     existing = tuple(path for path in known_paths if path.exists())
     if existing and not force:
         raise FileExistsError(f"Provider package '{package}' already contains generated files")
@@ -354,6 +356,7 @@ def scaffold_project(
         source_root / "py.typed",
         project_root / "tests" / "test_conformance.py",
     )
+    validate_generated_targets(project_root, known_paths)
     if any(path.exists() for path in known_paths) and not force:
         raise FileExistsError(f"Provider project '{distribution_name}' already contains generated files")
 
@@ -364,7 +367,7 @@ def scaffold_project(
     pyproject_source = dedent(
         f"""\
         [build-system]
-        requires = []
+        requires = ["modular-accounting-provider-sdk==0.5.0"]
         build-backend = "modular_accounting_provider_sdk.build_backend"
 
         [project]

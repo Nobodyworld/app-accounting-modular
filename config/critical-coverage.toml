@@ -132,6 +132,13 @@ path = "packages/provider-sdk/src/modular_accounting_provider_sdk/build_backend.
 line_floor = 85.0
 branch_floor = 70.0
 
+# v0.5 path-safety evidence measured 91% line and 89% branch coverage in the
+# focused hostile-path/archive suite at introduction.
+[[module]]
+path = "packages/provider-sdk/src/modular_accounting_provider_sdk/path_safety.py"
+line_floor = 85.0
+branch_floor = 80.0
+
 [[module]]
 path = "packages/provider-sdk/src/modular_accounting_provider_sdk/cli.py"
 line_floor = 85.0

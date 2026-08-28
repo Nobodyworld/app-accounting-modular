@@ -49,6 +49,11 @@ def test_sdk_distribution_metadata_is_zero_dependency_and_application_independen
     assert metadata["project"]["version"] == "0.5.0"
     assert metadata["project"]["dependencies"] == []
     assert metadata["project"]["license"] == "Apache-2.0"
+    assert metadata["build-system"] == {
+        "requires": [],
+        "build-backend": "modular_accounting_provider_sdk.build_backend",
+        "backend-path": ["src"],
+    }
     forbidden = ("apps", "fastapi", "sqlmodel", "streamlit", "starlette")
     for path in (sdk_root / "src" / "modular_accounting_provider_sdk").glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -167,6 +172,7 @@ def test_provider_and_sdk_artifacts_are_deterministic_installable_inventories(tm
         artifact_evidence(path).sha256 for path in provider_two
     ]
     assert any(name.endswith("provider.py") for name in artifact_evidence(provider_one[0]).inventory)
+    assert any("/src/fx_external_demo/provider.py" in name for name in artifact_evidence(provider_one[1]).inventory)
 
     sdk_root = Path(__file__).resolve().parents[1] / "packages" / "provider-sdk"
     sdk_one = (build_sdk_wheel(sdk_root, first), build_sdk_sdist(sdk_root, first))
@@ -287,10 +293,14 @@ def test_standalone_cli_failure_is_bounded_and_stable(
         )
         == 2
     )
-    assert capsys.readouterr().err.startswith("error: key must follow")
+    assert capsys.readouterr().err == ("error[project.metadata_invalid]: author-kit input metadata is invalid\n")
     assert main(["validate", "not_real.secret", "--api-version", "0.5.0", "--format", "json"]) == 1
     payload = json.loads(capsys.readouterr().out)
-    assert payload["checks"][0]["message"] == "module import failed (ModuleNotFoundError)"
+    assert payload["checks"][0] == {
+        "code": "module.name",
+        "message": "provider module name is invalid",
+        "status": "fail",
+    }
     assert "secret" not in payload["checks"][0]["message"]
 
     monkeypatch = pytest.MonkeyPatch()
@@ -301,7 +311,7 @@ def test_standalone_cli_failure_is_bounded_and_stable(
     )
     try:
         assert main(["scaffold", "tax:bounded", "--capability", "tax"]) == 2
-        assert len(capsys.readouterr().err.strip()) <= 264
+        assert capsys.readouterr().err == ("error[project.metadata_invalid]: author-kit input metadata is invalid\n")
     finally:
         monkeypatch.undo()
 
