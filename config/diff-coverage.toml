@@ -7,6 +7,7 @@
 
 [diff_coverage]
 include_roots = ["src/apps", "src/plugins", "src/cli", "packages/provider-sdk/src"]
-exclude = ["**/*.md"]
+# PEP 561 markers are package data and contain no executable Python lines.
+exclude = ["**/*.md", "**/py.typed"]
 minimum_changed_line_percent = 85.0
 allow_no_changed_executable_lines = true
