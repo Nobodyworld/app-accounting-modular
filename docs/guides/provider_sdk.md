@@ -6,8 +6,15 @@ The SDK does **not** install packages, discover arbitrary code, grant tenant acc
 
 ## Standalone v0.5 author workflow
 
-Build the local SDK artifacts, install the wheel into an author environment,
-then use the standalone standard-library CLI:
+The SDK has one authoritative, self-contained in-tree PEP 517 backend. Build
+its wheel and source-layout sdist through the standard frontend:
+
+```console
+PIP_NO_INDEX=1 python -m build --no-isolation packages/provider-sdk
+```
+
+Install the local wheel into an author environment, then use the standalone
+standard-library CLI:
 
 ```console
 python -m modular_accounting_provider_sdk scaffold market:example_author --capability market
@@ -17,6 +24,8 @@ python -m modular_accounting_provider_sdk validate market_example_author.provide
 
 The generated project contains `pyproject.toml`, `README.md`, a typed
 `src/<package>/` module, `py.typed`, and a standard-library conformance test.
+Its `build-system.requires` contains the exact
+`modular-accounting-provider-sdk==0.5.0` distribution that supplies the backend.
 `--force` overwrites only those known generated files. Unknown author files
 survive regeneration. Validation is structural by default; `--instantiate`
 explicitly opts into synchronous factory construction, but provider data methods
@@ -28,9 +37,11 @@ Repository acceptance is:
 python scripts/provider_author_acceptance.py --output provider-author-acceptance.json
 ```
 
-It uses local artifacts only, `PIP_NO_INDEX=1`, separate author and consumer
-venvs, no repository `PYTHONPATH`, a network-denial guard, deterministic
-artifact inventories/hashes, and unconditional disposable-state cleanup.
+It uses local artifacts only, `PIP_NO_INDEX=1`, standard PEP 517 builds,
+separate wheel/sdist installation environments, extracted-sdist rebuilds, no
+repository `PYTHONPATH`, a network-denial guard, validated metadata and RECORD
+entries, deterministic artifact inventories/hashes, an executed v0.4 handoff,
+and unconditional disposable-state cleanup.
 
 ## Trust model
 
@@ -190,6 +201,7 @@ The command exits with status 1 when any required check fails and status 2 for i
 
 The evidence can include these stable check families:
 
+- `module.name`
 - `module.import`
 - `manifest.present`
 - `manifest.sdk`

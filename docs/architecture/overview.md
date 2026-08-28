@@ -111,6 +111,9 @@ then narrow that process trust but cannot create it.
    provider executable. Policy/default mutations use revision comparison and
    atomic audit writes; deterministic evidence contains credential variable
    names and presence booleans only.
+   The v0.5 author distribution and generated providers build through one
+   SDK-owned PEP 517 backend. Successful build, installation, metadata, or
+   import never bypasses this process allowlist and v0.4 governance intersection.
    The ECB and OpenExchangeRates adapters share a bounded HTTPS JSON transport:
    streamed reads, declared and measured 1 MiB byte enforcement, 5/20-second
    connect/read timeouts, two selected-transient attempts, sanitized domain

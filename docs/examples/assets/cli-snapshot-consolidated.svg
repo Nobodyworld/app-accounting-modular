@@ -15,7 +15,7 @@
 
   <g clip-path="url(#terminal-content-clip)">
     <g fill="#dbe7f2" font-family="Consolas, 'Courier New', monospace" font-size="20">
-      <text x="46" y="86">PS&gt; $env:PYTHONPATH = "$PWD\src"</text>
+      <text x="46" y="86">PS&gt; $env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"</text>
       <text x="46" y="114">PS&gt; python -m cli.macli snapshot --base USD --commodity XAU --jurisdiction US --format table</text>
     </g>
 

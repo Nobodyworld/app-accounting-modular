@@ -3,18 +3,23 @@
 ## Unreleased v0.5 Provider Author Kit
 
 The v0.5 tranche introduces the installable, typed, zero-runtime-dependency
-`modular-accounting-provider-sdk` distribution; an identity-preserving
-`apps.provider_sdk` facade; standalone scaffold/validate/build CLI commands;
-conventional provider wheel/sdist projects; deterministic artifact evidence;
-and a cross-platform offline clean-environment acceptance harness.
+`modular-accounting-provider-sdk` distribution; one self-contained authoritative
+PEP 517 backend; an identity-preserving `apps.provider_sdk` facade; standalone
+scaffold/validate/build CLI commands; conventional provider wheel/sdist
+projects; deterministic artifact evidence; and a cross-platform offline
+clean-environment acceptance harness.
 
-Repeated SDK and generated-provider builds produce matching local hashes, clean
-author and consumer environments contain no application package or repository
-`PYTHONPATH`, structural inspection runs under a network-denial guard without
-factory/data calls, and an importable provider remains rejected before explicit
-operator allowlisting. v0.4 reconciliation and organization policy remain
-narrowing controls. No package is published, and this is not marketplace,
-registry, certification, production-provider, or public/LAN deployment approval.
+The harness uses `python -m build`, produces repeatable SDK and provider hashes,
+rebuilds extracted sdists, installs wheel/sdist variants in clean environments,
+and validates metadata and wheel RECORD entries. Those environments contain no
+application package or repository `PYTHONPATH`; structural inspection runs under
+a network-denial guard without factory/data calls. The handoff evidence observes
+rejection before import, exact operator allowlisting, safe v0.4 reconciliation,
+administrator enable/default changes, governed construction, and immediate
+non-executability after process-trust removal. Archive/link/path failures and
+tenant self-authorization inputs fail closed. No package is published, and this
+is not marketplace, registry, certification, production-provider, or public/LAN
+deployment approval.
 
 ## v0.4 Provider Catalog Governance
 

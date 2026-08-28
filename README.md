@@ -13,7 +13,7 @@ Version 0.2 adds an authenticated Accountant Close Workspace. A controlled close
 
 Version 0.4 adds persistent, tenant-aware provider governance. Operators reconcile the current `settings.allowed_providers` trust set into safe registration evidence; organization administrators may only narrow that set through enablement policy and deterministic capability defaults. Members can inspect effective state, conformance, compatibility, provenance, and credential-variable presence through authenticated API and Streamlit surfaces. Persisted rows never authorize Python modules, credential values are never stored or returned, and this workspace is not a provider marketplace or certification program.
 
-Version 0.5 adds the installable `modular-accounting-provider-sdk` author kit under `packages/provider-sdk/`. External authors can install its local wheel without the accounting application, scaffold a conventional `src/` provider project, build deterministic wheel/sdist artifacts, and run structural table/JSON conformance through `python -m modular_accounting_provider_sdk`. The application keeps `apps.provider_sdk` as an identity-preserving facade. Package installation, importability, manifests, and entry points never authorize execution: an operator must still configure the exact key/module/capability tuple, then use v0.4 reconciliation and organization policy.
+Version 0.5 adds the installable `modular-accounting-provider-sdk` author kit under `packages/provider-sdk/`. Its self-contained in-tree PEP 517 backend is authoritative for the SDK wheel and source-layout sdist, and generated providers use that same installed backend through an exact build-system requirement. Offline acceptance builds twice with the standard frontend, validates metadata and wheel records, installs SDK and provider wheel/sdist variants in fresh environments, and executes the v0.4 allowlist/reconciliation/policy/default/removal handoff. The application keeps `apps.provider_sdk` as an identity-preserving facade. Package installation, importability, manifests, and entry points never authorize execution.
 
 The Streamlit **Snapshot Review** remains a public/local controlled demonstration. Its selector is derived only from conforming providers in the current process trust configuration and its local `SnapshotOrchestrator` does not read organization policy or defaults. Provider Governance, Scenario Plan Review, Review Utilities, and tenant API operations remain authenticated and organization-scoped. Signing in does not silently change Snapshot Review to tenant-governed semantics.
 
@@ -76,7 +76,7 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
-export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$PWD/src:$PWD/packages/provider-sdk/src${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
 On Windows PowerShell:
@@ -86,7 +86,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
-$env:PYTHONPATH = "$PWD\src"
+$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"
 ```
 
 2. Start the API:

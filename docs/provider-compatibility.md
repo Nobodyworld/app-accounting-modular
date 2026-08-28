@@ -13,6 +13,13 @@ This matrix documents the v0.5 standalone author kit and the provider contracts 
 | Application API major | `0` | Exact major equality is required. |
 | Scaffold stamp | `0.5.0` | Records which author template produced the project. |
 
+The SDK source declares its zero-dependency in-tree backend as the only artifact
+implementation. Generated providers declare the exact SDK distribution as both
+runtime and build-system dependency. Compatibility evidence validates wheel and
+sdist name, version, Python requirement, dependency, provider identity,
+capabilities, source layout, typing marker, and wheel RECORD; a package being
+installable or importable remains unrelated to executable application trust.
+
 Additive changes must retain existing `1.0` behavior and the facade's object
 identity. A breaking manifest or protocol change requires a new contract
 version, stable deterministic incompatibility codes, migration guidance, and
