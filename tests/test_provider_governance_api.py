@@ -112,18 +112,22 @@ def test_member_cannot_mutate_and_tenant_cannot_submit_module_identity(governanc
     )
     assert member.status_code == 403
 
-    arbitrary_module = client.put(
-        path,
-        params={"organization_id": context["org"]},
-        headers=_headers(context["admin"]),
-        json={
-            "enabled": True,
-            "revision": 0,
-            "module": "tenant.evil.provider",
-            "factory": "build",
-        },
-    )
-    assert arbitrary_module.status_code == 422
+    for field, value in (
+        ("package", "tenant-provider.whl"),
+        ("wheel", "tenant-provider.whl"),
+        ("url", "https://invalid.example/provider"),
+        ("module", "tenant.evil.provider"),
+        ("factory", "build"),
+        ("entry_point", "tenant:provider"),
+        ("manifest", {"key": "market:tenant"}),
+    ):
+        arbitrary_identity = client.put(
+            path,
+            params={"organization_id": context["org"]},
+            headers=_headers(context["admin"]),
+            json={"enabled": True, "revision": 0, field: value},
+        )
+        assert arbitrary_identity.status_code == 422, field
     with Session(db.engine) as session:
         assert session.exec(select(OrganizationProviderPolicy)).first() is None
 
