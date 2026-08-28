@@ -67,10 +67,10 @@ def test_load_policy_requires_explicit_roots_and_floor(tmp_path: Path) -> None:
         load_policy(policy_path)
 
 
-def test_repository_policy_excludes_colocated_markdown_only() -> None:
+def test_repository_policy_excludes_only_non_executable_colocated_files() -> None:
     policy, _fingerprint = load_policy(Path("config/diff-coverage.toml"))
 
-    assert policy.exclude == ("**/*.md",)
+    assert policy.exclude == ("**/*.md", "**/py.typed")
     with pytest.raises(ValueError, match="absent from coverage evidence"):
         evaluate(
             _context(),
