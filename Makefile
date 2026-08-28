@@ -17,16 +17,16 @@ format-check:
 	ruff format --check .
 
 typecheck:
-	mypy src/apps/modular_accounting/application src/apps/api src/apps/extensions src/cli tests
+	mypy src/apps/modular_accounting/application src/apps/api src/apps/extensions src/cli packages/provider-sdk/src/modular_accounting_provider_sdk tests
 
 test:
-	pytest --cov=src/apps --cov=src/plugins --cov=src/cli --cov-report=term-missing --cov-fail-under=85
+	pytest --cov=src/apps --cov=src/plugins --cov=src/cli --cov=packages/provider-sdk/src/modular_accounting_provider_sdk --cov-report=term-missing --cov-fail-under=85
 
 coverage: test
 
 diff-coverage:
 	test -n "$(BASE)" || (echo "BASE=<commit-or-ref> is required" >&2 && exit 1)
-	$(PYTHON) -m pytest -o cache_dir=.pytest_cache_runtime --cov=src/apps --cov=src/plugins --cov=src/cli --cov-branch --cov-report=json:coverage.json
+	$(PYTHON) -m pytest -o cache_dir=.pytest_cache_runtime --cov=src/apps --cov=src/plugins --cov=src/cli --cov=packages/provider-sdk/src/modular_accounting_provider_sdk --cov-branch --cov-report=json:coverage.json
 	$(PYTHON) -m src.tools.diff_coverage coverage.json --base "$(BASE)" --head "$(DIFF_HEAD)" --config config/diff-coverage.toml --json-output diff-coverage.json --markdown-output diff-coverage.md
 
 security:

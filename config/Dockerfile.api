@@ -5,7 +5,7 @@ ARG APP_GID=10001
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
+    PYTHONPATH=/app/src:/app/packages/provider-sdk/src \
     HOME=/tmp/modacct-home
 
 RUN groupadd --gid ${APP_GID} modacct \

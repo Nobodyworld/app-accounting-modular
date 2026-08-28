@@ -41,20 +41,21 @@ jobs:
 
       - name: Generate release-authoritative coverage evidence
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/packages/provider-sdk/src
         run: |
           python -m pytest \
             -o cache_dir=.pytest_cache_runtime \
             --cov=src/apps \
             --cov=src/plugins \
             --cov=src/cli \
+            --cov=packages/provider-sdk/src/modular_accounting_provider_sdk \
             --cov-branch \
             --cov-report=term-missing \
             --cov-report=json:coverage.json
 
       - name: Enforce changed-production-line coverage
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/packages/provider-sdk/src
         run: |
           python -m src.tools.diff_coverage \
             coverage.json \

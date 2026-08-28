@@ -42,7 +42,7 @@ jobs:
 
       - name: Run quality gate and tests
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/packages/provider-sdk/src
         run: python -m src.tools.quality_gate > quality-gate.log 2>&1
 
       - name: Show quality-gate log tail
@@ -51,7 +51,7 @@ jobs:
 
       - name: Run accounting control suites
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/packages/provider-sdk/src
         run: pytest -q tests/test_ledger_service.py tests/test_data_snapshot_service.py tests/test_modular_accounting_snapshot.py tests/test_modular_accounting_controls.py
 
       - name: Upload quality evidence

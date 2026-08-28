@@ -1,14 +1,14 @@
 [tool.black]
 line-length = 120
 target-version = ["py312"]
-include = "(src/apps|src/cli|src/plugins|tests|docs)/.*\\.py$"
+include = "(src/apps|src/cli|src/plugins|packages/provider-sdk/src|tests|docs)/.*\\.py$"
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
 fix = false
 show-fixes = true
-src = ["src/apps", "src/cli", "src/plugins", "tests"]
+src = ["src/apps", "src/cli", "src/plugins", "packages/provider-sdk/src", "tests"]
 respect-gitignore = true
 force-exclude = true
 include = ["*.py", "*.pyi", "pyproject.toml"]
@@ -30,7 +30,7 @@ ignore = [
 preview = false
 
 [tool.ruff.lint.isort]
-known-first-party = ["src.apps", "src.plugins", "src.cli", "tests"]
+known-first-party = ["modular_accounting_provider_sdk", "src.apps", "src.plugins", "src.cli", "tests"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -41,7 +41,7 @@ docstring-code-format = false
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
-pythonpath = ["."]
+pythonpath = [".", "src", "packages/provider-sdk/src"]
 filterwarnings = [
   "error::sqlalchemy.exc.SADeprecationWarning",
   "ignore::DeprecationWarning:passlib",
@@ -60,7 +60,7 @@ warn_unreachable = true
 show_error_codes = true
 pretty = true
 color_output = true
-mypy_path = ["src", "."]
+mypy_path = ["src", "packages/provider-sdk/src", "."]
 files = [
   "src/apps/api/config.py",
   "src/apps/api/services/forecast_service.py",
@@ -90,6 +90,7 @@ files = [
   "src/apps/provider_sdk/contracts.py",
   "src/apps/provider_sdk/conformance.py",
   "src/apps/provider_sdk/scaffold.py",
+  "packages/provider-sdk/src/modular_accounting_provider_sdk",
   "src/cli/macli.py",
   "src/cli/provider_sdk.py",
   "src/apps/web/provider_governance_workspace.py",

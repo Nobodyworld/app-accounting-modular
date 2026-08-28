@@ -6,7 +6,7 @@
 # Documentation colocated with runtime modules is not executable coverage input.
 
 [diff_coverage]
-include_roots = ["src/apps", "src/plugins", "src/cli"]
+include_roots = ["src/apps", "src/plugins", "src/cli", "packages/provider-sdk/src"]
 exclude = ["**/*.md"]
 minimum_changed_line_percent = 85.0
 allow_no_changed_executable_lines = true
