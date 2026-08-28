@@ -2,7 +2,7 @@
 
 ## Status
 
-The provider SDK is the v0.3 candidate contract for authoring and reviewing accounting-data adapters. It is part of the modular accounting-control toolkit, not a provider marketplace, package manager, tenant authorization system, or production certification program.
+The v0.5 provider SDK is the installable `modular-accounting-provider-sdk` distribution. Its authoritative import is `modular_accounting_provider_sdk`; `apps.provider_sdk` is a thin compatibility facade over the same objects. It remains part of the modular accounting-control toolkit, not a provider marketplace, package manager, tenant authorization system, or production certification program.
 
 The repository remains an **Early Beta / Portfolio Preview** with a local-demonstration deployment boundary.
 

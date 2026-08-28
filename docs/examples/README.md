@@ -7,6 +7,10 @@ shows operator reconciliation, member review, administrator CAS mutations,
 secret-free evidence, and session-boundary checks without describing the v0.4
 workspace as a marketplace or production certification.
 
+The [external provider author walkthrough](provider_author_walkthrough.md)
+demonstrates local SDK installation, standalone scaffolding/build/conformance,
+and the explicit operator allowlist handoff without package publication.
+
 - `scenario-plan.json` – Multi-scenario batch input for `cli.macli` commands.
 - `ledger_persistence.md` – Examples of mapping domain transactions into external ledgers (QuickBooks, Xero, SQL).
 - `foreign_currency_accounting_case_study.md` – End-to-end accounting control walkthrough for invoice, settlement, and revaluation in mixed currencies.

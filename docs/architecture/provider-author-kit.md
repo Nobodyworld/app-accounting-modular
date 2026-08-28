@@ -1,12 +1,12 @@
 # Provider Author Kit Architecture
 
-Status: planned v0.5 contract for issue #148. Implementation and release claims remain subject to exact-head validation.
+Status: implemented v0.5 contract for issue #148. Release claims remain subject to exact-head validation.
 
 ## Purpose
 
 The v0.3 provider SDK established bounded manifests, capability contracts, deterministic conformance, scaffolding, and allowlist-enforced application loading. The v0.4 governance layer added persistent organization policy without allowing persistence to broaden executable trust.
 
-The remaining gap is external-author proof. The current authoring path lives inside the application source tree and uses the `apps.provider_sdk` import surface. v0.5 must prove that an author can consume a conventionally installable SDK artifact, scaffold a standalone provider project, build and install that provider in isolation, validate it without the accounting application, and hand it to an operator-controlled trust workflow.
+v0.5 closes the external-author gap. The authoritative implementation lives in `packages/provider-sdk/src/modular_accounting_provider_sdk`; `apps.provider_sdk` re-exports the same public objects. The repository-owned acceptance harness builds local SDK and provider artifacts, installs them in separate disposable environments with no repository `PYTHONPATH`, blocks network connections during structural validation, proves application packages are absent, and verifies pre-allowlist rejection.
 
 This tranche is an **authoring and packaging boundary**, not a marketplace, package installer, tenant upload surface, registry, certification program, or production provider approval.
 
@@ -23,7 +23,7 @@ This tranche is an **authoring and packaging boundary**, not a marketplace, pack
 
 ## Target package boundary
 
-The provisional standalone distribution is:
+The authoritative standalone distribution is:
 
 ```text
 distribution: modular-accounting-provider-sdk

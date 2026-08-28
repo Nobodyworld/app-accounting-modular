@@ -4,6 +4,34 @@ The Modular Accounting provider SDK is a dependency-light authoring and review b
 
 The SDK does **not** install packages, discover arbitrary code, grant tenant access, store credentials, call provider data methods during structural validation, or certify an adapter for production use. The repository remains an **Early Beta / Portfolio Preview** with a local-demonstration deployment boundary.
 
+## Standalone v0.5 author workflow
+
+Build the local SDK artifacts, install the wheel into an author environment,
+then use the standalone standard-library CLI:
+
+```console
+python -m modular_accounting_provider_sdk scaffold market:example_author --capability market
+python -m modular_accounting_provider_sdk build market-example-author --format json
+python -m modular_accounting_provider_sdk validate market_example_author.provider --expected-key market:example_author --capability market --api-version 0.5.0 --format json
+```
+
+The generated project contains `pyproject.toml`, `README.md`, a typed
+`src/<package>/` module, `py.typed`, and a standard-library conformance test.
+`--force` overwrites only those known generated files. Unknown author files
+survive regeneration. Validation is structural by default; `--instantiate`
+explicitly opts into synchronous factory construction, but provider data methods
+are never part of conformance.
+
+Repository acceptance is:
+
+```console
+python scripts/provider_author_acceptance.py --output provider-author-acceptance.json
+```
+
+It uses local artifacts only, `PIP_NO_INDEX=1`, separate author and consumer
+venvs, no repository `PYTHONPATH`, a network-denial guard, deterministic
+artifact inventories/hashes, and unconditional disposable-state cleanup.
+
 ## Trust model
 
 A provider participates in three separate decisions:

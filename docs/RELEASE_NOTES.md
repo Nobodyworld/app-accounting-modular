@@ -1,8 +1,24 @@
 # Release Notes
 
-## Unreleased v0.4 Provider Catalog Governance Candidate
+## Unreleased v0.5 Provider Author Kit
 
-The v0.4 candidate adds persistent tenant-aware administration on top of the v0.3 provider SDK while keeping the operator process allowlist authoritative for executable code.
+The v0.5 tranche introduces the installable, typed, zero-runtime-dependency
+`modular-accounting-provider-sdk` distribution; an identity-preserving
+`apps.provider_sdk` facade; standalone scaffold/validate/build CLI commands;
+conventional provider wheel/sdist projects; deterministic artifact evidence;
+and a cross-platform offline clean-environment acceptance harness.
+
+Repeated SDK and generated-provider builds produce matching local hashes, clean
+author and consumer environments contain no application package or repository
+`PYTHONPATH`, structural inspection runs under a network-denial guard without
+factory/data calls, and an importable provider remains rejected before explicit
+operator allowlisting. v0.4 reconciliation and organization policy remain
+narrowing controls. No package is published, and this is not marketplace,
+registry, certification, production-provider, or public/LAN deployment approval.
+
+## v0.4 Provider Catalog Governance
+
+v0.4 adds persistent tenant-aware administration on top of the provider SDK while keeping the operator process allowlist authoritative for executable code.
 
 - separate SQLModel records for safe trusted-registration evidence, unique organization provider policy, and unique organization capability defaults;
 - deterministic network-free startup/operator reconciliation with drift quarantine, allowlist-removal handling, validation, and secret-free evidence export;

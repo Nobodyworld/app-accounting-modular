@@ -1,5 +1,24 @@
 # Setup
 
+## Local Provider Author Kit
+
+The application source checkout needs both source roots:
+
+```powershell
+$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"
+```
+
+The SDK itself has zero runtime dependencies. Build or accept only local
+artifacts for this Early Beta demonstration; the repository acceptance harness
+creates clean author/consumer environments, sets `PIP_NO_INDEX=1`, installs
+with `--no-index --no-deps`, and cleans all disposable state:
+
+```console
+python scripts/provider_author_acceptance.py --output provider-author-acceptance.json
+```
+
+Do not publish the package or treat installation as application authorization.
+
 This guide covers the validated local-development and container workflows for Modular Accounting.
 
 ## Prerequisites

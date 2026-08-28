@@ -1,5 +1,17 @@
 # Operations & Incident Response
 
+## External provider operator handoff
+
+An authored wheel is inert application input until an operator reviews it and
+adds the exact provider key, import module, display metadata, and capabilities
+to `settings.allowed_providers`. Then run
+`python -m cli.macli provider-sdk validate --key KEY`, followed by
+`governance-reconcile` and `governance-validate`. Organization enablement and
+defaults apply only after that process-trust transition. Removing the allowlist
+entry immediately makes historical registration evidence non-executable.
+Tenant APIs accept none of packages, URLs, paths, factories, entry points, or
+module names as trust inputs.
+
 The Modular Accounting platform now exposes cohesive observability primitives
 so incidents can be triaged rapidly.
 

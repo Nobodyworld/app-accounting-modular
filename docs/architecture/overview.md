@@ -4,6 +4,13 @@ Modular Accounting now exposes a layered architecture with shared observability
 and extension scaffolding so that new modules can be introduced without
 touching the core. The diagram below illustrates the major runtime surfaces.
 
+The v0.5 authoring boundary is a separate zero-runtime-dependency distribution
+at `packages/provider-sdk/`. Application imports through `apps.provider_sdk`
+are thin re-exports of that authoritative package. External provider artifacts
+remain outside the runtime graph until an operator names their exact identity in
+`settings.allowed_providers`; v0.4 reconciliation and organization policy can
+then narrow that process trust but cannot create it.
+
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                             Entry Points                                 │
