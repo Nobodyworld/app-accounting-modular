@@ -1,5 +1,32 @@
 # Setup
 
+## Local Provider Author Kit
+
+The application source checkout needs both source roots:
+
+```powershell
+$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"
+```
+
+The SDK itself has zero runtime dependencies. Build or accept only local
+artifacts for this Early Beta demonstration; the repository acceptance harness
+creates clean author/consumer environments, sets `PIP_NO_INDEX=1`, builds
+through the declared PEP 517 backends, installs wheel and sdist variants from
+local artifacts only, and cleans all disposable state:
+
+```console
+python scripts/provider_author_acceptance.py --output provider-author-acceptance.json
+```
+
+Do not publish the package or treat installation as application authorization.
+
+The standard local SDK build is network-free because its declared backend has
+no build requirements:
+
+```console
+PIP_NO_INDEX=1 python -m build --no-isolation packages/provider-sdk
+```
+
 This guide covers the validated local-development and container workflows for Modular Accounting.
 
 ## Prerequisites
@@ -31,7 +58,7 @@ Activate the environment.
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
-$env:PYTHONPATH = "$PWD\src"
+$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"
 ```
 
 ### macOS or Linux
@@ -40,7 +67,7 @@ $env:PYTHONPATH = "$PWD\src"
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
-export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$PWD/src:$PWD/packages/provider-sdk/src${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
 `make install` is an equivalent convenience target on systems with GNU Make.
@@ -172,7 +199,7 @@ The default Compose configuration:
 
 - builds both images from the repository root;
 - runs both application processes as numeric UID/GID `10001:10001`;
-- sets `/app/src` on `PYTHONPATH`;
+- sets `/app/src` and `/app/packages/provider-sdk/src` on `PYTHONPATH`;
 - gives the API a persistent SQLite volume mounted at `/data`;
 - uses read-only root filesystems for both services;
 - drops all Linux capabilities and enables `no-new-privileges`;
@@ -311,18 +338,18 @@ python -m src.tools.secret_scan
 
 ### `ModuleNotFoundError: No module named 'apps'`
 
-The repository uses a `src` layout. Confirm that the virtual environment is active and `PYTHONPATH` contains the repository's `src` directory.
+The application and standalone SDK both use `src` layouts. Confirm that the virtual environment is active and `PYTHONPATH` contains both source roots.
 
 Windows PowerShell:
 
 ```powershell
-$env:PYTHONPATH = "$PWD\src"
+$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"
 ```
 
 macOS or Linux:
 
 ```bash
-export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$PWD/src:$PWD/packages/provider-sdk/src${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
 ### Compose reports that `MODACCT_JWT_SECRET_KEY` is required

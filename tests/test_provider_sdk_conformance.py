@@ -114,7 +114,7 @@ def test_runtime_loading_returns_instance_manifest_and_report() -> None:
 
 
 def test_missing_module_failure_is_sanitized() -> None:
-    report = inspect_provider_module("not_a_real_provider.secret-value")
+    report = inspect_provider_module("not_a_real_provider.provider")
     assert not report.passed
     assert report.failure_codes == ("module.import",)
     assert "secret-value" not in check(report, "module.import").message

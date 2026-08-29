@@ -1,7 +1,7 @@
 # Automation Roles
 
 Run direct `python -m cli...` and `python -m tools...` commands from an
-environment where `src` is on `PYTHONPATH`.
+environment where both `src` and `packages/provider-sdk/src` are on `PYTHONPATH`.
 
 ## Snapshot Steward Agent
 

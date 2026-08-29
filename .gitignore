@@ -716,6 +716,11 @@ runs/
 #########################################
 
 # Add project-specific patterns below this line
+!/packages/
+!/packages/provider-sdk/
+!/packages/provider-sdk/**
+/packages/provider-sdk/src/*.egg-info/
+/packages/provider-sdk/**/__pycache__/
 .ruff_cache/
 .pytest_cache_runtime/
 .venv314/

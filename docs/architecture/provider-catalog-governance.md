@@ -6,6 +6,19 @@ Status: implemented v0.4 contract for issue #145; release acceptance remains sub
 
 The v0.3 provider SDK establishes a structural contract for trusted provider modules. Issue #145 adds the operational layer that is still missing: persistent organization policy, deterministic default selection, bounded readiness/conformance evidence, and administrator-facing controls.
 
+In v0.5 the same contract implementation is delivered by the standalone
+`modular_accounting_provider_sdk` package; `apps.provider_sdk` re-exports it.
+An installed external wheel, package metadata, or entry point contributes no
+process trust. Governance reconciliation still begins only from the operator's
+current `settings.allowed_providers` identity.
+
+The v0.5 acceptance harness executes this transition against disposable SQLite
+state: rejection before import, exact `ProviderInfo` allowlisting, conformance,
+safe registration, administrator enable/default mutation, governed resolution,
+process-trust removal, retained historical evidence, and non-executability.
+Tenant policy schemas reject packages, wheels, URLs, modules, factories, entry
+points, and manifests as self-authorization inputs.
+
 This design deliberately separates **code trust** from **tenant policy**.
 
 - Code/process configuration decides which Python provider modules are trusted enough to be considered loadable.

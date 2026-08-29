@@ -27,7 +27,7 @@ Key files and examples (copy or reference these patterns):
 Run, test, and dev commands
 
 - Install dependencies: `pip install -r requirements.txt`.
-- Expose src-layout packages before direct module commands: PowerShell `$env:PYTHONPATH = "$PWD\src"`; bash/zsh `export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"`.
+- Expose both src-layout packages before direct module commands: PowerShell `$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"`; bash/zsh `export PYTHONPATH="$PWD/src:$PWD/packages/provider-sdk/src${PYTHONPATH:+:$PYTHONPATH}"`.
 - Run API locally: `python -m uvicorn apps.api.main:app --reload` (the tests and Streamlit expect API on http://localhost:8000).
 - Run UI: `streamlit run src/apps/web/app.py` (sets `API_BASE` to point at the running API if not set).
 - Run all tests: use the test runner in this repo (pytest is implied). Tests expect an in-repo importable path; see `tests/conftest.py`.

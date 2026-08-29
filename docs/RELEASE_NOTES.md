@@ -1,8 +1,29 @@
 # Release Notes
 
-## Unreleased v0.4 Provider Catalog Governance Candidate
+## Unreleased v0.5 Provider Author Kit
 
-The v0.4 candidate adds persistent tenant-aware administration on top of the v0.3 provider SDK while keeping the operator process allowlist authoritative for executable code.
+The v0.5 tranche introduces the installable, typed, zero-runtime-dependency
+`modular-accounting-provider-sdk` distribution; one self-contained authoritative
+PEP 517 backend; an identity-preserving `apps.provider_sdk` facade; standalone
+scaffold/validate/build CLI commands; conventional provider wheel/sdist
+projects; deterministic artifact evidence; and a cross-platform offline
+clean-environment acceptance harness.
+
+The harness uses `python -m build`, produces repeatable SDK and provider hashes,
+rebuilds extracted sdists, installs wheel/sdist variants in clean environments,
+and validates metadata and wheel RECORD entries. Those environments contain no
+application package or repository `PYTHONPATH`; structural inspection runs under
+a network-denial guard without factory/data calls. The handoff evidence observes
+rejection before import, exact operator allowlisting, safe v0.4 reconciliation,
+administrator enable/default changes, governed construction, and immediate
+non-executability after process-trust removal. Archive/link/path failures and
+tenant self-authorization inputs fail closed. No package is published, and this
+is not marketplace, registry, certification, production-provider, or public/LAN
+deployment approval.
+
+## v0.4 Provider Catalog Governance
+
+v0.4 adds persistent tenant-aware administration on top of the provider SDK while keeping the operator process allowlist authoritative for executable code.
 
 - separate SQLModel records for safe trusted-registration evidence, unique organization provider policy, and unique organization capability defaults;
 - deterministic network-free startup/operator reconciliation with drift quarantine, allowlist-removal handling, validation, and secret-free evidence export;

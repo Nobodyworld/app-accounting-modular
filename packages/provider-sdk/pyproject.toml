@@ -1,0 +1,32 @@
+[build-system]
+requires = []
+build-backend = "modular_accounting_provider_sdk.build_backend"
+backend-path = ["src"]
+
+[project]
+name = "modular-accounting-provider-sdk"
+version = "0.5.0"
+description = "Standalone structural contracts and author tooling for Modular Accounting providers"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{name = "Modular Accounting contributors"}]
+dependencies = []
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed",
+]
+
+[project.scripts]
+modular-accounting-provider-sdk = "modular_accounting_provider_sdk.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+modular_accounting_provider_sdk = ["py.typed"]

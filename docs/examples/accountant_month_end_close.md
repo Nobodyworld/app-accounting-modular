@@ -7,7 +7,7 @@ This walkthrough exercises the v0.2 close cycle with controlled sample data. It 
 Use a fresh local database, start the API and Streamlit as described in the README, then run:
 
 ```powershell
-$env:PYTHONPATH = "$PWD\src;$PWD"
+$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src;$PWD"
 $env:MODACCT_DATABASE_URL = "sqlite:///./close-demo.db"
 python scripts/seed_close_demo.py
 ```

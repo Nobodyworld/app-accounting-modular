@@ -22,6 +22,7 @@ COMMANDS: Sequence[Sequence[str]] = (
         "src/apps/api",
         "src/apps/extensions",
         "src/cli",
+        "packages/provider-sdk/src/modular_accounting_provider_sdk",
     ),
     (
         sys.executable,
@@ -32,6 +33,7 @@ COMMANDS: Sequence[Sequence[str]] = (
         "--cov=src/apps",
         "--cov=src/plugins",
         "--cov=src/cli",
+        "--cov=packages/provider-sdk/src/modular_accounting_provider_sdk",
         "--cov-branch",
         "--cov-report=term-missing",
         "--cov-report=xml:coverage.xml",
@@ -64,6 +66,12 @@ COMMANDS: Sequence[Sequence[str]] = (
         "tests/test_data_snapshot_service.py",
         "tests/test_modular_accounting_snapshot.py",
         "tests/test_modular_accounting_controls.py",
+    ),
+    (
+        sys.executable,
+        "scripts/provider_author_acceptance.py",
+        "--output",
+        "provider-author-acceptance.json",
     ),
     (sys.executable, "-m", "pip", "check"),
     (
@@ -105,8 +113,10 @@ class CommandResult:
 def _run_command(command: Sequence[str]) -> CommandResult:
     env = os.environ.copy()
     src_path = str(REPO_ROOT / "src")
+    sdk_path = str(REPO_ROOT / "packages" / "provider-sdk" / "src")
     existing_pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = src_path if not existing_pythonpath else f"{src_path}{os.pathsep}{existing_pythonpath}"
+    paths = f"{src_path}{os.pathsep}{sdk_path}"
+    env["PYTHONPATH"] = paths if not existing_pythonpath else f"{paths}{os.pathsep}{existing_pythonpath}"
     try:
         completed = subprocess.run(command, check=False, cwd=str(REPO_ROOT), env=env)
     except FileNotFoundError as exc:

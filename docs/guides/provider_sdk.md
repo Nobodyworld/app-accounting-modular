@@ -4,6 +4,45 @@ The Modular Accounting provider SDK is a dependency-light authoring and review b
 
 The SDK does **not** install packages, discover arbitrary code, grant tenant access, store credentials, call provider data methods during structural validation, or certify an adapter for production use. The repository remains an **Early Beta / Portfolio Preview** with a local-demonstration deployment boundary.
 
+## Standalone v0.5 author workflow
+
+The SDK has one authoritative, self-contained in-tree PEP 517 backend. Build
+its wheel and source-layout sdist through the standard frontend:
+
+```console
+PIP_NO_INDEX=1 python -m build --no-isolation packages/provider-sdk
+```
+
+Install the local wheel into an author environment, then use the standalone
+standard-library CLI:
+
+```console
+python -m modular_accounting_provider_sdk scaffold market:example_author --capability market
+python -m modular_accounting_provider_sdk build market-example-author --format json
+python -m modular_accounting_provider_sdk validate market_example_author.provider --expected-key market:example_author --capability market --api-version 0.5.0 --format json
+```
+
+The generated project contains `pyproject.toml`, `README.md`, a typed
+`src/<package>/` module, `py.typed`, and a standard-library conformance test.
+Its `build-system.requires` contains the exact
+`modular-accounting-provider-sdk==0.5.0` distribution that supplies the backend.
+`--force` overwrites only those known generated files. Unknown author files
+survive regeneration. Validation is structural by default; `--instantiate`
+explicitly opts into synchronous factory construction, but provider data methods
+are never part of conformance.
+
+Repository acceptance is:
+
+```console
+python scripts/provider_author_acceptance.py --output provider-author-acceptance.json
+```
+
+It uses local artifacts only, `PIP_NO_INDEX=1`, standard PEP 517 builds,
+separate wheel/sdist installation environments, extracted-sdist rebuilds, no
+repository `PYTHONPATH`, a network-denial guard, validated metadata and RECORD
+entries, deterministic artifact inventories/hashes, an executed v0.4 handoff,
+and unconditional disposable-state cleanup.
+
 ## Trust model
 
 A provider participates in three separate decisions:
@@ -162,6 +201,7 @@ The command exits with status 1 when any required check fails and status 2 for i
 
 The evidence can include these stable check families:
 
+- `module.name`
 - `module.import`
 - `manifest.present`
 - `manifest.sdk`

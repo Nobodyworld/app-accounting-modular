@@ -7,7 +7,7 @@ This walkthrough demonstrates the v0.4 governance boundary in a local **Early Be
 Configure only reviewed providers in `settings.allowed_providers`, initialize the database, and run:
 
 ```powershell
-$env:PYTHONPATH = "$PWD\src"
+$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"
 python -m cli.macli provider-sdk governance-reconcile --format table
 python -m cli.macli provider-sdk governance-validate --format table
 ```

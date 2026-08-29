@@ -1,6 +1,38 @@
 # Provider SDK Compatibility Matrix
 
-This matrix documents the provider contracts declared by the bundled configuration in the v0.3 provider-SDK candidate. It is review evidence, not a marketplace listing or production certification.
+This matrix documents the v0.5 standalone author kit and the provider contracts declared by the bundled configuration. It is review evidence, not a marketplace listing or production certification.
+
+## Compatibility and deprecation lifecycle
+
+| Identity | Current value | Rule |
+| --- | --- | --- |
+| SDK distribution | `modular-accounting-provider-sdk==0.5.0` | Author-tool packaging version; local artifacts only in this tranche. |
+| SDK import | `modular_accounting_provider_sdk` | Authoritative implementation and public types. |
+| Manifest SDK contract | `1.0` | Exact equality is required; no compatibility range is implied. |
+| Provider implementation | Manifest semantic version | Provider-owned evidence, independent of the SDK distribution. |
+| Application API major | `0` | Exact major equality is required. |
+| Scaffold stamp | `0.5.0` | Records which author template produced the project. |
+
+The SDK source declares its zero-dependency in-tree backend as the only artifact
+implementation. Generated providers declare the exact SDK distribution as both
+runtime and build-system dependency. Compatibility evidence validates wheel and
+sdist name, version, Python requirement, dependency, provider identity,
+capabilities, source layout, typing marker, and wheel RECORD; a package being
+installable or importable remains unrelated to executable application trust.
+
+Additive changes must retain existing `1.0` behavior and the facade's object
+identity. A breaking manifest or protocol change requires a new contract
+version, stable deterministic incompatibility codes, migration guidance, and
+an Early Beta notice period when security response does not require immediate
+withdrawal. Older artifacts remain valid only when their exact SDK contract and
+application API major pass current structural checks. Security fixes may reject
+an older artifact immediately and must document the reason.
+
+`apps.provider_sdk` may be removed only after all application callers,
+bundled providers, operator commands, downstream examples, and a documented
+deprecation window use the standalone import. v0.5 emits no disruptive
+deprecation warning. The lifecycle adds no marketplace, certification,
+publication, production support, or broad version ranges.
 
 The authoritative installation boundary remains `settings.allowed_providers`. A manifest cannot self-install or self-authorize. Exact-head validation must pass before any branch state is described as validated.
 

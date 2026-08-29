@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Python
         # actions/setup-python v7.0.0 (released 2026-07-20; resolved 2026-07-31)
@@ -42,7 +43,9 @@ jobs:
 
       - name: Run quality gate and tests
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/packages/provider-sdk/src
+          PROVIDER_ACCEPTANCE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PROVIDER_ACCEPTANCE_TESTED_COMMIT: ${{ github.sha }}
         run: python -m src.tools.quality_gate > quality-gate.log 2>&1
 
       - name: Show quality-gate log tail
@@ -51,7 +54,7 @@ jobs:
 
       - name: Run accounting control suites
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}/packages/provider-sdk/src
         run: pytest -q tests/test_ledger_service.py tests/test_data_snapshot_service.py tests/test_modular_accounting_snapshot.py tests/test_modular_accounting_controls.py
 
       - name: Upload quality evidence
@@ -64,6 +67,7 @@ jobs:
             docs/reports/audit-latest.md
             coverage.xml
             coverage.json
+            provider-author-acceptance.json
             quality-gate.log
           if-no-files-found: error
           retention-days: 14

@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-08-28: Closed v0.5 packaging and trust-boundary review gaps: made the SDK's in-tree zero-dependency PEP 517 backend authoritative; preserved `src/` layouts in SDK/provider sdists; declared the exact provider build requirement; added standard-frontend, extracted-sdist, wheel/sdist install, metadata/RECORD, clean-start, and exact-tree evidence; executed the full allowlist-to-v0.4-to-removal handoff; and hardened module, source, force-target, archive, and sanitized CLI path boundaries.
+
+- 2026-08-28: Implemented the v0.5 Provider Author Kit for issue #148 / draft PR #149: installable zero-runtime-dependency SDK wheel/sdist, identity-preserving application facade, standalone scaffold/validate/build CLI, conventional typed provider projects, deterministic evidence, offline clean author/consumer acceptance, exact compatibility/deprecation lifecycle, quality/container integration, and explicit pre-allowlist rejection. No package was published and no marketplace or certification surface was added.
+
 - 2026-08-21: Corrected the v0.4 Streamlit boundary so Snapshot Review remains a public/local controlled demonstration backed by process-trusted conforming providers and the local orchestrator, while Provider Governance and authenticated tenant API provider resolution remain organization-scoped.
 
 - 2026-08-20: Implemented the v0.4 provider-catalog governance candidate for issue #145 / draft PR #146: safe persistent trusted-registration evidence; tenant policy and deterministic capability defaults; CAS/audit transactions; allowlist-enforced resolution; credential-presence-only readiness; protected API/Streamlit administration; operator reconciliation/validation/export; snapshot provenance; security regressions; and explicit critical coverage. Exact-head acceptance remains pending; this is not a marketplace or certification claim.

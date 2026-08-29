@@ -4,6 +4,13 @@ Modular Accounting now exposes a layered architecture with shared observability
 and extension scaffolding so that new modules can be introduced without
 touching the core. The diagram below illustrates the major runtime surfaces.
 
+The v0.5 authoring boundary is a separate zero-runtime-dependency distribution
+at `packages/provider-sdk/`. Application imports through `apps.provider_sdk`
+are thin re-exports of that authoritative package. External provider artifacts
+remain outside the runtime graph until an operator names their exact identity in
+`settings.allowed_providers`; v0.4 reconciliation and organization policy can
+then narrow that process trust but cannot create it.
+
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                             Entry Points                                 │
@@ -104,6 +111,9 @@ touching the core. The diagram below illustrates the major runtime surfaces.
    provider executable. Policy/default mutations use revision comparison and
    atomic audit writes; deterministic evidence contains credential variable
    names and presence booleans only.
+   The v0.5 author distribution and generated providers build through one
+   SDK-owned PEP 517 backend. Successful build, installation, metadata, or
+   import never bypasses this process allowlist and v0.4 governance intersection.
    The ECB and OpenExchangeRates adapters share a bounded HTTPS JSON transport:
    streamed reads, declared and measured 1 MiB byte enforcement, 5/20-second
    connect/read timeouts, two selected-transient attempts, sanitized domain

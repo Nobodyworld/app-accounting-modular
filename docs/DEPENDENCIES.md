@@ -102,7 +102,8 @@ to fail the lock fingerprint check; that failure must not be bypassed.
 Development dependencies are declared in `requirements-dev.txt` and include:
 
 - Quality tooling: `ruff`, `black`, `mypy`
-- Test tooling: `pytest`, `pytest-cov`
+- Test and package tooling: `pytest`, `pytest-cov`, and the exact `build==1.3.0`
+  standard PEP 517 frontend used by Provider Author Kit acceptance
 - Security tooling: `pip-audit`
 
 Most human-edited development dependencies retain bounded compatibility ranges.

@@ -15,7 +15,7 @@
 
   <g clip-path="url(#terminal-content-clip)">
     <g fill="#dbe7f2" font-family="Consolas, 'Courier New', monospace" font-size="19">
-      <text x="48" y="90">PS&gt; $env:PYTHONPATH = "$PWD\src"</text>
+      <text x="48" y="90">PS&gt; $env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"</text>
       <text x="48" y="118">PS&gt; python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000</text>
       <text x="48" y="146">PS&gt; curl http://127.0.0.1:8000/health</text>
       <text x="48" y="174">PS&gt; curl http://127.0.0.1:8000/health/ready</text>
