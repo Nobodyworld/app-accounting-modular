@@ -12,6 +12,7 @@ from apps.api.main import create_app
 from apps.api.models.models import AuditLog, Membership, Organization, OrganizationProviderPolicy, User
 from apps.api.security import get_password_hash
 from apps.api.services.auth_session_service import AuthSessionService
+from apps.api.services.provider_governance_service import ProviderGovernanceService
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -251,3 +252,22 @@ def test_credential_and_evidence_outputs_are_secret_free_and_deterministic(gover
     assert exported.status_code == 200
     assert exported.headers["X-Evidence-SHA256"] == exported.json()["evidence_sha256"]
     assert exported.headers["Content-Disposition"].endswith(f'provider-governance-{context["org"]}.json"')
+
+
+def test_evidence_export_uses_one_service_snapshot(governance_api, monkeypatch: pytest.MonkeyPatch) -> None:
+    client, context = governance_api
+    headers = _headers(context["member"])
+    params = {"organization_id": context["org"]}
+    calls = 0
+    original = ProviderGovernanceService.evidence
+
+    def counted(self: ProviderGovernanceService) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return original(self)
+
+    monkeypatch.setattr(ProviderGovernanceService, "evidence", counted)
+    exported = client.get("/providers/evidence/export", params=params, headers=headers)
+    assert exported.status_code == 200, exported.text
+    assert calls == 1
+    assert exported.headers["X-Evidence-SHA256"] == exported.json()["evidence_sha256"]
