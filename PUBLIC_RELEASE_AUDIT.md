@@ -84,9 +84,9 @@ Aggregate branch coverage is retained as diagnostic evidence without an aggregat
 
 ## Merge-enforcement review — 2026-09-06
 
-A read of active ruleset `18912267` found strict required checks for `build (3.12)`, `build (3.13)`, `build (3.14)`, and `container-smoke`, all bound to GitHub Actions integration `15368`. The ruleset also preserves pull-request-only squash merging, linear history, resolved review threads, no force pushes, no branch deletion, and no bypass actors.
+A complete readback of active ruleset `18912267` confirmed strict required checks for `build (3.12)`, `build (3.13)`, `build (3.14)`, `container-smoke`, `diff-coverage`, and `container-supply-chain`, all bound to GitHub Actions integration `15368`. The ruleset also preserves pull-request-only squash merging, linear history, resolved review threads, no force pushes, no branch deletion, and no bypass actors.
 
-The existing `diff-coverage` and `container-supply-chain` jobs were not required by that ruleset. They must be added with integration `15368`, retaining every existing check and protection. This is a repository-administration change, not a source-file change; it remains pending until a successful mutation and readback confirm it. No current workflow or required check should be removed as part of this correction.
+The authorized GitHub CLI update on 2026-09-06 at 22:23:38 -05:00 (2026-09-07 UTC) added the existing `diff-coverage` and `container-supply-chain` jobs as required checks. Complete before/after comparison confirmed exactly those two additions and the server-maintained update timestamp changed; every existing check and other setting was preserved. PR #154 records the settings readback and separate source-validation evidence. No workflow was removed or consolidated, and this administration change does not authorize a merge or release.
 
 ## Security and automation posture
 
@@ -101,7 +101,7 @@ The existing `diff-coverage` and `container-supply-chain` jobs were not required
 
 ## Remaining non-blocking work
 
-- Keep current repository merge enforcement aligned with documented acceptance gates; the specific pending change is recorded above and must not be confused with completed enforcement.
+- Keep repository merge enforcement aligned with documented acceptance gates and preserve the six-check configuration verified above.
 - Keep work-slice cleanup conservative: ignored status alone never proves a database, environment file, user-data path, or unknown artifact is disposable.
 - Periodically review repository description, topics, social preview, rulesets, required checks, and least-privilege Actions settings.
 - No tag or GitHub release is authorized by this audit unless separately approved.
