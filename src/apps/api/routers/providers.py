@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -162,12 +163,14 @@ def evidence_export(
     current_user: User = Depends(get_current_user),
 ) -> Response:
     service, _ = _service(organization_id, session, current_user)
+    evidence = service.evidence()
+    content = json.dumps(evidence, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
     return Response(
-        content=service.evidence_json(),
+        content=content,
         media_type="application/json",
         headers={
             "Content-Disposition": f'attachment; filename="provider-governance-{organization_id}.json"',
-            "X-Evidence-SHA256": str(service.evidence()["evidence_sha256"]),
+            "X-Evidence-SHA256": str(evidence["evidence_sha256"]),
         },
     )
 
