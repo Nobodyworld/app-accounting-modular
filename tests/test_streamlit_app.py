@@ -493,7 +493,7 @@ def test_snapshot_remains_public_while_protected_workflows_start_locked(fake_run
 
     at = _app_test()
     at.run(timeout=15)
-    _store_scenario_plan(at, {"metadata": {"name": "Retained anonymous input"}, "scenarios": []})
+    plan_bytes = _store_scenario_plan(at, {"metadata": {"name": "Retained anonymous input"}, "scenarios": []})
 
     assert at.button(key="snapshot_generate_button").disabled is False
     assert at.selectbox(key="snapshot_fx_provider_select").disabled is False
@@ -502,8 +502,13 @@ def test_snapshot_remains_public_while_protected_workflows_start_locked(fake_run
     assert "snapshot_controls_payload" in at.session_state
     assert fake_runtime.calls
     assert at.button(key="scenario_plan_preview_button").disabled is True
-    at.button(key="scenario_plan_preview_button").click()
+    # A browser cannot click a disabled widget. Verify the locked state survives
+    # an ordinary rerun instead of relying on older AppTest allowing that click.
     at.run(timeout=15)
+    assert not at.exception
+    assert at.button(key="scenario_plan_preview_button").disabled is True
+    assert at.session_state["scenario_plan_bytes"] == plan_bytes
+    assert "scenario_plan_preview" not in at.session_state
     for key in ("budget_report_button", "cashflow_report_button", "fx_sync_button", "market_sync_button"):
         assert at.button(key=key).disabled is True
 
