@@ -78,9 +78,15 @@ Hosted artifacts are short-lived operational evidence. The SHA, run identifiers,
 
 ## Coverage policy
 
-The release-authoritative metric is aggregate **line coverage**, with a minimum of 85%.
+The release-authoritative aggregate metric is **line coverage**, with a minimum of 85%.
 
-Branch coverage is measured and retained as diagnostic evidence. It is not currently a release threshold. Changed-production coverage and explicit critical-module floors are additional review gates in the current repository. Package-level values in `docs/reports/audit-latest.md` use Python `trace` and are stewardship diagnostics, not pytest-cov percentages.
+Aggregate branch coverage is retained as diagnostic evidence without an aggregate release floor. Separately, the current critical-module policy enforces explicit line and branch floors; those branch floors are mandatory, not merely diagnostic. Changed-production coverage is an additional enforced workflow gate. Package-level values in `docs/reports/audit-latest.md` use Python `trace` and are stewardship diagnostics, not pytest-cov percentages.
+
+## Merge-enforcement review — 2026-09-06
+
+A read of active ruleset `18912267` found strict required checks for `build (3.12)`, `build (3.13)`, `build (3.14)`, and `container-smoke`, all bound to GitHub Actions integration `15368`. The ruleset also preserves pull-request-only squash merging, linear history, resolved review threads, no force pushes, no branch deletion, and no bypass actors.
+
+The existing `diff-coverage` and `container-supply-chain` jobs were not required by that ruleset. They must be added with integration `15368`, retaining every existing check and protection. This is a repository-administration change, not a source-file change; it remains pending until a successful mutation and readback confirm it. No current workflow or required check should be removed as part of this correction.
 
 ## Security and automation posture
 
@@ -95,7 +101,7 @@ Branch coverage is measured and retained as diagnostic evidence. It is not curre
 
 ## Remaining non-blocking work
 
-- Keep current repository merge enforcement aligned with documented acceptance gates, including changed-production coverage and the container supply-chain gate before removing any older equivalent check.
+- Keep current repository merge enforcement aligned with documented acceptance gates; the specific pending change is recorded above and must not be confused with completed enforcement.
 - Keep work-slice cleanup conservative: ignored status alone never proves a database, environment file, user-data path, or unknown artifact is disposable.
 - Periodically review repository description, topics, social preview, rulesets, required checks, and least-privilege Actions settings.
 - No tag or GitHub release is authorized by this audit unless separately approved.
