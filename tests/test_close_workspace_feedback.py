@@ -4,7 +4,6 @@ import sys
 from typing import Any
 
 import pytest
-import streamlit as st
 
 pytest.importorskip("streamlit", reason="streamlit dependencies not available")
 from streamlit.testing.v1 import AppTest  # type: ignore[import-not-found]
@@ -23,6 +22,7 @@ class DummyResponse:
 
 
 def _feedback_test_app() -> None:
+    import streamlit as st
     from apps.web.api_session import ApiLoginResult, store_api_session
     from apps.web.close_workspace import render_close_workspace
 
