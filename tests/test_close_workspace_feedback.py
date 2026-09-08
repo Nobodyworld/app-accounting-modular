@@ -124,7 +124,11 @@ def test_reconciliation_approval_rerenders_fresh_server_table(monkeypatch: pytes
 
     assert not app.exception
     assert len(writes) == 1
-    assert any("APPROVED" in str(item.value) and "1000" in str(item.value) for item in app.dataframe)
+    table = next(
+        item.value for item in app.dataframe if {"Account", "Status"}.issubset(set(item.value.columns))
+    )
+    visible = table.loc[table["Account"] == 1000]
+    assert visible["Status"].tolist() == ["APPROVED"]
     assert any("Reconciliation independently approved." in str(item.value) for item in app.success)
 
 
@@ -164,7 +168,9 @@ def test_checklist_update_rerenders_fresh_server_table(monkeypatch: pytest.Monke
 
     assert not app.exception
     assert len(writes) == 1
-    assert any("COMPLETE" in str(item.value) and "freshness" in str(item.value).lower() for item in app.dataframe)
+    table = next(item.value for item in app.dataframe if {"Task", "Status"}.issubset(set(item.value.columns)))
+    visible = table.loc[table["Task"] == "Provider/report freshness attestation"]
+    assert visible["Status"].tolist() == ["COMPLETE"]
     assert any("Checklist task updated." in str(item.value) for item in app.success)
 
 
