@@ -114,6 +114,7 @@ def test_mutate_surfaces_request_error_immediately(monkeypatch: pytest.MonkeyPat
     from apps.web import close_workspace
 
     messages: list[str] = []
+    monkeypatch.setattr(close_workspace, "_org_params", lambda: {})
     monkeypatch.setattr(close_workspace, "_request", lambda *_args, **_kwargs: (None, "Session expired."))
     monkeypatch.setattr(close_workspace, "_render_mutation_error", messages.append)
 
@@ -127,6 +128,7 @@ def test_mutate_surfaces_missing_response_immediately(monkeypatch: pytest.Monkey
     from apps.web import close_workspace
 
     messages: list[str] = []
+    monkeypatch.setattr(close_workspace, "_org_params", lambda: {})
     monkeypatch.setattr(close_workspace, "_request", lambda *_args, **_kwargs: (None, None))
     monkeypatch.setattr(close_workspace, "_render_mutation_error", messages.append)
 
