@@ -1,65 +1,46 @@
-<!--
-Guidance for AI coding agents working on the Modular Accounting repo.
-Keep this file concise (~20-50 lines). Update only with project-discoverable facts.
--->
-
 # Copilot instructions for Modular Accounting
 
-Be pragmatic and project-aware. This repository is a small, modular accounting platform:
+Read root `AGENTS.md` and any applicable scoped instructions before changing the repository. Preserve pre-existing checkouts, worktrees, local databases, environment files, and user data.
 
-- Backend: FastAPI app in `src/apps/api` (imported as `apps.api`; SQLModel + SQLite by default).
-- UI: Streamlit app in `src/apps/web/app.py` that talks to the API via `API_BASE`.
-- Plugins: Drop-in provider modules under `src/plugins/` (imported as `plugins.*`, e.g. `plugins.fx_ecb.provider`).
+## Application boundaries
 
-What to change and how
+- Backend: FastAPI in `src/apps/api`, imported as `apps.api`; SQLModel with SQLite by default.
+- UI: Streamlit in `src/apps/web/app.py`; `apps/web/app.py` is the compatibility launcher.
+- Providers: explicitly configured modules under `src/plugins/`, imported as `plugins.*`.
+- Authoritative standalone SDK: `packages/provider-sdk/src/modular_accounting_provider_sdk`; `apps.provider_sdk` is an identity-preserving compatibility facade, not a second implementation.
+- This is a public Early Beta / Portfolio Preview, not a production accounting or provider-certification service.
 
-- Prefer minimal, local changes. Keep public APIs stable (routers under `src/apps/api/routers`).
-- Use existing config patterns in `src/apps/api/config.py` (Settings.load/get_settings) when adding environment-driven options.
-- Plugin discovery uses `src/apps/api/services/plugin_loader.py`: add provider modules under `src/plugins/` and register them via `DEFAULT_ALLOWED_PROVIDERS` in `config.py`.
+## Changes and trust
 
-Key files and examples (copy or reference these patterns):
+- Keep public API contracts stable and changes focused on the active slice.
+- Use `src/apps/api/config.py` and its `Settings.load(...)` / `get_settings` patterns for configuration.
+- `settings.allowed_providers` is the sole executable provider trust source. Packaging, importability, manifests, entry points, and persisted governance state cannot authorize code execution.
+- Use the provider loader in `src/apps/api/services/plugin_loader.py`, not tenant-supplied module imports. Tenant governance may only narrow process trust; authorize membership before discovery or provider resolution.
+- Register API routers in the application factory in `src/apps/api/main.py` and use the existing session and audit dependencies.
+- Keep evidence export content and its header bound to the same `service.evidence()` result. Never independently recompute them.
+- Required tests must remain hermetic; do not make live financial-provider requests a prerequisite for passing tests.
 
-- App factory: `src/apps/api/main.py` — call `init_db()` and include routers via `app.include_router(...)`.
-- DB: `src/apps/api/db.py` — uses SQLModel, `get_session()` yields sessions for FastAPI dependencies.
-- Plugin: `src/plugins/fx_ecb/provider.py` — expose a `provider()` factory returning an object with required methods (e.g. `sync_daily_rates`).
-- Streamlit UI: `src/apps/web/app.py` — calls API endpoints and demonstrates parameter usage.
+## Setup and execution
 
-Run, test, and dev commands
+Install development dependencies with `python -m pip install -r requirements-dev.txt` in the approved environment; do not modify shared environments incidentally.
 
-- Install dependencies: `pip install -r requirements.txt`.
-- Expose both src-layout packages before direct module commands: PowerShell `$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"`; bash/zsh `export PYTHONPATH="$PWD/src:$PWD/packages/provider-sdk/src${PYTHONPATH:+:$PYTHONPATH}"`.
-- Run API locally: `python -m uvicorn apps.api.main:app --reload` (the tests and Streamlit expect API on http://localhost:8000).
-- Run UI: `streamlit run src/apps/web/app.py` (sets `API_BASE` to point at the running API if not set).
-- Run all tests: use the test runner in this repo (pytest is implied). Tests expect an in-repo importable path; see `tests/conftest.py`.
+Expose both source roots before direct module commands:
 
-Project-specific conventions
+- PowerShell: `$env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"`
+- bash/zsh: `export PYTHONPATH="$PWD/src:$PWD/packages/provider-sdk/src${PYTHONPATH:+:$PYTHONPATH}"`
 
-- Config: Use `src/apps/api/config.py` and `Settings.load(...)` to respect `MODACCT_` prefixed env vars.
-- DB: SQLite is default. For in-memory tests, `db.engine` uses StaticPool to share connections. Avoid recreating engines.
-- Providers: keys use the pattern `{capability}:{provider}` (e.g. `fx:ecb`, `market:yfinance`). Use matching `module` strings in `DEFAULT_ALLOWED_PROVIDERS`.
-- Secrets: JWT secret default is `change-me` in settings; tests rely on the default unless env overrides are provided.
+Run from the verified repository worktree:
 
-Patterns and anti-patterns to follow
+- API: `python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000`
+- UI: `python -m streamlit run apps/web/app.py --server.address 127.0.0.1`; configure `API_BASE` for the loopback API.
+- Focused regression: `python -m pytest -q tests/test_provider_governance_api.py`
+- Full gate: `python -m src.tools.quality_gate` or `make quality-gate`.
 
-- Prefer the plugin loader (`load_provider`) over direct imports of `plugins.*` modules.
-- When adding API routes, register them under `src/apps/api/routers/` and include in the factory in `src/apps/api/main.py`.
-- Tests emulate missing third-party modules by stubbing (see `tests/conftest.py` multipart stub). Mirror that technique when writing tests that require optional deps.
+## Secrets and validation
 
-Examples you can use in generated code
-
-- Load a provider safely:
-  from apps.api.services.plugin_loader import load_provider
-  handle = load_provider('fx:ecb')
-  for rate in handle.instance.sync_daily_rates(base='EUR'):
-  pass
-
-Verify and lint
-
-- Run focused pytest suites after edits. Use `make quality-gate` or `python -m src.tools.quality_gate` for the full Ruff, format, mypy, pytest, dependency-audit, and current-tree secret-scan gate.
-
-If anything is unclear
-
-- Reference `README.md` and `docs/` for higher-level goals.
-- Ask for missing runtime details (e.g., Docker secrets, external API keys) — do not invent credentials.
-
-Thanks — after making changes, run the test suite and update this file only if new discoverable conventions are introduced.
+- There is no fixed `change-me` JWT default. Without a configured secret, `_resolve_jwt_secret` generates an ephemeral value and tokens rotate on restart.
+- Configure `MODACCT_JWT_SECRET_KEY` or the supported `JWT_SECRET_KEY` fallback when persistence is needed. Compose requires an explicit secret; never print or commit its value.
+- Use existing test fixtures for isolated configuration and databases; do not invent production credentials.
+- Preserve aggregate line coverage, independent critical-module line/branch floors, changed-production coverage, accounting controls, dependency audits, and secret scanning.
+- Keep existing workflows and required checks intact. A source-file edit cannot change live GitHub ruleset enforcement.
+- Record actual validation, exact source SHA, and any blocked checks without claiming an unexecuted pass. Merging or publishing still requires separate owner authorization.
