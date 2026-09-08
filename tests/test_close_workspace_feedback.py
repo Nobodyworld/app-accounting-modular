@@ -110,6 +110,32 @@ def _table(app: AppTest, *columns: str) -> Any:
     return next(item.value for item in app.dataframe if required.issubset(set(item.value.columns)))
 
 
+@pytest.mark.parametrize("feedback_key", ["close_confirmation", "close_error"])
+def test_feedback_does_not_move_tabs_between_reruns(monkeypatch: pytest.MonkeyPatch, feedback_key: str) -> None:
+    app = _configure_app(
+        monkeypatch,
+        {},
+        post=lambda *_args, **_kwargs: DummyResponse({}),
+        patch=lambda *_args, **_kwargs: DummyResponse({}),
+    )
+
+    def tab_position() -> int:
+        # Streamlit's browser retains unkeyed tab selection by its render position.
+        return next(index for index, node in app.main.children.items() if node.type == "tab_container")
+
+    position = tab_position()
+    app.session_state[feedback_key] = "Synthetic action feedback."
+    app.run(timeout=20)
+    assert not app.exception
+    assert any("Synthetic action feedback." in str(item.value) for item in [*app.success, *app.error])
+    assert tab_position() == position
+
+    app.run(timeout=20)
+    assert not app.exception
+    assert not any("Synthetic action feedback." in str(item.value) for item in [*app.success, *app.error])
+    assert tab_position() == position
+
+
 def test_mutate_surfaces_request_error_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
     from apps.web import close_workspace
 

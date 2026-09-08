@@ -892,12 +892,14 @@ def render_close_workspace(*, access_token: str | None, organization_id: int | N
     if not authenticated_workspace_ready(access_token, organization_id):
         st.warning("Close Workspace locked. Sign in through API Session with a positive organization ID.")
         return
+    # Keep the tabs at a stable render position when feedback appears or disappears.
+    feedback = st.container()
     confirmation = st.session_state.pop("close_confirmation", None)
     if isinstance(confirmation, str) and confirmation:
-        st.success(confirmation)
+        feedback.success(confirmation)
     error = st.session_state.pop("close_error", None)
     if isinstance(error, str) and error:
-        st.error(error)
+        feedback.error(error)
     cycle_id = _render_selection()
     if cycle_id is None:
         return
