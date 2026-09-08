@@ -648,6 +648,10 @@ class CloseService:
                 event="period_closed",
             )
             self.s.flush()
+            # Serialize the database representations used by later downloads,
+            # not timezone-aware timestamps still held only in the identity map.
+            # The write gate and transaction remain held; no early commit occurs.
+            self.s.expire_all()
             evidence_service = CloseEvidenceService(self.s, self.organization_id, self.actor_user_id)
             bundle = evidence_service.build_bundle(cycle_id)
             evidence_service.record_generation(

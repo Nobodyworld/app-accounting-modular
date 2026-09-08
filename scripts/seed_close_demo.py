@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 from apps.api.audit import AuditActor, use_actor
@@ -14,6 +17,7 @@ from apps.api.services.close_service import CloseService
 from apps.api.services.ledger_service import LedgerService
 from apps.api.services.reconciliation_service import ReconciliationService
 from apps.api.services.workflow_service import WorkflowService
+from sqlalchemy.engine import make_url
 from sqlmodel import Session, select
 
 DEMO_ORGANIZATION = "Accountant Close Demo"
@@ -82,6 +86,7 @@ def seed_close_demo(session: Session) -> dict[str, Any]:
         source="demo-seed",
         user_label=users["preparer"].email,
     )
+    reviewer_actor = replace(actor, user_id=reviewer_id, user_label=users["reviewer"].email)
     with use_actor(actor):
         ledger = LedgerService(session, organization.id)
         cash = ledger.create_account("Operating cash", "ASSET", code="1000")
@@ -136,7 +141,7 @@ def seed_close_demo(session: Session) -> dict[str, Any]:
             [
                 {
                     "date": date(2026, 3, 31),
-                    "description": "Accrued expense adjustment",
+                    "description": "Controlled payroll settlement adjustment",
                     "source_reference": "demo-staged-accrual",
                     "postings": [
                         {"account_id": payroll.id, "debit": 25, "credit": 0, "currency": "USD"},
@@ -154,11 +159,12 @@ def seed_close_demo(session: Session) -> dict[str, Any]:
             cash.id,
             control_balance=Decimal("380.00"),
             tolerance=Decimal("0.00"),
-            notes="Matched to the controlled statement balance.",
+            notes="Matched to the controlled statement balance before the staged adjustment posts.",
         )
-        ReconciliationService(session, organization.id, reviewer_id).approve_reconciliation(
-            cycle.id, matched.id, version=matched.version
-        )
+        with use_actor(reviewer_actor):
+            ReconciliationService(session, organization.id, reviewer_id).approve_reconciliation(
+                cycle.id, matched.id, version=matched.version
+            )
         controls.prepare_reconciliation(
             cycle.id,
             payroll.id,
@@ -178,13 +184,14 @@ def seed_close_demo(session: Session) -> dict[str, Any]:
             transaction_id=sale.id,
             reason="Independent close approval for the posted revenue journal.",
         )
-        ReconciliationService(session, organization.id, reviewer_id).decide_approval(
-            cycle.id,
-            approval.id,
-            version=approval.version,
-            decision=JournalApprovalStatus.APPROVED,
-            reason="Journal support reviewed.",
-        )
+        with use_actor(reviewer_actor):
+            ReconciliationService(session, organization.id, reviewer_id).decide_approval(
+                cycle.id,
+                approval.id,
+                version=approval.version,
+                decision=JournalApprovalStatus.APPROVED,
+                reason="Journal support reviewed.",
+            )
     return {
         "organization_id": organization.id,
         "period_id": period.id,
@@ -199,10 +206,38 @@ def seed_close_demo(session: Session) -> dict[str, Any]:
     }
 
 
+def _require_fresh_demo_target() -> Path:
+    """Reject implicit, remote, existing, or link-backed command-line targets."""
+    requested_url = os.environ.get("MODACCT_DATABASE_URL")
+    if not requested_url:
+        raise ValueError("Set MODACCT_DATABASE_URL explicitly to a new disposable SQLite database")
+    if engine.url != make_url(requested_url):
+        raise ValueError("Restart the seed process after configuring its explicit database")
+    if engine.url.get_backend_name() != "sqlite" or engine.url.database in {None, "", ":memory:"} or engine.url.query:
+        raise ValueError("The demo seed command requires a new local SQLite file")
+    target = Path(engine.url.database).absolute()
+    if ".." in target.parts or target.exists() or target.is_symlink() or not target.parent.is_dir():
+        raise ValueError("The demo database must be a new file under an existing directory")
+    if any(parent.is_symlink() or getattr(parent, "is_junction", lambda: False)() for parent in target.parents):
+        raise ValueError("The demo database cannot use linked parent directories")
+    return target
+
+
 def main() -> int:
-    init_db()
-    with Session(engine, expire_on_commit=False) as session:
-        payload = seed_close_demo(session)
+    try:
+        target = _require_fresh_demo_target()
+        # Reserve ownership exclusively; an existing/racing file must never be seeded.
+        with target.open("xb"):
+            pass
+        init_db()
+        with Session(engine, expire_on_commit=False) as session:
+            payload = seed_close_demo(session)
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+    except Exception:
+        print("DEMO_SEED_FAILED: retain any newly created demo database for inspection")
+        return 1
     print("Controlled accountant close demo created:")
     for key, value in payload.items():
         print(f"{key}: {value}")

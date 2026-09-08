@@ -163,6 +163,16 @@ def _refresh_cycle_data(cycle_id: int) -> None:
     _load_json("close_readiness", f"/close/cycles/{cycle_id}/readiness")
 
 
+def _refresh_lifecycle(cycle_id: int) -> None:
+    """Refresh lifecycle labels and rerender controls after a successful transition."""
+    _refresh_periods()
+    _refresh_cycles(int(st.session_state["close_selected_period_id"]))
+    _refresh_cycle_data(cycle_id)
+    # Streamlit retains selected option text when a keyed widget is reused.
+    st.session_state["close_selector_revision"] = int(st.session_state.get("close_selector_revision", 0)) + 1
+    st.rerun()
+
+
 def _currency(value: Any) -> str:
     try:
         return f"{Decimal(str(value)):,.2f}"
@@ -204,7 +214,7 @@ def _render_selection() -> int | None:
         period_ids,
         index=period_ids.index(default_period),
         format_func=lambda item_id: f"{period_options[item_id].get('label')} · {period_options[item_id].get('status')}",
-        key="close_period_selector",
+        key=f"close_period_selector_{st.session_state.get('close_selector_revision', 0)}",
     )
     if st.session_state.get("close_selected_period_id") != selected_period:
         st.session_state["close_selected_period_id"] = selected_period
@@ -277,7 +287,7 @@ def _render_selection() -> int | None:
         cycle_ids,
         index=cycle_ids.index(default_cycle),
         format_func=lambda item_id: f"{cycle_options[item_id].get('name')} · {cycle_options[item_id].get('status')}",
-        key="close_cycle_selector",
+        key=f"close_cycle_selector_{st.session_state.get('close_selector_revision', 0)}",
     )
     if st.session_state.get("close_selected_cycle_id") != selected_cycle:
         st.session_state["close_selected_cycle_id"] = selected_cycle
@@ -380,7 +390,7 @@ def _render_overview(cycle_id: int) -> None:
                 "POST", f"/close/cycles/{cycle_id}/ready", {"version": version}, success="Cycle marked ready."
             )
             if updated:
-                _refresh_cycle_data(cycle_id)
+                _refresh_lifecycle(cycle_id)
     elif status_now == "READY_FOR_APPROVAL":
         with st.form("close_return_to_work_form"):
             reason = st.text_area("Return-to-work reason", max_chars=1000)
@@ -812,8 +822,7 @@ def _render_evidence_and_close(cycle_id: int) -> None:
                 "POST", f"/close/cycles/{cycle_id}/close", {"version": version}, success="Period closed atomically."
             )
             if updated:
-                _refresh_periods()
-                _refresh_cycle_data(cycle_id)
+                _refresh_lifecycle(cycle_id)
     elif status_value == "CLOSED":
         with st.expander("Verify the closed-period posting control"):
             with st.form("close_posting_lock_verification_form"):
@@ -856,8 +865,7 @@ def _render_evidence_and_close(cycle_id: int) -> None:
                 success="Period explicitly reopened; prior evidence is stale.",
             )
             if updated:
-                _refresh_periods()
-                _refresh_cycle_data(cycle_id)
+                _refresh_lifecycle(cycle_id)
     elif readiness.get("blocker_count", 0):
         st.info("Final close remains unavailable until all server-derived blockers are resolved.")
 

@@ -89,6 +89,8 @@ python -m pip install -r requirements-dev.txt
 $env:PYTHONPATH = "$PWD\src;$PWD\packages\provider-sdk\src"
 ```
 
+For the **Accountant Close** demo, configure and seed a new disposable database **before step 2**, following the [complete close walkthrough](docs/examples/accountant_month_end_close.md). The seed command requires an explicit `MODACCT_DATABASE_URL`, refuses existing database files, and prints only synthetic demo identifiers/accounts. Changing the environment in another terminal does not reconfigure an already-running API.
+
 2. Start the API:
 
 ```bash
@@ -101,7 +103,7 @@ python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
 streamlit run src/apps/web/app.py
 ```
 
-To create the deterministic three-user close example in a fresh local database, set `MODACCT_DATABASE_URL`, run `python scripts/seed_close_demo.py`, and sign in through the Streamlit **API Session** sidebar. The script prints the controlled organization, cycle, budget, staged-workflow, account, and user identifiers. The complete walkthrough is in [`docs/examples/accountant_month_end_close.md`](docs/examples/accountant_month_end_close.md).
+For the seeded close, use the same configured database in both terminals and sign in through the Streamlit **API Session** sidebar with the printed synthetic organization and account details. Do not use demo credentials with real data or on a public/LAN service.
 
 4. Optional CLI snapshot and scenario proof:
 
@@ -114,10 +116,17 @@ python -m cli.macli provider-sdk governance-validate --format table
 
 For Docker Compose, configuration, validation, and troubleshooting, use the [setup guide](docs/setup.md).
 
+## Accountant Close Rehearsal and Pilot
+
+From a clean verified checkout and compliant environment, run `python -m scripts.accountant_close_pilot --output .tmp/close-pilot-run` with an existing output parent and a new output directory. This isolated in-memory rehearsal executes the actual March 2026 seed through a staged adjustment, refreshed reconciliations, independent approvals, current variance review, READY/CLOSED posting freezes, final recorded evidence and explicit reopen. It never seeds the configured user database or calls live providers.
+
+The output is `close-pilot.json` plus `close-final.zip`. Expected post-adjustment debit-minus-credit balances are USD 355 cash, -500 revenue, and 145 payroll expense. The final ZIP is captured while CLOSED, then marked historical/stale after the reopen probe. Service-layer checks do not claim browser or human acceptance. Use the [corrected role-by-role walkthrough](docs/examples/accountant_month_end_close.md) and the [unfilled reviewer worksheet](docs/examples/accountant_close_pilot_review.md) to record those separately.
+
 ## Portfolio Review Links
 
 - [Foreign-currency accounting case study](docs/examples/foreign_currency_accounting_case_study.md)
 - [End-to-end snapshot and control demonstration](docs/examples/end_to_end_snapshot_demo.md)
+- [Accountant close rehearsal and walkthrough](docs/examples/accountant_month_end_close.md)
 - [Provider governance controlled walkthrough](docs/examples/provider_governance_walkthrough.md)
 - [Public release audit evidence](PUBLIC_RELEASE_AUDIT.md)
 - [Latest audit metrics snapshot](docs/reports/audit-latest.md) - technical supporting evidence only; see the public audit for the release verdict.

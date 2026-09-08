@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+- 2026-09-07: Refresh the Close Workspace period/cycle selectors and operational controls immediately after ready, final close, and explicit reopen, so the visible lifecycle state agrees with the completed action.
+
 - 2026-08-17: Added the v0.3 provider-SDK candidate in draft PR #141: bounded immutable manifests; bank, FX, macro, market, and tax structural contracts; sanitized fail-closed conformance; allowlist-enforced runtime loading; manifests for all nine configured providers; deterministic scaffolding; table/JSON CLI evidence; targeted mypy and explicit critical coverage; and provider authoring, compatibility, architecture, roadmap, and release documentation. Exact-head local and hosted validation remains pending before merge consideration.
 - 2026-08-12: Coordinated the v0.2 maintenance contract in PR #139: verified the Python 3.14.7 slim-trixie base digest, adopted `yfinance>=0.2.44,<2.0` with locked 1.5.2 compatibility coverage, regenerated the 76-package hashed runtime graph, and reviewed Ruff 0.16.2 under the existing explicit policy. The generated graph retained curl-cffi 0.16.0, removed frozendict, and advanced charset-normalizer to 3.5.0 and typing-inspection to 0.4.4 as reviewed transitive outcomes.
 - 2026-08-11: Migrated deliberately to Ruff 0.16.0 with an exact development pin, explicit lint families, preview disabled, Python/stub-only discovery, Markdown/notebook exclusion, `force-exclude`, executable policy tests, and no runtime or container-lock changes.
