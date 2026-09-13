@@ -116,6 +116,12 @@ def _load_json(key: str, path: str) -> Any | None:
     return payload
 
 
+def _render_mutation_error(message: str) -> None:
+    """Show sanitized mutation feedback where the action occurred."""
+    st.session_state.pop("close_error", None)
+    st.error(message)
+
+
 def _mutate(
     method: str,
     path: str,
@@ -126,14 +132,14 @@ def _mutate(
 ) -> Any | None:
     response, error = _request(method, path, params=_org_params(), json_body=body, timeout=timeout)
     if error:
-        st.session_state["close_error"] = error
+        _render_mutation_error(error)
         return None
     if response is None:
-        st.session_state["close_error"] = "The close request did not return a response."
+        _render_mutation_error("The close request did not return a response.")
         return None
     payload, payload_error = _safe_json(response)
     if payload_error:
-        st.session_state["close_error"] = payload_error
+        _render_mutation_error(payload_error)
         return None
     st.session_state["close_confirmation"] = success
     st.session_state.pop("close_error", None)
@@ -161,6 +167,12 @@ def _selected_cycle_id() -> int | None:
 def _refresh_cycle_data(cycle_id: int) -> None:
     _load_json("close_cycle_payload", f"/close/cycles/{cycle_id}")
     _load_json("close_readiness", f"/close/cycles/{cycle_id}/readiness")
+
+
+def _refresh_after_mutation(cycle_id: int) -> None:
+    """Refresh cycle state and rerender server-backed panels after a successful write."""
+    _refresh_cycle_data(cycle_id)
+    st.rerun()
 
 
 def _refresh_lifecycle(cycle_id: int) -> None:
@@ -373,7 +385,7 @@ def _render_overview(cycle_id: int) -> None:
                     success=f"Staged journal {staged_id} processed through the existing workflow service.",
                 )
                 if processed:
-                    _refresh_cycle_data(cycle_id)
+                    _refresh_after_mutation(cycle_id)
     else:
         st.success("No server-derived blockers remain.")
     status_now = str(cycle.get("status") or "")
@@ -504,8 +516,7 @@ def _render_reconciliations(cycle_id: int, *, mutable: bool) -> None:
                 success="Reconciliation independently approved.",
             )
             if result:
-                _load_json("close_reconciliations", reconciliation_path)
-                _refresh_cycle_data(cycle_id)
+                _refresh_after_mutation(cycle_id)
     else:
         st.info("No reconciliations have been prepared for this cycle.")
 
@@ -579,8 +590,7 @@ def _render_variances(cycle_id: int, *, mutable: bool) -> None:
                 success="Variance disposition recorded.",
             )
             if result:
-                _load_json("close_variances", variance_path)
-                _refresh_cycle_data(cycle_id)
+                _refresh_after_mutation(cycle_id)
     else:
         st.info("No variance review rows match the current filter.")
 
@@ -673,9 +683,8 @@ def _render_approvals(cycle_id: int, *, mutable: bool) -> None:
                 success="Journal approval decision recorded.",
             )
             if result:
-                _load_json("close_approvals", approvals_path)
                 st.session_state.pop(f"close_approval_history_{approval_id}", None)
-                _refresh_cycle_data(cycle_id)
+                _refresh_after_mutation(cycle_id)
     else:
         st.info("No journal approval requests exist for this cycle.")
 
@@ -725,8 +734,7 @@ def _render_checklist(cycle_id: int, *, operational: bool, configurable: bool) -
             success="Custom checklist task added.",
         )
         if result:
-            _load_json("close_checklist", f"/close/cycles/{cycle_id}/checklist")
-            _refresh_cycle_data(cycle_id)
+            _refresh_after_mutation(cycle_id)
     manual = (
         [row for row in rows if row.get("control_type") != "SYSTEM" and row.get("task_key") != "final_close_approved"]
         if isinstance(rows, list)
@@ -753,8 +761,7 @@ def _render_checklist(cycle_id: int, *, operational: bool, configurable: bool) -
                 success="Checklist task updated.",
             )
             if result:
-                _load_json("close_checklist", f"/close/cycles/{cycle_id}/checklist")
-                _refresh_cycle_data(cycle_id)
+                _refresh_after_mutation(cycle_id)
 
 
 def _render_evidence_and_close(cycle_id: int) -> None:
@@ -789,9 +796,7 @@ def _render_evidence_and_close(cycle_id: int) -> None:
         )
         if isinstance(result, Mapping):
             st.session_state["close_evidence_result"] = result
-            _load_json("close_evidence_preview", f"/close/cycles/{cycle_id}/evidence/preview")
-            _refresh_cycle_data(cycle_id)
-            preview = st.session_state.get("close_evidence_preview", preview)
+            _refresh_after_mutation(cycle_id)
     result = st.session_state.get("close_evidence_result")
     if isinstance(result, Mapping):
         st.caption("Manifest SHA-256")
@@ -887,12 +892,14 @@ def render_close_workspace(*, access_token: str | None, organization_id: int | N
     if not authenticated_workspace_ready(access_token, organization_id):
         st.warning("Close Workspace locked. Sign in through API Session with a positive organization ID.")
         return
+    # Keep the tabs at a stable render position when feedback appears or disappears.
+    feedback = st.container()
     confirmation = st.session_state.pop("close_confirmation", None)
     if isinstance(confirmation, str) and confirmation:
-        st.success(confirmation)
+        feedback.success(confirmation)
     error = st.session_state.pop("close_error", None)
     if isinstance(error, str) and error:
-        st.error(error)
+        feedback.error(error)
     cycle_id = _render_selection()
     if cycle_id is None:
         return
