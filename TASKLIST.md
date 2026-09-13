@@ -10,12 +10,16 @@ Keep active entries one-line, oldest-first. When completing an active task, chec
 
 - [ ] Run the real human-accountant close pilot using the existing synthetic workflow and record actual usefulness/friction observations (Issue #159; `docs/examples/accountant_close_pilot_review.md`) - TASK-0093 - When completed: _
 
-## Active maintenance
+## Maintenance review dispositions
 
-- [ ] Refresh and evaluate Dependabot PR #150 (Ruff/build minor-and-patch proposal) from current `main`; keep separate from product work - TASK-0094 - When completed: _
-- [ ] Refresh and evaluate Dependabot PR #151 (mypy accepted-range expansion into 2.x) from current `main`; require explicit major-version compatibility evidence - TASK-0095 - When completed: _
-- [ ] Refresh and evaluate Dependabot PR #152 (pandas accepted-range expansion into 3.x) from current `main`; require explicit major-version compatibility evidence - TASK-0096 - When completed: _
-- [ ] Refresh and evaluate Dependabot PR #153 (Anchore SBOM action patch/minor update) from current `main`; verify the existing supply-chain contract remains intact - TASK-0097 - When completed: _
+- [x] Refresh and evaluate Dependabot PR #150 (Ruff/build proposal) from current `main` - TASK-0094 - When completed: 2026-09-13
+  - Completed: 2026-09-13 - PR #150 rebased 1 ahead / 0 behind; deferred because the fresh suite fails the deliberate `ruff==0.16.2` migration-policy regression. Adopting Ruff 0.16.6/build 1.6.0 requires a separate intentional tooling-policy migration.
+- [x] Refresh and evaluate Dependabot PR #151 (mypy accepted-range expansion into 2.x) from current `main` - TASK-0095 - When completed: 2026-09-13
+  - Completed: 2026-09-13 - PR #151 rebased 1 ahead / 0 behind and fresh exact-head validation passed with mypy 2.3.1 across all six required contexts, quality gate, audits, provider-author acceptance, and accounting controls; merge remains an explicit owner decision because the supported range crosses a major version.
+- [x] Refresh and evaluate Dependabot PR #152 (pandas accepted-range expansion into 3.x) from current `main` - TASK-0096 - When completed: 2026-09-13
+  - Completed: 2026-09-13 - PR #152 rebased 1 ahead / 0 behind but is deferred: changing the runtime requirement invalidates the repository's hash-locked container dependency input digest. A pandas 3.x migration requires an intentional lock regeneration/transitive-compatibility slice and full validation.
+- [x] Refresh and evaluate Dependabot PR #153 (Anchore SBOM action 0.24.2) from current `main` - TASK-0097 - When completed: 2026-09-13
+  - Completed: 2026-09-13 - PR #153 rebased 1 ahead / 0 behind and all six required contexts pass; existing container build/start/health, least-privilege, lock, SBOM, and evidence contracts remain intact. Technically merge-ready pending owner authorization.
 
 ## Current completion boundary
 
