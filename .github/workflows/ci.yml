@@ -274,8 +274,8 @@ jobs:
           )
 
       - name: Generate API SPDX SBOM
-        # anchore/sbom-action v0.24.0 (released 2026-03-20; resolved 2026-07-31); Syft v1.50.0
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        # anchore/sbom-action v0.24.2 (released 2026-08-28; reviewed 2026-09-14); Syft v1.50.0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26
         with:
           image: ${{ env.API_IMAGE }}
           format: spdx-json
@@ -286,8 +286,8 @@ jobs:
           upload-release-assets: false
 
       - name: Generate web SPDX SBOM
-        # anchore/sbom-action v0.24.0 (released 2026-03-20; resolved 2026-07-31); Syft v1.50.0
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        # anchore/sbom-action v0.24.2 (released 2026-08-28; reviewed 2026-09-14); Syft v1.50.0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26
         with:
           image: ${{ env.WEB_IMAGE }}
           format: spdx-json
