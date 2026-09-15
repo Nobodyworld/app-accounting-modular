@@ -1,10 +1,10 @@
 # Provider Catalog Governance Architecture
 
-Status: implemented v0.4 contract for issue #145; release acceptance remains subject to exact-head validation.
+Status: implemented and accepted v0.4 contract for issue #145 / PR #146.
 
 ## Purpose
 
-The v0.3 provider SDK establishes a structural contract for trusted provider modules. Issue #145 adds the operational layer that is still missing: persistent organization policy, deterministic default selection, bounded readiness/conformance evidence, and administrator-facing controls.
+The v0.3 provider SDK establishes a structural contract for trusted provider modules. PR #146 added the operational layer: persistent organization policy, deterministic default selection, bounded readiness/conformance evidence, and administrator-facing controls.
 
 In v0.5 the same contract implementation is delivered by the standalone
 `modular_accounting_provider_sdk` package; `apps.provider_sdk` re-exports it.

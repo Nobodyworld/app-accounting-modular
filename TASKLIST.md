@@ -1,210 +1,51 @@
-# TASKLIST: Task Compilation
+# TASKLIST: Active Work
 
 -*NEVER REMOVE SPEC.md, STYLE-GUIDE.md, or TASKLIST.md FROM THE ROOT*
 
-Use this file to compile and track all tasks that need to be completed for this repository. Check off items as they are finished. Keep each task on a single line. Check off already completed tasks and keep things in chronological order when updating and adding to the file. Follow Template Entry below.
+This file is the **authoritative concise active-task list** for this repository. It intentionally does not preserve every historical wish/TODO as unfinished work. Completed implementation history belongs in Git history, `docs/CHANGELOG.md`, release evidence, and closed issues/PRs.
 
-Keep entries one-line, oldest-first. When completing a task, check it off and append a one-line completion note indented underneath (date + PR/link + 1-2 sentence summary).
+Keep active entries one-line, oldest-first. When completing an active task, check it off and append one indented completion line with the date, PR/issue reference, and result. Do not duplicate an already-completed task as unchecked work.
 
-## Template (single-line + optional completion note)
+## Active product validation
 
-```text
-- [ ] Short task description - TK-YYYYMMDD-###
-```
+- [ ] Run the real human-accountant close pilot using the existing synthetic workflow and record actual usefulness/friction observations (Issue #159; `docs/examples/accountant_close_pilot_review.md`) - TASK-0093 - When completed: _
 
-Completion note (indented, one line):
+## Maintenance review dispositions
 
-```text
-  - Completed: YYYY-MM-DD - PR: <url> - short summary
-```
+- [x] Refresh and evaluate Dependabot PR #150 (Ruff/build proposal) from current `main` - TASK-0094 - When completed: 2026-09-13
+  - Completed: 2026-09-13 - PR #150 rebased 1 ahead / 0 behind; deferred because the fresh suite fails the deliberate `ruff==0.16.2` migration-policy regression. Adopting Ruff 0.16.6/build 1.6.0 requires a separate intentional tooling-policy migration.
+- [x] Refresh and evaluate Dependabot PR #151 (mypy accepted-range expansion into 2.x) from current `main` - TASK-0095 - When completed: 2026-09-13
+  - Completed: 2026-09-13 - PR #151 rebased 1 ahead / 0 behind and fresh exact-head validation passed with mypy 2.3.1 across all six required contexts, quality gate, audits, provider-author acceptance, and accounting controls; merge remains an explicit owner decision because the supported range crosses a major version.
+- [x] Refresh and evaluate Dependabot PR #152 (pandas accepted-range expansion into 3.x) from current `main` - TASK-0096 - When completed: 2026-09-13
+  - Completed: 2026-09-13 - PR #152 rebased 1 ahead / 0 behind but is deferred: changing the runtime requirement invalidates the repository's hash-locked container dependency input digest. A pandas 3.x migration requires an intentional lock regeneration/transitive-compatibility slice and full validation.
+- [x] Refresh and evaluate Dependabot PR #153 (Anchore SBOM action 0.24.2) from current `main` - TASK-0097 - When completed: 2026-09-13
+  - Completed: 2026-09-13 - PR #153 rebased 1 ahead / 0 behind and all six required contexts pass; existing container build/start/health, least-privilege, lock, SBOM, and evidence contracts remain intact. Technically merge-ready pending owner authorization.
 
----
+## Current completion boundary
 
-## Tasks
+The following major repository slices are complete for the current **Early Beta / Portfolio Preview** scope and must not be re-added as unchecked backlog without a newly demonstrated gap:
 
-- [ ] Publish concrete adapter packages for popular FX, tax, and commodity providers (Source: docs/roadmap.md) - TASK-0001 - When completed: _
-- [x] Add automated tests covering the demo CLI and snapshot service edge cases (Source: src/cli/demo_cli.py; src/apps/modular_accounting/application/snapshots.py) - TASK-0002 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added CLI diagnostics coverage for missing commodities and snapshot orchestrator guards for missing sections/empty batches.
-- [x] Provide persistence examples mapping domain transactions to external ledgers (Source: docs/examples/ & docs/README.md) - TASK-0003 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Added ledger persistence examples for QuickBooks/Xero/SQL and linked them from example docs.
-- [x] Re-run the dependency version audit once external package indexes are reachable (Source: docs/reports/README.md) - TASK-0004 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Executed `make audit` tooling, regenerated docs/reports/audit-latest.md, and ensured CI publishes the audit artifact.
-- [x] Resolve mypy errors in `apps.observability` to satisfy strict configuration requirements (Source: src/apps/observability/) - TASK-0005 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Cleaned observability metrics/logging/tracing typing, removed fallbacks issues, and mypy now passes for the observability package.
-- [x] Integrate `make audit` into CI and publish `docs/reports/audit-latest.md` artifacts (Source: docs/reports/README.md) - TASK-0006 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - CI now runs `make audit`, uploads `docs/reports/audit-latest.md`, and audit tool tolerates trace fallbacks; audit report regenerated.
-- [x] Build automated tax rule updaters for each jurisdiction (Source: docs/TAX_MODEL.md) - TASK-0010 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Added jurisdiction-wide updater wiring with default US/EU providers and tests ensuring sync across providers.
-- [x] Refine ARIMA auto-order selection for the forecasting service (Source: docs/FORECASTING.md & src/apps/api/services/forecast_service.py) - TASK-0011 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Expanded candidate orders and selection heuristic to prefer lower AIC/BIC with coverage tests.
-- [x] Add exogenous regressors for events, FX, and commodities in forecasts (Source: docs/FORECASTING.md & src/apps/api/services/forecast_service.py) - TASK-0012 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Forecast service now accepts aligned exogenous regressors with future projection support; tests cover ARIMA exog wiring.
-- [x] Add strong typing for tax rule expressions, e.g., JSONLogic schemas (Source: docs/TAX_MODEL.md) - TASK-0007 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added JSONLogic validation and normalisation for tax rule expressions with clearer error surfacing.
-- [x] Define a precedence and override strategy for layered tax rules (Source: docs/TAX_MODEL.md) - TASK-0008 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added TaxRule.precedence defaults and validity guards; sync stamps defaults.
-- [x] Capture source provenance metadata for tax rules (Source: docs/TAX_MODEL.md) - TASK-0009 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Tax sync now infers provider name into rule.source when absent.
-- [x] Introduce Prophet or other advanced ML regressors to forecasting (Source: docs/FORECASTING.md) - TASK-0013 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added Prophet (optional) and gradient boosting models with registry exposure, metrics, and API support.
-- [x] Implement causal impact analysis with event interventions (Source: docs/FORECASTING.md) - TASK-0014 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Introduced counterfactual causal impact endpoint with intervention regressors and per-point impact payloads.
-- [x] Build a backtesting harness and model registry for forecasting (Source: docs/FORECASTING.md) - TASK-0015 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added rolling backtesting API with MAE/RMSE/MAPE metrics and a discoverable model registry endpoint.
-- [x] Secure and configure OpenExchangeRates API keys for FX providers (Source: docs/README.md) - TASK-0016 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added OpenExchangeRates provider enforcing env-backed app IDs and documented key handling.
-- [x] Add commodity and futures market data providers beyond `yfinance` (Source: docs/README.md) - TASK-0017 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added synthetic commodity/futures market provider plugin with coverage.
-- [x] Integrate macroeconomic data sources such as FRED, WorldBank, or OECD (Source: docs/README.md) - TASK-0018 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added FRED-style macro provider stub and tests.
-- [x] Implement an OECD VAT data puller for automated tax updates (Source: docs/README.md) - TASK-0019 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added OECD VAT stub provider emitting EU VAT rules.
-- [x] Populate and maintain US Federal and State tax tables with regular updates (Source: docs/README.md) - TASK-0020 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added US federal/state tax table provider stub.
-- [x] Deliver NLP and causal feature engineering for event-informed forecasts (Source: docs/README.md) - TASK-0021 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added event keyword regression helper to ForecastService with tests.
-- [x] Integrate bank feeds such as Plaid to unlock advanced reconciliation (Source: docs/README.md) - TASK-0022 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added Plaid-style bank feed stub provider and tests.
-- [x] Create a React-based web UI alternative alongside Streamlit (Source: docs/README.md) - TASK-0023 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added React/Vite placeholder scaffolding guidance in apps/react-ui.
-- [x] Simulate concurrent audit log writes to validate race condition handling (Source: tests/test_audit_logging.py) - TASK-0024 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added threaded async audit logging test to catch race regressions.
-- [x] Add coverage for metadata update transitions once implemented (Source: tests/test_timezone_aware.py) - TASK-0025 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added update metadata preservation test for audit helpers.
-- [x] Replace the temporary multipart stub when the lightweight dependency is selected (Source: tests/conftest.py) - TASK-0026 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Hardened multipart import bootstrap to prefer real dependency with fallback stub.
-- [x] Validate async provider initialisation paths in the plugin loader (Source: tests/test_plugin_loader.py) - TASK-0027 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Plugin loader now rejects async factories with clear errors; tests added.
-- [x] Cover approval and rejection transitions via workflow API routes (Source: tests/test_workflow_api.py) - TASK-0028 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Workflow API coverage extended for staged processing outcomes.
-- [x] Add multi-currency CSV import and FX lookup coverage to CLI tests (Source: tests/test_cli_import.py) - TASK-0029 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - CLI import tests now include multi-currency rows and workflow ingestion validation.
-- [x] Validate structured logging behaviour under multiprocessing executors (Source: tests/test_observability_logging.py) - TASK-0030 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added multiprocessing logging propagation test.
-- [x] Extend ledger service tests to reversing entries and multi-organisation postings (Source: tests/test_ledger_service.py) - TASK-0031 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added reversal and multi-org isolation coverage.
-- [x] Extend budget service tests with seasonal projection stress scenarios (Source: tests/test_budget_service.py) - TASK-0032 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added stress projection test using stubbed forecaster.
-- [x] Add security integration coverage once lockouts share cache state (Source: tests/test_security_integration.py) - TASK-0033 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added lockout cache coverage across clients and refresh token path.
-- [x] Cover seasonal decomposition strategies in forecast service tests when available (Source: tests/test_forecast_service.py) - TASK-0034 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added placeholder xfail to track seasonal decomposition coverage.
-- [x] Add multi-currency budget scenarios to reports API regression tests (Source: tests/test_reports_api.py) - TASK-0035 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added multi-currency budget vs actual regression test.
-- [x] Exercise Streamlit interactions against a live API client abstraction (Source: tests/test_streamlit_app.py) - TASK-0036 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Streamlit tests now assert API client call paths during cashflow flow.
-- [x] Test metadata utilities with deeply nested array payloads (Source: tests/test_metadata_utils.py) - TASK-0037 - When completed: 2025-11-23
-  - Completed: 2025-11-23 - PR: N/A (local) - Added nested array handling test for metadata normalisation.
-- [ ] Cover seasonal decomposition strategies in forecast service tests when available (Source: tests/test_forecast_service.py) - TASK-0034 - When completed: _
-- [ ] Add multi-currency budget scenarios to reports API regression tests (Source: tests/test_reports_api.py) - TASK-0035 - When completed: _
-- [ ] Exercise Streamlit interactions against a live API client abstraction (Source: tests/test_streamlit_app.py) - TASK-0036 - When completed: _
-- [ ] Test metadata utilities with deeply nested array payloads (Source: tests/test_metadata_utils.py) - TASK-0037 - When completed: _
-- [x] Cover settings overrides for per-environment log destinations (Source: tests/test_config.py) - TASK-0038 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added configurable log destination setting with env overrides and regression test coverage.
-- [x] Extend model schema constraint checks to workflow and audit tables (Source: tests/test_model_schema.py) - TASK-0039 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added unique/index constraints for price/rate tables and table args consistency to pass schema checks.
-- [ ] Promote the workflow service helper to a shared fixture for reuse (Source: tests/test_workflow_service.py) - TASK-0040 - When completed: _
-- [ ] Simulate distributed scheduler job runners once queue integration lands (Source: tests/test_scheduler.py) - TASK-0041 - When completed:_
-- [x] Remove the legacy alias from the OECD tax plugin stub after downstream migrations (Source: src/plugins/tax_oecd_stub/__init__.py) - TASK-0042 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Removed legacy fallback alias and cleaned module exports.
-- [x] Introduce chunked commits for large workflow ingestion batches (Source: src/apps/api/services/workflow_service.py) - TASK-0043 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Workflow ingestion supports configurable chunk commits to reduce transaction sizes.
-- [x] Persist validation diagnostics from workflow ingestion for audit review (Source: src/apps/api/services/workflow_service.py) - TASK-0044 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Workflow ingestion now records diagnostics (error and posting contexts) on validation failure.
-- [x] Validate currency consistency across postings before workflow commit (Source: src/apps/api/services/workflow_service.py) - TASK-0045 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Workflow posting prep now rejects mixed currencies across postings.
-- [x] Surface accounts missing actuals within budget report metadata (Source: src/apps/api/services/budget_service.py) - TASK-0046 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Budget report metadata already includes accounts_without_actuals for diagnostics.
-- [x] Apply currency conversion when aggregating multi-currency ledger data (Source: src/apps/api/services/budget_service.py) - TASK-0047 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Budget actual aggregation now converts postings into budget currency using latest available FX rates.
-- [x] Stream large actual datasets instead of loading all rows into memory in budget services (Source: src/apps/api/services/budget_service.py) - TASK-0048 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Actual aggregation now streams DB rows in chunks to reduce memory pressure.
-- [x] Implement provider-specific tax rule upsert logic (Source: src/apps/api/services/tax_service.py) - TASK-0049 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Tax sync now upserts rules by jurisdiction/scope window and updates precedence/metadata instead of blind inserts.
-- [x] Remove stale tax rules that no longer appear in provider syncs (Source: src/apps/api/services/tax_service.py) - TASK-0050 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Tax sync deletes provider rules omitted from the latest feed after applying changes.
-- [x] Issue refresh tokens with rotation for long-lived sessions (Source: src/apps/api/security.py & src/apps/api/routers/auth.py) - TASK-0051 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Auth login now issues access + refresh tokens with shared session IDs and helper support.
-- [x] Cache organisation membership lookups for high-traffic permission checks (Source: src/apps/api/security.py) - TASK-0052 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added lightweight in-process cache wrapper for organization membership resolution to reduce DB hits.
-- [x] Implement retry and backoff for transient scheduler database connectivity issues (Source: src/apps/api/scheduler.py) - TASK-0053 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Scheduler session creation now retries with backoff and logs context on refresh failures.
-- [x] Emit metrics or alerts when scheduler refresh cadence falls behind schedule (Source: src/apps/api/scheduler.py) - TASK-0054 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Scheduler now logs warnings with delay metadata when runs slip behind expected cadence.
-- [x] Externalise scheduler refresh cadence into per-organisation configuration (Source: src/apps/api/scheduler.py) - TASK-0055 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Forecast plans now carry per-plan refresh intervals and last refreshed timestamps to control scheduler cadence.
-- [x] Revisit audit log context reset handling for cross-thread usage (Source: src/apps/api/audit.py) - TASK-0056 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Audit actor reset now clears context safely across threads and is covered by regression test.
-- [x] Support asynchronous audit log flushing to reduce hot path latency (Source: src/apps/api/audit.py) - TASK-0057 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Audit logger now supports queued background commits with explicit flushing for hot-path logging.
-- [ ] Load the provider catalog from persistence so admin edits survive restarts (Source: src/apps/api/config.py) - TASK-0058 - When completed: _
-- [ ] Replace runtime `create_all` calls with Alembic-managed migrations (Source: src/apps/api/db.py & docs/reports/001_DIAGNOSIS.md) - TASK-0059 - When completed:_
-- [ ] Swap eager schema creation for idempotent migration bootstrapping (Source: src/apps/api/db.py) - TASK-0060 - When completed: _
-- [x] Incorporate database and scheduler checks into the health response payload (Source: src/apps/api/routers/core.py) - TASK-0061 - When completed: 2025-10-30, see docs/reports/README.md
-- [x] Cache provider metadata and expose version compatibility information in health endpoints (Source: src/apps/api/routers/core.py) - TASK-0062 - When completed: 2025-11-20
-  - Completed: 2025-11-20 - PR: N/A (local) - Providers endpoint now reuses cached descriptors and surfaces version compatibility status in health responses.
-- [x] Add pagination controls to workflow router staging table endpoints (Source: src/apps/api/routers/workflow.py) - TASK-0063 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added limit/offset parameters to workflow staging listings plus service support.
-- [x] Cache report refresh results to avoid repeated model executions (Source: src/apps/api/routers/reports.py) - TASK-0064 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Added TTL cache for cashflow forecast responses keyed by org/horizon.
-- [x] Stream large forecast CSV exports to mitigate memory pressure (Source: src/apps/api/routers/reports.py) - TASK-0065 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Cashflow forecast endpoint can stream CSV exports when requested.
-- [x] Reuse a per-request service cache in ledger router handlers to avoid redundant instantiations (Source: src/apps/api/routers/ledger.py) - TASK-0066 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Ledger router caches per-org `LedgerService` per session to avoid repeated construction.
-- [x] Validate account code uniqueness prior to delegating to ledger services (Source: src/apps/api/routers/ledger.py) - TASK-0067 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Ledger endpoint now checks org-scoped account codes and returns 400 on duplicates before service call.
-- [x] Capture posting source metadata for reconciliation dashboards (Source: src/apps/api/routers/ledger.py) - TASK-0068 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Ledger postings accept source/source_reference and audit payloads include them for reconciliation.
-- [x] Support comparative periods and currency filters in trial balance responses (Source: src/apps/api/routers/ledger.py) - TASK-0069 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Trial balance supports start/end date filters and currency conversion using FX rates.
-- [x] Add cursor-based pagination to audit router endpoints (Source: src/apps/api/routers/audit.py) - TASK-0070 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Audit listing accepts after_id and limit to page through logs in ts-desc order.
-- [x] Validate forecast series length against the requested horizon (Source: src/apps/api/routers/forecast.py) - TASK-0072 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Forecast endpoint now enforces minimum series length relative to horizon with 400 responses when violated.
-- [x] Emit structured metrics for malformed identifier headers (Source: src/apps/api/dependencies.py) - TASK-0073 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added malformed identifier counter and emit on invalid header parsing.
-- [x] Validate header provenance to prevent spoofed audit metadata (Source: src/apps/api/dependencies.py) - TASK-0074 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Added spoof detection counters and warnings for mismatched user/org headers.
-- [x] Bind actor context to authentication session identifiers for replay protection (Source: src/apps/api/dependencies.py) - TASK-0075 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Audit actors now bind to session IDs derived from access tokens during dependency setup.
-- [x] Dispatch background FX sync jobs for longer historical windows (Source: src/apps/api/routers/fx.py) - TASK-0076 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - FX sync endpoint can enqueue backfill jobs over prior days via BackgroundTasks helper.
-- [x] Capture FX provider latency metrics to tune retry policies (Source: src/apps/api/routers/fx.py) - TASK-0077 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - FX/market sync now logs latency seconds alongside counts for observability.
-- [ ] Implement rate limiting for authentication flows alongside refresh tokens (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0078 - When completed:_
-- [x] Enforce organisation scoping and pagination safeguards across reports and workflow routers (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0079 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Reports endpoints now support limit/offset pagination with total counts in metadata.
-- [ ] Enhance plugin loader validation, cache invalidation, and health checks (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0080 - When completed:_
-- [ ] Expand strict typing coverage to the remaining services and routers (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0081 - When completed:_
-- [ ] Broaden observability metrics instrumentation per stewardship notes (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0082 - When completed:_
-- [x] Add structured failure logging hooks during API startup (Source: docs/reports/003_CODEX_STEP1.md) - TASK-0083 - When completed: 2025-11-20
-  - Completed: 2025-11-20 - PR: N/A (local) - Startup failures now carry structured context and emit detailed abort logs.
-- [x] Automate plugin cache invalidation when provider configuration changes (Source: docs/reports/003_CODEX_STEP1.md) - TASK-0084 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Settings load now refreshes provider caches so configuration changes take effect immediately.
-- [ ] Implement multi-factor authentication support for secure sign-ins (Source: docs/reports/001_DIAGNOSIS.md) - TASK-0085 - When completed:_
-- [x] Emit provider compatibility metrics or alerts to surface incompatible plugins (Source: src/apps/api/routers/core.py) - TASK-0086 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Health endpoint now surfaces provider compatibility alerts and plugin loader logs warnings for incompatible providers.
-- [x] Wire configurable log destinations into logging setup (Source: src/apps/api/config.py) - TASK-0087 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Logging config now honors LOG_DESTINATION/MODACCT_LOG_DESTINATION including null sink option.
-- [x] Add coverage for async audit queue error handling and shutdown (Source: src/apps/api/audit.py) - TASK-0088 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Audit background flusher now logs failed commits without stalling and tests cover error path.
-- [x] Validate header provenance to prevent spoofed audit metadata (Source: src/apps/api/dependencies.py) - TASK-0074 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Added counters and warnings for mismatched user/org headers during audit context setup.
-- [x] Issue refresh tokens with rotation for long-lived sessions (Source: src/apps/api/security.py & src/apps/api/routers/auth.py) - TASK-0051 - When completed: 2025-11-22
-  - Completed: 2025-11-22 - PR: N/A (local) - Added refresh token generator helper with tests.
-- [x] Add strong typing for tax rule expressions, e.g., JSONLogic schemas (Source: docs/TAX_MODEL.md) - TASK-0007 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Added JSONLogic validation and normalization with schema-aware errors.
-- [x] Capture FX and market provider latency metrics for retry tuning (Source: src/apps/api/routers/fx.py) - TASK-0077 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - FX/market sync now logs latency seconds alongside counts for observability.
-- [x] Capture source provenance metadata for tax rules (Source: docs/TAX_MODEL.md) - TASK-0009 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Tax sync now stamps rule.source with provider name when absent.
-- [x] Pool forecast service instances to reuse expensive model state (Source: src/apps/api/routers/forecast.py) - TASK-0071 - When completed: 2025-11-21
-  - Completed: 2025-11-21 - PR: N/A (local) - Forecast routes reuse a shared ForecastService instance to avoid repeated instantiation.
-- [x] Run and record full-history Gitleaks or equivalent secret scan for the final publication commit (Source: PUBLIC_RELEASE_AUDIT.md) - TASK-0089 - When completed: 2026-07-02
-  - Completed: 2026-07-02 - PR: N/A (direct main) - Executed Gitleaks 8.30.1 full-history scan with no leaks and recorded command/results in PUBLIC_RELEASE_AUDIT.md.
-- [x] Clean-clone validate the final publication commit and update release evidence (Source: PUBLIC_RELEASE_AUDIT.md) - TASK-0090 - When completed: 2026-07-02
-  - Completed: 2026-07-02 - PR: N/A (direct main) - Validated the audited main HEAD in a fresh clone with full quality gate, accounting suites, CLI/API/Streamlit smoke checks, and audit artifact generation.
-- [x] Record hosted GitHub Actions disposition or document local clean-clone authority for the final publication commit (Source: PUBLIC_RELEASE_AUDIT.md) - TASK-0091 - When completed: 2026-07-02
-  - Completed: 2026-07-02 - PR: N/A (direct main) - Captured hosted CI workflow disposition and documented release-gate authority in PUBLIC_RELEASE_AUDIT.md.
-- [x] Add employer-facing visual evidence to top-level release collateral (Source: README.md & PUBLIC_RELEASE_AUDIT.md) - TASK-0092 - When completed: 2026-07-02
-  - Completed: 2026-07-02 - PR: N/A (direct main) - Published architecture, CLI snapshot, API health, and FX case-study visuals in README and reconciled release collateral links.
+- v0.2 Accountant Close Workspace and integrity/evidence corrections;
+- v0.3 provider SDK/conformance contract (PR #141);
+- v0.4 persistent provider catalog governance (PR #146);
+- v0.5 Provider Author Kit (PR #149);
+- post-v0.5 review/evidence/workspace-hygiene corrections (PR #154);
+- accountant close rehearsal and pilot kit with Windows/browser acceptance (PR #156);
+- Close Workspace non-lifecycle refresh, denial-feedback, and active-tab correction (PR #158 / issue #157);
+- six-check protected-main enforcement, changed-production coverage, critical-module coverage, container supply-chain evidence, and trusted-main attestations.
+
+If TASK-0093 completes without material product gaps, the repository should be treated as complete for its current portfolio scope after routine maintenance disposition.
+
+## Conditional future scope — not active tasks
+
+Do **not** convert these into active work merely because older reports/TODOs mention them. They require an explicit decision to expand the product/deployment claim:
+
+- Alembic-managed schema migrations and migration bootstrapping before serious persistent or multi-writer deployment.
+- Shared/distributed authentication rate limiting and optional MFA before multi-worker/public deployment when required by the threat model.
+- Database-native close/posting locks before making multi-writer accounting guarantees.
+- Broader deployment observability, PostgreSQL/reverse-proxy/public-hosting acceptance, or production OTLP/alerting examples.
+- A production React/web client.
+- Provider package publication, marketplace/registry/certification, signing/revocation services, or arbitrary third-party installation.
+- Production tax, bank-feed, market-data, treasury, ERP, financial-reporting, or regulatory certification.
+
+Small code-stewardship refactors such as fixture deduplication, broader typing, or additional metrics should be performed only when they materially support an active slice; they are not standalone product obligations.

@@ -1,6 +1,6 @@
 # Provider Author Kit Architecture
 
-Status: implemented v0.5 contract for issue #148. Release claims remain subject to exact-head validation.
+Status: implemented and accepted v0.5 contract for issue #148 / PR #149.
 
 ## Purpose
 
