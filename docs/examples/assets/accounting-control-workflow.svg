@@ -83,7 +83,7 @@
     <circle class="dot" cx="34" cy="36" r="15"/>
     <text class="step-number" x="62" y="42">STEP 04</text>
     <text class="step-title" x="30" y="88">Confirm</text>
-    <text class="step-title" x="30" y="119">Journal Controls</text>
+    <text class="step-title" x="30" y="119" style="font-size: 21px;">Journal Controls</text>
     <text class="step-copy" x="30" y="160">Validate balanced</text>
     <text class="step-copy" x="30" y="184">posting evidence</text>
     <text class="step-copy" x="30" y="208">and accounts.</text>
